@@ -1,0 +1,744 @@
+# MarkdownAura — interface spec
+
+Design source of truth. `mockup.html` is the reference implementation — open it in a
+browser and click through it; this document explains the *why* behind each decision.
+
+Stack assumption: Tauri 2 shell + WebView2, frontend framework-agnostic. The mockup is
+vanilla JS so it ports without rework; the shipped app is vanilla TypeScript + Vite
+(`IMPL.md` §1).
+
+Scope convention: this document describes the **target** UX. Every section that differs
+from the shipped app carries a **v1 status** note naming three things: what is
+implemented, what is deferred *with its feature*, and what deliberately deviates. The
+notes were last revised on 2026-10-02 against the running build (30 Rust tests, `tsc`
+clean, production asset-protocol render verified).
+
+Three terms are used precisely, because the difference between them is the whole point
+of the status notes:
+
+- **implemented** — the app does this today.
+- **deferred** — designed, the structure is in place, the events are not wired; a v2
+  wire-up, not a refactor.
+- **deviates** — the app does something else and the difference is intentional. The
+  target text stays so the deviation is a decision rather than an accident.
+
+---
+
+## 1. Product position
+
+**A reader, not an editor.** Every design decision below follows from this.
+
+- The source view is read-only. There is no caret, no undo, no save. The app shows a
+  `read-only` pill over the source view; the pane is a `<pre>`, not a `<textarea>`.
+- Vertical space goes to content: the title bar hosts the tabs, the status bar is 26px.
+- Chrome disappears on demand (`F11` immersive, `ctrl B` sidebar, `ctrl alt O` outline).
+- Reading comfort is the product: `--measure` (a preset — 60ch, 100ch, or the whole pane),
+  `line-height: 1.7`, two font weights only.
+
+If a proposed feature turns MarkdownAura into an editor, it is out of scope.
+
+## 2. Window anatomy
+
+```
+┌─ title bar (38px) ── logo · tab strip · [⋯] · ─ □ × ──────────────────┐
+├─ toolbar (40px) ──── [sidebar] [preview|split|source] [↻] … [find] ────┤
+│                               [outline] [↔] [theme] [settings] [i]      │
+├─ sidebar (224px) ─┬─ content ───────────────────┬─ outline (200px) ───┤
+│  explorer         │  preview / split / source   │  headings           │
+│  filter           │  + find bar (floating)      │  diagrams           │
+│  tree             │  + diagram overlay          │                     │
+│  watching N files │                             │                     │
+├─ status bar (26px) ── path · words · encoding · engine health · ms ───┤
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**v1 status — title bar buttons.** The target has `[+]` (new tab, `ctrl T`) and `[⋯]`
+(all tabs). The app shell carries `[⋯]` and it is **wired**: it lists every tab as a menu
+with the current one marked, and `ctrl shift A` does the same from the keyboard. The `[+]`
+button exists only in the mockup; the app has no new-tab button because `ctrl T` is not
+bound. The rest of the tab context menu (close others / close to the right / pin / duplicate)
+is still deferred (§5).
+
+Tab overflow scrolls horizontally instead of wrapping, and the active tab is scrolled
+into view on every switch — a jumping title bar is worse than a hidden tab.
+
+**v1 status — window creation.** The window is built programmatically in
+`src-tauri/src/lib.rs` (`WebviewWindowBuilder`), and `tauri.conf.json` carries
+`"windows": []` on purpose. A restricted session (remote desktop, some sandboxes)
+crashes the WebView2 browser process at startup — a correctly sized, perfectly dark
+window and one Crashpad dump per launch, no error surfaced anywhere. `--no-sandbox`
+fixes it, and that flag must never be a shipped default, so it is opt-in through the
+`MARKDOWNAURA_BROWSER_ARGS` environment variable. Reading it requires the window to be
+built in code. Settings: 1200×800, min 720×480, centred, `decorations: false`, drag-drop
+enabled. `transparent` is left at its default (false).
+
+Everything inside the title bar except the drag surface needs
+`-webkit-app-region: no-drag` (already in `components.css`). Three chrome heights are
+tokens (`--h-title`, `--h-toolbar`, `--h-status`) and must never grow.
+
+## 3. Layout regions
+
+### Sidebar (explorer)
+
+- Resizable **180–360px** by dragging its right edge; the bounds are the `--w-sidebar-min` /
+  `--w-sidebar-max` tokens, read at drag time so the design file stays the single source.
+  `ctrl B` collapses it entirely.
+- Skips the ignored directory names (`node_modules`, `.git`, build output) but otherwise
+  **lists every file**, not only markdown — see the v1 status note below.
+- Single click opens a **preview tab**, double click pins it (VS Code semantics — this is
+  what keeps a folder with 200 files from becoming 200 tabs).
+- Filter box narrows the visible tree; it does not search content.
+- Foot shows `watching N files`. This makes the watcher observable instead of silently
+  failing.
+
+**v1 status.** The ignore list is **fixed in Rust** (`fs_ops::is_ignored_dir`): any name
+starting with `.`, plus `node_modules`, `target`, `dist`. It is deliberately *not* a
+setting — the tree and the watcher's `N files` counter read the same function, so they
+cannot disagree about what exists. The settings-panel chips in §10 are therefore target
+UX, not shipped.
+
+**v1 status — the tree is not markdown-only.** `fs_ops::list_dir` returns every entry that
+is not an ignored directory; there is no extension filter, and `TreeEntry.ext` is carried
+but unused. So a folder of images shows images. The target (markdown plus directories) is
+the better reader experience and the extension list already exists in `main.ts`
+(`MD_EXTENSIONS`), but the filter is not applied to the tree. Deviates — decide whether to
+apply the filter in Rust (so the tree and the watcher share one rule again) or drop the
+target.
+
+**v1 status — resizing ships.** Both side panels are draggable: the sidebar's right edge and
+the outline's left edge. Widths live in `--w-sidebar` / `--w-outline`, written by JS, so a drag
+is one `setProperty` and never a layout rewrite; the bounds come from the matching
+`--w-*-min` / `--w-*-max` tokens. The handle is a child of the panel it resizes, which is why a
+closed panel (user toggle or the responsive media query) cannot leave a stray handle behind —
+there is no second place deciding whether a handle shows. Widths persist in the session
+(`IMPL.md` §6).
+
+Two consequences worth keeping: the outline's own box no longer scrolls (an absolutely
+positioned handle inside a scroll container scrolls away with the content), so its list lives in
+an inner `.outline-scroll`; and the split view's `#splitter` keeps its own fixed range, it is not
+the same control.
+
+### Content area
+
+Three view modes, one segmented control:
+
+| mode | icon | content | use |
+|---|---|---|---|
+| `preview` | single column, text lines | rendered markdown, full measure | reading — the default |
+| `split` | column split by a vertical rule, lines only on the left | source left (soft-wrapped), rendered right, draggable splitter | checking a diagram block against its output |
+| `source` | chevrons `‹ ›` in a frame | read-only highlighted markdown | copying a block, checking raw syntax |
+
+**The switch is icons, not text.** (Decision confirmed 2026-10-01; implemented in the
+mockup, `index.html` and `components.css`.) Rationale: view mode is a set-once,
+low-frequency control — it must not carry the heaviest visual weight in the toolbar (text
+was ~196px; icons are ~86px, leaving `find` as the only text-labelled control, which is
+correct since find is high-frequency and its kbd hint teaches the shortcut). The three
+modes are layout shapes, so their meaning is directly drawable. Icon+text hybrid was
+rejected: wider than text alone, fully redundant.
+
+Icon rules: all three share one outer frame; they differ **only by interior marks** —
+frame-shape variation is invisible at 15px. Do not use a file icon for `preview`, it
+collides with the tree's file icon. Discoverability is covered by tooltip, `aria-label`,
+and an accent-coloured active state (colour, not just background).
+
+**The active segment must not be a background step alone.** `.segmented button.on` paints the accent
+tint with the accent icon — the same "engaged" treatment `.iconbtn.on` gives the sidebar and outline
+toggles, and the text variant takes `--ac-tx` plus weight 500. The first version was a `--bg` chip on
+a `--code` track: #ffffff on #f5f4f1 is a ~4% luminance step, and it read as "no state at all" — the
+mode you were looking at was the one thing the switch did not say. The accent tint is the app's
+existing signal for "this one is on"; do not replace it with a subtler one.
+
+`split` stays. Diagram-heavy docs are maintained by comparing source and output; removing
+it would push users back into an editor. The right pane gets `.prose.compact` (13px, and
+`prose.css` multiplies `--doc-size` by .867 with `--zoom`) because it has half the width.
+
+**Source text soft-wraps.** Both the source view and the split source pane wrap
+(`white-space: pre-wrap`), and long unbreakable tokens break (`overflow-wrap: anywhere`) — otherwise
+a single URL pushes the pane back into horizontal scrolling, which is what wrapping was for. The
+source *view* always did this; the split pane was the one place it did not, which is why it grew a
+horizontal scrollbar in a pane that is half the window. If line integrity ever matters more than
+width, that is one rule in `prose.css`.
+
+### Reading width — one column for everything
+
+The measure is a *setting*, not a typographic constant: a fixed value is a fraction of the pane that
+depends on the pane, and on a 3440px display the old fixed `72ch` came to 582px in a 3016px content
+area — 19% of the screen (measured at 15px). It stays a **preset with three values** rather than a
+free slider, because line length is the one typographic knob a reader can genuinely wreck.
+
+- **One column for everything.** Every direct child of `.prose` carries the same limit — headings,
+  body text, tables, fenced code and diagram cards — so both edges line up across block types. The
+  alignment is structural (one rule, one token), not a convention a new block type can quietly opt
+  out of. Two consequences are accepted rather than worked around: a table wider than the column
+  scrolls horizontally inside it (`.prose table { overflow-x: auto }`), and a large diagram is scaled
+  down to the column — the diagram viewer is where you look at one big.
+  - The rule is `max-width: var(--measure); margin-inline: auto` on the **children**: the container
+    fills the pane and the blocks are centred. On the container instead, a block could never be
+    narrower or wider than the text column.
+  - It is also why no block rule in `prose.css` may use the `margin` **shorthand**: a shorthand zeroes
+    `margin-inline` for that element, and its specificity (0,1,1) beats the centring rule (0,1,0) —
+    leaving exactly that block flush left while every other block stays centred. That shipped once
+    (`.prose p`, and it is invisible to a width measurement: the box is the right size, in the wrong
+    place), so `node design/check-prose-css.mjs` now fails instead (`IMPL.md` §10).
+- **The limit is resolved once, into pixels, not left as `ch`.** `ch` is resolved against the *using*
+  element's font, so a `72ch` token on an `h1` (22px) is 40% wider than the same token on a
+  paragraph (16px): the "column" came out ragged, with headings jutting past the body text by up to
+  40% (measured 733px vs 518px at 60ch before the fix). One measurement against the prose font
+  (`src/measure.ts`) gives every block the same column — measured after: 518px for `p`, `h1`, `h2`,
+  `ul` and `blockquote` alike at 60ch. The token therefore has to be recomputed whenever the
+  document font size or the zoom changes, and once more when webfonts settle; the status-bar tooltip
+  shows the resolved figure and its share of the pane (`阅读宽度 — 舒适 · 1035px · 57%`) so the number
+  on screen is never a mystery.
+- Consequence worth knowing: the resolved column is the same pixel value in both split panes, and a
+  half-width pane is narrower than it, so in split view the pane — not the measure — is the binding
+  constraint.
+- **Three presets: narrow 60ch / comfortable 100ch / full 100% of the pane.** `comfortable` was 72ch
+  and was raised to 100ch on the reader's call: 72 sits in the classic 45–75-character band, while
+  on-screen technical reading (docs sites, code hosts) runs 80–120, and `narrow` covers long-form
+  prose. The two measured presets are in `ch` because that is the only unit that keeps a line
+  *readable* whatever the window size; `full` is a percentage, because there the request is "use the
+  pane", which is what a percentage measures. Mixed units are deliberate — the preset names say what
+  each one is for.
+  - Cost of `full`, stated plainly: on a 3016px pane a 100% column is ~350 characters per line at
+    16px. That is the reader's explicit choice, and the tooltip reports the resolved width and its
+    share of the pane (`阅读宽度 — 撑满 · 100%`) so the number is never a mystery.
+- **Four entry points, one field** (see §10): the status-bar chip (carrying a `↔` icon, because its
+  meaning is not its value) and the toolbar button both open the preset menu, `ctrl shift M` cycles
+  from the keyboard in any mode, and the immersive bar repeats the chip. All of them write
+  `state.measure`, persisted by *preset name* so the table in `src/measure.ts` stays the single
+  definition.
+
+**Split scroll — synced, both directions.** Scrolling either pane moves the other continuously;
+entering split from a scrolled preview opens already aligned. The mapping is **anchor + pixel
+fraction within the segment**, because anchors alone would make ordinary prose snap from heading
+to heading:
+
+- The anchors are the headings and the diagram cards — `hN` / `dN`, the only positions both panes
+  can identify (the source pane carries them as `data-anchor`, the rendered pane as `id` /
+  `data-diagram`).
+- Between two anchors the mapping is linear in pixels. The two panes render the same document at
+  different heights (in the sample doc the rendered pane is ~1.9× the source), so "the same place"
+  is exact *at* an anchor and approximate in between — tens of pixels over a ~900px viewport.
+  Closing that gap needs per-line line numbers on the rendered output, which `markdown.rs` does not
+  emit; do not pretend the current mapping is pixel-identical.
+- A programmatic write is remembered per pane, and the scroll event it causes is ignored. Without
+  that echo guard the two panes push each other forever.
+- The per-tab scroll position (SPEC §5) is the **rendered pane's**; the source pane is aligned from
+  it on restore, so a session never stores two positions that can disagree.
+- A document with no headings and no diagrams falls back to proportional scrolling: wrong in
+  detail, right in direction.
+
+### Outline
+
+- **Expanded by default**, 200px, resizable **160–360px** by dragging its left edge
+  (`--w-outline-min` / `--w-outline-max`), `ctrl alt O` to hide.
+- Two sections: heading tree (indented by `data-level`, headings of level 1–4 only),
+  then a diagram list with engine badges.
+- **Clicking an entry scrolls every pane the current view shows**: preview scrolls the rendered
+  pane, split scrolls the rendered pane *and* the source pane, source scrolls the source pane.
+  The target lands 12px below the pane's top edge. Split scrolling both is the point of split —
+  a jump that moved only the right pane leaves the reader comparing two unrelated regions.
+- Anchors: the rendered pane uses the heading `id` (`h0`) or the card's `data-diagram` (`d0`);
+  the source pane gets a `data-anchor` on exactly those lines (`markdown.rs` reports the line for
+  both kinds). Only those lines carry an anchor — stamping every line would add an attribute per
+  line for anchors nothing can reach.
+- A document-wide query is **not** acceptable here: it finds the first match, which may live in a
+  hidden view, and then scrolls nothing at all. The lookup is scoped to the visible panes.
+- Auto-hides below 1000px window width; sidebar below 720px. Both are CSS media queries in
+  `components.css` so the responsive fallback works even before JS wires up.
+- **Implementation warning — now handled in the app.** The mockup toggles panels with an
+  inline `style.display`, which wins over those media queries — at narrow widths the
+  toolbar button keeps its `.on` state while the panel is hidden, i.e. the button lies.
+  `main.ts applyLayout()` implements the fix the mockup lacks: it stamps
+  `display: ""` (never `none`) when a panel is open, so the media query keeps ownership of
+  the narrow case, and only sets `display: none` when the *user* closed the panel. Keep it
+  that way; re-introducing a blanket inline `display` re-breaks the responsive fallback.
+
+**v1 status — diagram entries.** The target is "scrolls to the card *and* opens the
+viewer". The app scrolls the card into view — plus the matching source line when the pane is
+showing — and does not open the viewer; that stays a deliberate click on the card's zoom button
+(§4). Deviates.
+
+### Status bar
+
+Left: path, word count, encoding. Right: three engine health dots, render time, **reading width**,
+zoom. The path is the only unbounded item in the row, so it ellipsises rather than pushing the
+controls off the edge.
+
+The engine dots are the honest answer to "is this thing offline?" — green when the WASM
+module loaded, amber while loading, red if it failed, and **grey when the engine is not
+installed at all** (`d2`, §4). `off` and `failed` are different states with different
+colours; do not merge them. Render time in milliseconds is shown because it is the
+product's whole claim.
+
+Two decode facts change the status bar's shape, both as warn marks rather than silent
+substitutions. A `utf-8-lossy` decode turns the encoding text into a warn dot plus the
+label, with a tooltip saying invalid bytes were replaced — the file still renders, and the
+mark says the screen is not byte-exact. A document past the 8 MiB read cap adds a
+`truncated` mark after the encoding: what is on screen is a prefix of the file on disk, and
+saying so is the only honest option short of refusing to open it.
+
+## 4. Diagram cards
+
+Fenced ` ```mermaid `, ` ```dot `, ` ```graphviz ` and ` ```d2 ` blocks become cards, not
+inline SVG dumps. `graphviz` is an alias for `dot` (`markdown.rs::diagram_lang`): people
+write it as often, and the badge should name the engine either way.
+
+```
+┌ badge · title · line N ──────────────── [zoom] [copy] ┐
+│                                                        │
+│                     rendered svg                       │
+│                                                        │
+└────────────────────────────────────────────────────────┘
+```
+
+- Badge colour identifies the engine: mermaid purple, dot teal, d2 amber
+  (`--eng-*` tokens). Consistent in cards, outline list and the viewer header.
+- Card head carries the source line number — that is the bridge back to `split` view.
+- The card's `[zoom]` button opens the **viewer overlay**; `[copy]` copies the diagram
+  source. **The whole card is not clickable** — the app opens the viewer from the button
+  only, where the target said the card would open it. Deviates; the target text stands as
+  the design if it is revisited.
+- **Failures render inline** as a red band with the line number and the offending engine
+  message. A broken block must never blank the page or throw away the rest of the
+  document. This is the one rule that must not regress.
+- Viewer overlay: `− / % / +` zoom (the `%` resets to 100% and re-centres), wheel zoom,
+  drag to pan, `copy svg`, `copy source`, `esc` to close. The SVG is **cloned from the
+  card**, never re-rendered — re-rendering a large graph to open a viewer would be a
+  visible stall. The footer names the engine and repeats the interaction hints.
+
+**v1 status — viewer footer.** The target footer carried the engine's render time. The app
+shows the engine name plus `scroll to zoom · drag to pan · esc to close`; the card's render
+time is on the card and in the status bar, not duplicated here. Deviates (harmless).
+
+### Engine loading — measured, not assumed
+
+Sizes below were read off the npm registry on 2026-10-01, not estimated. The "~1.2 / 0.8 / 2.1 MB"
+figures this document previously carried were wrong; the corrections matter enough to change the
+packaging plan.
+
+| engine | package (licence) | shipped cost | notes |
+|---|---|---|---|
+| mermaid | `mermaid@12` (MIT) | **29 KB entry**, chunks on demand | The ESM build is code-split: 104 chunks, 5.18 MB on disk, but only the entry plus the chunks for the diagram types actually used get loaded. `dist/mermaid.min.js` — the monolith — is 5.3 MB and must **not** be used. |
+| dot | `@hpcc-js/wasm-graphviz@1.29.2` (Apache-2.0) | **~0.9 MB** | 13 files, zero dependencies. The wasm is inlined into the JS, so there is no separate `.wasm` to ship or fetch. |
+| dot (alternative) | `@viz-js/viz@3.31.0` (MIT) | ~1.2 MB | One self-contained file, MIT rather than Apache-2.0. Take this one only if the Apache licence or the `@hpcc-js` API is a problem. |
+| d2 | `@d2lang/d2@0.1.34` (MPL-2.0) | **11.0 MB** | `dist/browser/index.js` alone is 11.0 MB. That is 5× the old estimate and about half of a sane total installer budget. |
+
+Consequences, in order:
+
+1. **d2 cannot ship in the base bundle.** At 11 MB it would dominate the installer and contradict
+   "small and fast". It becomes an opt-in download driven from settings, which means the status
+   bar's d2 health dot needs a fourth state — `off` — distinct from `warn`.
+2. **Never import the mermaid monolith.** 5.3 MB versus a 29 KB entry point. This is the single
+   largest packaging decision in the app. Verified in production: the code-split chunks resolve
+   over the `tauri://` asset protocol.
+3. **The d2 package was renamed** to `@d2lang/d2`; `@terrastruct/d2` survives only as a
+   compatibility alias. Pin the new name.
+4. **Licences differ per engine** — MIT / Apache-2.0 / MPL-2.0. MPL-2.0 is file-level copyleft:
+   fine to ship unmodified, but d2's files must stay separable and the notices must ship. That is
+   why `THIRD-PARTY.md` exists, is generated from what the build actually resolves
+   (`npm run notices`), and ships next to the executable together with `LICENSE`; the engine table in
+   the About sheet is the in-app half of the same obligation. The Rust dependency graph is listed by
+   SPDX identifier rather than with each crate's full licence text — if the app is ever published,
+   generate the texts (e.g. `cargo about`) and ship those too.
+
+In the base configuration nothing is fetched at runtime — the WASM is inlined in the bundle, which
+is what makes "no network calls" literally true. The opt-in d2 download is the one exception, and
+the settings UI must say so plainly rather than inheriting the offline claim.
+
+**v1 status — d2.** The download is **not implemented**. `engine_status` scans
+`%APPDATA%/MarkdownAura/engines/d2/<version>/` so a manually unpacked build is detected
+and the status bar dot turns green, but the settings `install` button only reports that
+the download is not implemented. Until it ships, `d2` is the honest fourth dot: grey, and
+a d2 card renders an inline error card that names the engine and says it is not installed.
+`IMPL.md` §7 records the intended fetch path.
+
+## 5. Tabs
+
+Minimal by design, but correct:
+
+- Six states: `active`, `inactive`, `hover`, `preview` (italic), `missing` (strikethrough —
+  the file could not be read), `reloading` (amber dot replaces the file icon while the watcher
+  re-renders).
+- Class naming, so the two do not collide: the shipped preview state is **`.tab.preview`**;
+  **`.tab.pinned`** is reserved for manual pinning (§v1 status below) and must not borrow
+  the preview italic. No pin action ships, and `components.css` has **no rule for
+  `.tab.pinned`** — the class is emitted because the mockup emits it, nothing more. Do not
+  read its presence as a styled state.
+- Close button is always laid out on the active tab and hidden-but-space-reserved elsewhere,
+  so tabs do not jitter on hover. It is a `<button>` inside a `<span>`-era stylesheet, so
+  `.tab-close` must strip the UA chrome (`border`, `padding`, `background`, `cursor`) the
+  way `.tabbtn` and `.iconbtn` do — without that the app rendered a native grey beveled box
+  on every tab while the mockup's `<span class="tab-close">` did not, and the shared
+  stylesheet hid the difference. It is a real regression that shipped once; the reset is not
+  optional. Hover state uses `var(--tx)` on `var(--line-2)` and must be written as
+  `.tab .tab-close:hover` so it outranks the resting rule.
+- Geometry: height 30, radius `8 8 0 0`, min 96, max 200, middle-ellipsis for long names.
+- Overflow: compress to min width → scroll horizontally → the `⋯` / `ctrl shift A` all-tabs
+  menu. All three ship.
+
+### v1 status — what the app actually ships
+
+**Implemented**
+
+- open / switch / close tabs; one tab per file, opening an already-open file activates it
+  (path comparison is case-insensitive and separator-insensitive — Windows identity)
+- preview-tab semantics: a single tree click reuses *the one* preview tab rather than
+  opening a second, a double click pins it
+- the four reader states `active`, `inactive`, `hover`, `preview`, **plus `missing` and
+  `reloading`**: a failed load marks the tab `missing`, a removal event from the watcher
+  marks it `missing` too, and a watcher batch marks it `reloading` for the duration of the
+  re-render. Wiring the two v2 fields cost nothing — the record and the CSS already existed
+  — so they ship rather than being documented as absent.
+- per-tab state: view mode, scroll position, find query/case/hit
+- overflow: compress to min width, then horizontal scroll, active tab scrolled into view,
+  then the `⋯` / `ctrl shift A` all-tabs menu
+- `ctrl W` close, `ctrl tab` / `ctrl shift tab` cycle, `ctrl 1…9` jump
+- middle-click closes a tab
+- live reload reaches **every** open tab: the visible one re-renders, a background one drops
+  its parsed document and reloads when it is activated. A background tab silently showing
+  stale text is the failure the watcher exists to prevent.
+- session restore: the last tab set reopens on launch
+
+**Deferred (target UX above, not shipped)**
+
+- the right-click tab menu (close / close others / close right / close all / pin / copy
+  path / reveal in explorer / duplicate)
+- tab drag-to-reorder and drag-out-to-new-window
+- pin/unpin as a user action, and with it any `.tab.pinned` styling
+- `ctrl T`, `ctrl shift W` (§7)
+
+**v1 status — `missing`.** Both routes now work: a failed load marks the tab `missing`, and
+the watcher's `fs://removed` batch — which Rust emits separately from `fs://changed` — marks
+every matching tab. The parsed document is deliberately *kept* on removal, so a stricken tab
+stays readable until the file returns; a `fs://changed` for the same path clears the mark and
+reloads. Only the tab *strip* changes on removal; the content pane is not blanked.
+
+### Per-tab state — the part that is easy to get wrong
+
+Each tab remembers its own:
+
+- view mode (`preview` / `split` / `source`)
+- scroll position
+- find query, match-case flag and hit index
+
+Window-level (shared, *not* per tab): theme, zoom, document font size, reduce-motion,
+language, sidebar/outline visibility, and both panel widths.
+
+Switching tabs must restore all values. Losing the scroll position on every tab switch is
+the single most annoying failure mode of a multi-tab reader; view mode is the same bug in
+slower motion, and both were real regressions caught in verification — `paintActive()`
+re-selects the tab's view on every switch, and `captureScroll()` runs before every switch
+away.
+
+**v1 status — outline highlight is not per-tab.** `Tab.outlineHit` exists in the record but
+is never written or read; the outline shows the active tab's current heading from the
+scroll spy only. Per-tab outline memory is deferred with the field. Do not "clean up" the
+unused field — it is the v2 contract.
+
+## 6. Empty state
+
+The window opens here when no folder is loaded. It is also the drop target.
+
+- Dashed dropzone, one line of copy, `open folder` (primary) / `open file`.
+- Three shortcut hints (`ctrl O`, `ctrl shift P`, `F1`).
+- Recent entries as links (the three most recent).
+- Dragging a file over it tints the whole area (`--ac-bg`) so the drop affordance is
+  obvious. With native drag-drop enabled the WebView fires no HTML5 drop events, so the
+  tint is driven by Tauri's core drag events adding `.empty.dragover` — see `IMPL.md` §8.
+
+## 7. Keyboard map
+
+| key | action | v1 |
+|---|---|---|
+| `ctrl O` | open file | implemented |
+| `ctrl shift O` | open folder | implemented |
+| `ctrl alt O` | toggle outline | implemented |
+| `ctrl T` | new tab | **not bound** (mockup-only, §5) |
+| `ctrl W` | close tab | implemented |
+| `ctrl shift P` | recent files (top 8, as a menu) | implemented |
+| `ctrl shift W` | close all tabs | **not bound** |
+| `ctrl tab` / `ctrl shift tab` | next / previous tab | implemented |
+| `ctrl 1…9` | jump to tab N | implemented |
+| `ctrl shift A` | list all tabs | implemented |
+| `ctrl B` | toggle sidebar | implemented |
+| `ctrl F` | find in document | implemented |
+| `enter` / `shift enter` | next / previous match (while the find bar is open) | implemented |
+| `ctrl R` | re-render | implemented |
+| `ctrl ,` | settings | implemented |
+| `ctrl +` / `ctrl -` / `ctrl 0` | zoom in / out / reset | implemented |
+| `ctrl shift M` | cycle reading width | implemented |
+| `F11` | immersive | implemented |
+| `F1` | help | implemented |
+| `esc` | dismiss one layer (see below) | implemented |
+
+Keys marked **not bound** are design intent that has no handler in the app yet; they
+exist in the mockup's keymap so the shape is recorded.
+
+> **Resolved 2026-10-01.** `ctrl shift O` was bound to both "open folder" and "toggle
+> outline". **Open folder keeps `ctrl shift O`** (VS Code muscle memory, and it is the
+> higher-frequency action); **toggle outline moves to `ctrl alt O`**. Both are implemented.
+>
+> **AltGr caveat:** Windows synthesises AltGr as ctrl+alt, so on layouts where AltGr+O
+> composes a character, `ctrl alt O` is unreachable. If that surfaces on the dev machine,
+> fall back to `ctrl shift K` (currently unbound).
+
+`esc` dismissal is ordered, and the app's order is the **reverse of opening order**: menu
+→ diagram viewer → settings → help → about → find bar → immersive. Only one layer closes per
+keypress.
+
+**A menu also closes on any pointer press outside it, and a second press on the control that opened
+it closes it** — the control is a toggle. One rule, one implementation (`dom.ts`): every menu opened
+by a control passes that control to `showMenu`, which is also what positions the menu. Menus opened
+from the keyboard (recent files) have no control and simply dismiss on the next press anywhere.
+
+**The help table and the dispatcher are two lists.** `src/ui/help.ts` owns `KEYMAP` and the
+panel is generated from it; `main.ts` owns a hand-written `switch`, and the two are kept in
+step by review. They agree today, but nothing enforces that — either generate the dispatch
+from the table, or add a test that asserts the two lists match. Until one of those exists,
+adding a key means editing two files and the help panel can silently go stale.
+
+## 8. Visual language
+
+- **Flat.** No gradients, no shadows, no blur. Elevation comes from 0.5px hairlines at three
+  strengths (`--line`, `--line-2`, `--line-3`) plus background shifts.
+- **Two font weights**, 400 and 500. Never 600/700 — bold is carried by weight 500 plus colour.
+- **One accent.** Purple `#534ab7` (the "aura"), used for: active tab bar, active tree row,
+  links, focus rings, primary buttons, mermaid badge. Nothing else is saturated.
+- **Sentence case everywhere** — `open folder`, not `Open Folder`. Lowercase UI reads as
+  tool-like rather than corporate.
+- Radii: 6px badges/chips, 8px buttons/inputs/tabs, 12px cards/overlays/window.
+- Icons are inline SVG, 1.1–1.3px strokes, no icon font, no emoji.
+- Motion is 90ms/140ms `ease-out`. Reduce-motion is honoured twice: the OS query in
+  `tokens.css` zeroes the motion tokens, and the settings toggle stamps
+  `[data-motion="reduce"]` which does the same — the in-app control exists because the OS
+  setting is not always the reader's wish. Nothing animates on scroll or on render.
+
+Dark mode is a full token swap under `[data-theme="dark"]`, not a filter. The accent lifts
+from `#534ab7` to `#b3adf0` to hold contrast on dark surfaces; semantic and engine colours
+do the same. Follow the OS by default, with a manual override in settings; a `system`
+selection re-resolves on OS change rather than freezing the value at startup.
+
+See `tokens.css` for the complete palette — it is the only place colours may be defined.
+
+## 9. Files
+
+| file | role |
+|---|---|
+| `tokens.css` | every colour, size, radius, height, duration. Import first. |
+| `components.css` | chrome: window, tabs, toolbar, panels, cards, overlays, menus, status bar |
+| `prose.css` | rendered markdown only, scoped under `.prose`. Also the source-view highlighting (`.src .h/.em/.code/.meta/.quote`) |
+| `mockup.html` | interactive reference — open in a browser, no build step |
+| `mockup.js` | behaviour spec: state shape, tab logic, find, menus, keyboard map |
+| `check-raw-html.mjs` | asserts the mockup honours the raw-HTML allow-list (`IMPL.md` §4) |
+| `check-prose-css.mjs` | asserts the reading column stays centred (`IMPL.md` §5): no `margin` shorthand may reach a direct child of `.prose` |
+| `IMPL.md` | the build contract: repo layout, IPC surface, state shape, persistence, engine packaging |
+
+`prose.css` is kept separate because it is the one stylesheet that gets injected into
+rendered content; it must not be able to reach the chrome.
+
+Raw HTML in a source document is **not** passed through. Only a short exact-match allow-list
+survives, and the tags on it — `<details>`, `<summary>`, `<kbd>`, `<sub>`, `<sup>`, `<br>`,
+`<hr>` — are the ones `prose.css` styles. `components.css` also carries a *global* `kbd`
+rule for the chrome, which is exactly the leak `.prose kbd` exists to pin down. The policy,
+and the reason it is an allow-list rather than a sanitiser, live in `IMPL.md` §4.
+
+The mockup hand-draws its diagram SVGs. The real app calls the engines — the card, badge,
+overlay and error markup in `mockup.js` (`renderMarkdown`) is what was ported, and
+`src/render/pipeline.ts` keeps the class names byte-identical so the two share one
+stylesheet.
+
+## 10. Settings, immersive, help
+
+Three entry points had been in the chrome with nothing behind them. All three reuse the
+existing overlay shell (`.overlay` > `.sheet`), so the app gains no new window and no new
+surface type. This section is the design; `IMPL.md` is where each row's state is specified
+and persisted.
+
+### One shell, four panels
+
+| panel | sheet | body |
+|---|---|---|
+| settings | `.sheet.tight` (560px) | top-aligned, scrolling (`.sheet.form`) |
+| help | `.sheet.wide` (640px) | top-aligned, two columns |
+| about | `.sheet.tight` (560px) | top-aligned, scrolling — same rows as settings |
+| diagram viewer | `.sheet` (full bleed) | centred (unchanged, §4) |
+
+### About
+
+The toolbar's last control answers "what is this, who made it, and where does it keep my data"
+without leaving the window, in that order. Its own overlay sheet, because a separate window for a
+few read-only rows would cost a window lifecycle for nothing.
+
+| block | content |
+|---|---|
+| brand | logo · `MarkdownAura` · `v0.1.0` chip · `MIT` chip · one tagline |
+| what it is | a sentence, then **six capabilities** in two columns: layout / engines / reading / navigation / session / language |
+| author | 道荣（黄超） · design and development · `github.com/westsource/MarkdownAura ↗` |
+| engines | badge, engine, version, licence right-aligned; d2 marked as the opt-in install |
+| data | `%APPDATA%\MarkdownAura` (mono), what lives there, and an `open` button |
+| foot | `LICENSE · THIRD-PARTY.md` (both ship next to the executable) · `no telemetry · rendering happens locally` |
+
+Decisions inside that shape, each of which was made deliberately:
+
+- **The licence sits in the brand, not the foot.** It is a fact about the build like the version is,
+  so it belongs beside the version; the foot is left for the one claim that is not a noun.
+- **The version comes from `package.json`, injected at build time** (`vite.config.ts` →
+  `__APP_VERSION__`). The help panel's footer reads the same constant, so bumping the package version
+  is the whole change and no panel can lie about its own build.
+- **No runtime block.** Tauri 2 / WebView2 is how the app is built, not something a reader of the
+  About sheet needs; it was in the first version and was removed on review.
+- **The author line keeps a role subtitle** and the row is a plain form row, so a second contributor
+  later is another row, not a redesign.
+- **The author's name is not transliterated** — the Chinese catalogue and the English one carry it
+  identically, because a name is spelled the way its owner spells it.
+- **Feature copy states capabilities, never adjectives.** No "fast", no "lightweight": those are the
+  claims the app is supposed to make by being used, and the About sheet is the wrong place to assert
+  them.
+- **The foot says "no telemetry · rendering happens locally", not "no network requests."** The
+  opt-in d2 download will be a network request when it ships (§4); the wording has to survive that.
+
+**The GitHub line is the only external URL in the app**, and it is opened through
+`tauri-plugin-opener` rather than by shelling out to `cmd /C start`. The capability allows **that
+one URL** (`opener:allow-open-url` with a single-entry `allow` scope); anything else is refused by
+the capability layer, not by our code. The element is an `<a>` for semantics and cursor, but its
+click is intercepted (`preventDefault`): an `<a href>` inside the webview would try to navigate the
+webview itself, and CSP would block it rather than open a browser.
+
+### Settings
+
+**Decision: settings is an in-app overlay sheet, not a second window.** A separate Tauri window
+costs a window lifecycle, a second webview and cross-window state sync, for a panel that is two
+screens tall. If it ever needs to be a real window the sheet markup moves across unchanged.
+
+Content order — reading, engines, files, cache:
+
+| section | rows (shipped) |
+|---|---|
+| reading | theme (`system` / `light` / `dark`, segmented), language (`system` / `English` / `简体中文`, segmented), document font size (stepper, 12–22px, the `--doc-size` token), reading width (5 presets, the `--measure` token), reduce motion |
+| engines | mermaid and dot are static "bundled" rows with their measured costs; d2 is the only `.form-row.hot` row in the app — it is the one row that would touch the network, the row says so, and its button is currently a truthful dead end (`SPEC` §4 v1 status) |
+| files | watch debounce (read-out only; the value lives in `IMPL.md` §3) |
+| cache | rendered-SVG size + clear (the in-memory cap is 6 MB, `IMPL.md` §5) |
+
+The theme control and the toolbar's theme button are **the same field**: toggling the button sets
+an explicit `light`/`dark`, and the sheet's `system` option is what restores OS-following. A
+`system` selection re-resolves on OS change (`matchMedia`); it does not freeze the resolved value.
+
+**Principle — anything you want to change while reading must be changeable on the reading
+surface.** The settings sheet lists a choice and supplies its default; it does not own it. Three
+settings are already wired this way and must stay that way:
+
+| field | reading surface | settings row |
+|---|---|---|
+| theme | toolbar button | reading ▸ theme |
+| reading width | status-bar chip (`↔` icon + value) · toolbar `↔` button · `ctrl shift M` · the immersive bar | reading ▸ reading width |
+| zoom | status bar (`100%`) + `ctrl +/-` / `ctrl 0` + the immersive bar | — (surface only is enough) |
+
+`ctrl +/-` and `ctrl 0` reach the zoom from the keyboard in every mode, which is why the immersive
+bar can afford to offer only "reset" rather than a stepper.
+
+Language is the deliberate exception: it is a set-once choice, so it has no surface control. Adding
+one later means adding it to this table, not inventing a second source of truth.
+
+**v1 status — two rows short.** The target's `files` row is "ignore list as chips, watch
+debounce". The chips are not shipped because the ignore list is not a setting (§3); only
+the debounce read-out is there. The target's `cache` row also named the session file path;
+the app shows size and clear only. Both are deviations, not omissions to be re-added
+without a decision.
+
+### Language
+
+Two catalogues ship: **English** and **简体中文**. The setting is `system` / `English` /
+`简体中文`, lives in the reading section, defaults to `system`, and is persisted with the session
+(`IMPL.md` §6). Like the theme, `system` resolves against the OS and re-resolves on the next
+launch — it is a choice, not a frozen value.
+
+Three rules keep it from rotting:
+
+- **English is the key set.** `en` defines the keys; `zh-CN` is typed against them, so a missing
+  or stray translation fails the type check instead of silently falling back to English.
+- **Two homes for a string, and no third.** Static shell copy sits in `index.html` with a
+  `data-i18n` (or `-title` / `-aria-label` / `-placeholder`) attribute and is filled by
+  `applyStatic()`; anything a module renders goes through `t()` at render time. A `data-i18n`
+  attribute on text a module owns is a bug — `applyStatic()` would overwrite live data (the
+  watcher count, the viewer's engine name) with the key's fallback.
+- **A language change re-renders.** `main.ts applyLang()` is the single place that knows the
+  list of surfaces (chrome, tabs, outline, status, open overlays); nothing caches a translated
+  string in a module.
+
+Language names stay in their own language, because a picker written in a language you cannot
+read is useless; only `system` is translated. Numbers go through one shared formatter so a count
+groups the way the active language expects.
+
+**Not translated, deliberately:** proper nouns and identifiers — engine names (`mermaid`, `dot`,
+`d2`), `MarkdownAura`, key names (`ctrl B`, `F11`), encoding values (`utf-8-lossy`), file paths,
+and the diagram source. Translating them would make the UI harder to search, not easier to read.
+
+**Scope note.** The mockup carries the language row (layout parity) but stays English: two
+catalogues in the reference implementation would drift from `src/i18n.ts`, which is the app's only
+catalogue. The mockup's row exists so the four-row reading section can be reviewed at the right
+height.
+
+### Immersive (`F11`) — what survives
+
+Everything goes: title bar and with it the tab strip, toolbar, sidebar, outline, status bar. What
+survives is the content, plus the diagram cards' own controls — opening the viewer full screen is
+still a reading action.
+
+**The way out is a 5px hot zone at the top edge** of the window. Hovering it reveals a single 34px
+bar carrying the file name, the two reading controls — reading width and zoom — and `esc exit`.
+Nothing is permanently on screen. Entering fires a toast once, because a mode whose exit is
+invisible is a mode people get stuck in.
+
+The bar's controls write the same fields the status bar does — immersive takes the chrome away, not
+the ability to change what you are looking at. Clicking empty bar space exits; clicking a control
+does **not**, and that distinction is the whole reason the exit handler checks for a button first
+(`immersive.ts`).
+
+Note the consequence: with `decorations: false` (§2) the window controls leave with the title bar,
+so in immersive the exits are `esc`, `F11`, and whatever the OS offers (alt+F4, the taskbar).
+Acceptable for a reading mode; the hover bar is what keeps it from being hostile.
+
+**v1 status.** The target bar carried `N of M tabs` alongside the file name. The app shows the file
+name plus the two reading controls — the tab count needs a tab-strip lookup the bar does not do.
+Deviates; if it returns, it belongs in `immersive.ts set()` next to the filename.
+
+### Help (`F1`)
+
+Two columns: the shortcut table on the left, grouped `file` / `view` / `find`; a diagram-syntax
+card per engine on the right. The d2 card carries its install note so the help panel is the second
+route to discovering d2, not only settings.
+
+**The shortcut table is data, not markup.** `KEYMAP` in `src/ui/help.ts` is a
+`{ group, keys, label }[]` and the panel is generated from it. It is *not* the dispatcher —
+see §7; the mockup's comment claiming "the app must dispatch from this table" is the target,
+not the present.
+
+### Screenshot parameters
+
+The mockup takes `?view= &theme= &tab= &preview= &find= &overlay=`, plus `?panel=settings`,
+`?panel=help`, `?immersive=1`, and `?peek=1` to force the immersive hover bar open — a
+headless browser cannot hover, so the bar is otherwise uncapturable.
+
+`preview=N` and `overlay=N` are **indices, not booleans**: `?preview=1` marks tab 1 as the
+italic preview tab (the single-click-from-tree state), `?overlay=1` opens viewer overlay
+number 1. Parameters without an explicit boolean value are still "present" to
+`URLSearchParams`, so `?immersive` and `?immersive=1` behave the same — the mockup checks
+`!== null`, not truthiness.
+
+## 11. Not designed yet
+
+Deliberately out of scope for this pass; each needs its own decision before implementation.
+Tab-related deferrals are not here — they live in §5, already designed and waiting.
+
+- A full recents panel. `ctrl shift P` ships as a menu of the top 8 and the empty state
+  shows the top 3 links, but a panel with pinning/clearing is not designed.
+- Error toast / notification styling beyond the placeholder in `mockup.js`
+  (`dom.ts toast()` is the shipped shape: colour dot, 1.8 s fade).
+- Touch and pen input
+- Multi-window behaviour — specifically *open a second folder in a second window*. Settings is
+  decided (§10) as an overlay rather than a window; the folder case is still open.
+- PDF / image export of a rendered document
+- Windows high-contrast and forced-colors modes
+- Syntax highlighting for ordinary (non-diagram) code fences. The source view's 5-role
+  highlighting (§9) covers the source pane; a rendered code block is monochrome today.

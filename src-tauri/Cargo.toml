@@ -1,0 +1,85 @@
+[package]
+name = "markdownaura"
+version = "0.1.0"
+description = "A small, fast markdown viewer with local mermaid, dot and d2 rendering"
+authors = ["道荣（黄超）"]
+edition = "2021"
+rust-version = "1.78"
+license = "MIT"
+repository = "https://github.com/westsource/MarkdownAura"
+publish = false
+
+[lib]
+name = "markdownaura_lib"
+# The Tauri template lists `staticlib` and `cdylib` here for mobile targets. On this GNU target
+# they are actively harmful: linking the cdylib makes GNU ld build a PE image with more export
+# ordinals than the format allows —
+#
+#     ld: error: export ordinal too large: 103647
+#
+# which fails the whole build at the very last step. A desktop build needs only `rlib`: src/main.rs
+# links the library statically. Re-add the other two when a mobile target is genuinely being built.
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.1", features = [] }
+
+# Must be here as well as under [dependencies] — see the note there. Build-dependencies and
+# normal dependencies do not share feature unification under the 2021 edition resolver, and
+# schemars is reached through both.
+indexmap = { version = "1.9", features = ["std"] }
+
+[dependencies]
+tauri = { version = "2.12.1", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2.8.1"
+# The About sheet's GitHub line is the only external URL in the app, and it is opened through this
+# plugin rather than by shelling out to `cmd /C start`: one capability, scoped to that one URL.
+tauri-plugin-opener = "2"
+
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.21"
+
+# getopts is the crate's CLI arg parser, which we do not use — drop it.
+pulldown-cmark = { version = "0.13.4", default-features = false, features = ["html"] }
+
+notify = "8.2.0"
+
+# Not used by this crate directly. These two entries (here and under [build-dependencies]) exist
+# only to repair a transitive build, and both are required.
+#
+# tauri-build and tauri-utils both depend on schemars 0.8, whose `preserve_order` feature — turned
+# on transitively by tauri — emits `indexmap::IndexMap<K, V>`:
+#
+#     pub type Map<K, V> = indexmap::IndexMap<K, V>;      // schemars-0.8.22/src/lib.rs:12
+#
+# indexmap gates its default generic on a build-script cfg:
+#
+#     #[cfg(has_std)]      pub struct IndexMap<K, V, S = RandomState> { .. }
+#     #[cfg(not(has_std))] pub struct IndexMap<K, V, S>             { .. }
+#
+# and indexmap-1.9.3/build.rs only emits `has_std` when the `std` feature is on. schemars asks for
+# indexmap with `features = ["serde-1"]` and never enables `std`, so the two-argument form does not
+# compile (E0107) and the build dies before a single line of our code is reached.
+#
+# Cargo unifies features additively, so turning `std` on from here fixes it without pinning,
+# patching, or forking. The reason it must appear in both sections: schemars is reached once
+# through tauri-build (a build-dependency) and once through tauri-utils (a normal dependency), and
+# under the 2021 edition resolver those are separate feature groups — one entry would only repair
+# one of the two instances.
+#
+# Delete both entries once schemars asks indexmap for `std` itself.
+indexmap = { version = "1.9", features = ["std"] }
+
+[target.'cfg(windows)'.dependencies]
+tauri-plugin-single-instance = "2.5.2"
+
+[dev-dependencies]
+insta = "1.43"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

@@ -1,0 +1,7 @@
+# Deterministic line endings: the sources are LF (everything here writes LF) and a Windows checkout
+# must not silently rewrite every file to CRLF, which would make the working tree differ from the
+# commit for no reason. Binary assets are excluded by `text=auto` and listed here for clarity.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.exe binary

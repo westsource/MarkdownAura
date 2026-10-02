@@ -1,0 +1,225 @@
+@import url("./tokens.css");
+
+/* MarkdownAura — prose.css
+   Styles for rendered markdown. Scoped under .prose so it never leaks into chrome.
+   This file is the whole reason the tool exists: reading comfort. */
+
+.prose {
+  font-family: var(--font-sans);
+  font-size: calc(var(--doc-size, 15px) * var(--zoom, 1));   /* settings x status-bar zoom */
+  line-height: var(--lh-body);
+  color: var(--tx);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+/* ---------- headings ---------- */
+
+.prose :is(h1, h2, h3, h4, h5, h6) {
+  font-weight: 500;
+  line-height: 1.3;
+  scroll-margin-top: var(--sp-4);   /* outline jumps land below the toolbar */
+}
+.prose h1 {
+  font-size: var(--fs-2xl);
+  letter-spacing: -.01em;
+  margin-block: 0 var(--sp-2);
+}
+.prose h2 {
+  font-size: var(--fs-lg);
+  margin-block: var(--sp-6) var(--sp-2);
+  padding-bottom: 6px;
+  border-bottom: 0.5px solid var(--line);
+}
+.prose h3 { font-size: 14px; margin-block: var(--sp-5) 6px; }
+.prose :is(h4, h5, h6) { font-size: var(--fs-md); margin-block: var(--sp-4) 4px; }
+.prose :is(h2, h3, h4, h5, h6):first-child { margin-top: 0; }
+
+/* anchor shown on hover, used by "copy as link" */
+.prose :is(h1, h2, h3, h4, h5, h6) .anchor {
+  margin-left: 6px;
+  color: var(--tx-3);
+  text-decoration: none;
+  opacity: 0;
+  font-weight: 400;
+}
+.prose :is(h1, h2, h3, h4, h5, h6):hover .anchor { opacity: 1; }
+
+/* ---------- blocks ---------- */
+
+.prose p { margin-block: 0 var(--sp-3); }
+.prose > :first-child { margin-top: 0; }
+.prose a { color: var(--ac); text-decoration: underline; text-decoration-color: var(--line-3); text-underline-offset: 2px; }
+.prose a:hover { text-decoration-color: currentColor; }
+.prose strong { font-weight: 500; }
+.prose em { font-style: italic; }
+
+.prose ul, .prose ol { margin-block: 0 var(--sp-3); padding-left: 22px; }
+.prose li { margin-block: 2px; }
+.prose li::marker { color: var(--tx-2); }
+.prose li > ul, .prose li > ol { margin-block: 2px; }
+/* GFM task lists */
+.prose li.task { list-style: none; margin-left: -18px; }
+.prose li.task input { margin-right: 7px; accent-color: var(--ac); pointer-events: none; }
+
+.prose blockquote {
+  margin-block: 0 var(--sp-3);
+  padding: 2px 0 2px var(--sp-3);
+  border-left: 2px solid var(--line-3);
+  color: var(--tx-2);
+}
+.prose blockquote > :last-child { margin-bottom: 0; }
+
+.prose hr { border: 0; border-top: 0.5px solid var(--line); margin-block: var(--sp-6); }
+
+/* ---------- inline code & fences ---------- */
+
+.prose code {
+  font-family: var(--font-mono);
+  font-size: .88em;
+  background: var(--code);
+  border: 0.5px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+.prose pre {
+  margin-block: 0 var(--sp-3);
+  padding: var(--sp-3) 14px;
+  background: var(--code);
+  border: 0.5px solid var(--line);
+  border-radius: 10px;
+  overflow: auto;
+}
+.prose pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--tx);
+}
+
+/* ---------- tables ---------- */
+
+.prose table {
+  width: 100%;
+  margin-block: 0 var(--sp-3);
+  border-collapse: collapse;
+  font-size: 13.5px;
+  display: block;
+  overflow-x: auto;
+}
+.prose th, .prose td {
+  padding: 6px 12px;
+  border: 0.5px solid var(--line);
+  text-align: left;
+}
+.prose th { background: var(--side); font-weight: 500; white-space: nowrap; }
+.prose tbody tr:nth-child(even) { background: var(--side); }
+
+/* ---------- images ---------- */
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--r-md);
+  border: 0.5px solid var(--line);
+}
+.prose figure { margin-block: 0 var(--sp-3); }
+.prose figcaption { margin-top: 6px; font-size: var(--fs-xs); color: var(--tx-2); text-align: center; }
+
+/* ---------- frontmatter ----------
+   rendered as a row of pills above h1, never as a table */
+
+.frontmatter { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--sp-3); }
+.frontmatter .pill {
+  font-size: var(--fs-xs);
+  color: var(--tx-2);
+  background: var(--side);
+  border: 0.5px solid var(--line);
+  border-radius: 99px;
+  padding: 2px 9px;
+}
+
+/* ---------- footnotes ---------- */
+
+.prose sup a { text-decoration: none; padding: 0 1px; }
+.prose .footnotes { margin-top: var(--sp-6); padding-top: var(--sp-3); border-top: 0.5px solid var(--line); font-size: 13px; color: var(--tx-2); }
+
+/* ---------- allow-listed raw HTML ----------
+   Only the tags on IMPL §4's allow-list can reach here; everything else a source document
+   contains is dropped before it becomes HTML. These rules exist so the few allowed tags match
+   the prose voice instead of falling back to UA defaults.
+
+   `kbd` is here deliberately: components.css has a *global* `kbd` rule tuned for the chrome,
+   and a word inside a sentence must not be styled by a chrome rule. Scoping it here is the fix,
+   not a duplicate. */
+.prose details {
+  margin-block: 0 var(--sp-3);
+  border: 0.5px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--sp-2) var(--sp-3);
+}
+.prose summary { cursor: pointer; font-weight: 500; }
+.prose summary::marker { color: var(--tx-2); }
+.prose details[open] > summary { margin-bottom: var(--sp-2); }
+.prose details > :last-child { margin-bottom: 0; }
+.prose kbd {
+  border: 0.5px solid var(--line-2);
+  border-radius: 4px;
+  padding: 0 5px;
+  font-family: var(--font-sans);
+  font-size: .867em;
+  color: var(--tx-2);
+  white-space: nowrap;
+}
+
+/* ---------- source view highlighting ----------
+   minimal, 5 roles only — this is a viewer, not an editor */
+
+/* Source text soft-wraps — in the source view (`components.css` already set `pre-wrap` on
+   `.source-view pre`) and now in the split pane too, which was the one place it did not: at half the
+   window an unwrapped line is unreadable rather than merely wide, so the pane grew a horizontal
+   scrollbar instead. `overflow-wrap: anywhere` is the other half of the fix — with `pre-wrap` alone
+   a single unbreakable token (a URL, a minified line) still overflows, which is exactly the
+   scrollbar this rule exists to remove. */
+.src {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.src .h { color: var(--ac); font-weight: 500; }          /* headings, links */
+.src .em { font-weight: 500; }                            /* bold */
+.src .code { color: var(--ok); }                          /* fences, inline code */
+.src .meta { color: var(--tx-2); }                        /* fence markers, frontmatter */
+.src .quote { color: var(--tx-2); font-style: italic; }
+
+/* ---------- compact density (split view halves the width) ---------- */
+
+.prose.compact { font-size: calc(var(--doc-size, 15px) * .867 * var(--zoom, 1)); }
+.prose.compact h1 { font-size: var(--fs-xl); }
+.prose.compact h2 { font-size: 13.5px; margin-top: var(--sp-4); }
+.prose.compact pre code { font-size: 11.5px; }
+.prose.compact table { font-size: 12px; }
+
+/* ---------- reading measure ---------- */
+
+/* One column for everything (SPEC §3).
+ *
+ * Every direct child of `.prose` takes the same limit, so headings, body text, tables, fences and
+ * diagram cards line up on both edges — the alignment is structural, not a convention a new block
+ * type can quietly opt out of. A wide table scrolls horizontally inside the column
+ * (`.prose table { overflow-x: auto }`) and a large diagram is scaled to it; the diagram viewer is
+ * where you go to see one big.
+ *
+ * The token is a resolved length (pixels for the measured presets, `100%` for "full"), never a `ch`
+ * left for each child to resolve itself: `ch` would be computed against the child's own font size
+ * and headings would come out ~40% wider than body text.
+ *
+ * This is also why every block rule above uses `margin-block` instead of the `margin` shorthand:
+ * the centring below is `margin-inline`, and a shorthand would silently zero it. Horizontal margins
+ * do not participate in margin collapsing, so the vertical rhythm is exactly what it was. */
+.prose > * {
+  max-width: var(--measure);
+  margin-inline: auto;
+}

@@ -1,0 +1,21 @@
+# Incremental compilation is disabled deliberately. Do not "optimise" this back on.
+#
+# This machine's sandbox intermittently refuses file operations inside target/:
+#
+#     error deleting lock file for incremental compilation session directory
+#       `...\target\debug\incremental\...\s-....lock`: 拒绝访问。 (os error 5)
+#     error copying object file `...rmeta` to incremental directory ...: 拒绝访问。 (os error 5)
+#
+# Incremental compilation assumes those operations succeed. When they silently fail it leaves a
+# half-written session behind, and the *next* build reuses it and makes rustc abort with:
+#
+#     error: the compiler unexpectedly panicked. This is a bug
+#
+# That message is actively misleading — it blames the compiler rather than the corrupted cache —
+# and the failure is intermittent, so it reads as a Heisenbug. Reproduced and confirmed fixed on
+# 2026-10-01 by running the same `cargo test` with and without CARGO_INCREMENTAL=0.
+#
+# The cost is nil in practice: dependencies are cached regardless and never change, so only this
+# crate is rebuilt in full, which takes seconds.
+[build]
+incremental = false

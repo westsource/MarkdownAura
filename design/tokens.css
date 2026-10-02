@@ -1,0 +1,128 @@
+/* MarkdownAura — design tokens
+   Single source of truth for color, spacing, type and elevation.
+   Consumed by the WebView2 frontend; keep in sync with design/SPEC.md. */
+
+:root {
+  color-scheme: light;
+
+  /* surfaces */
+  --bg-page: #efeef0;      /* desktop behind the window (mockup only) */
+  --bg: #ffffff;           /* main content */
+  --chrome: #f6f5f3;       /* title bar, status bar */
+  --side: #faf9f7;         /* sidebar, card headers */
+  --code: #f5f4f1;         /* code blocks, source view */
+  --card: #ffffff;         /* raised cards (diagrams) */
+
+  /* hairlines — always 0.5px strokes, three strengths */
+  --line: rgba(0, 0, 0, .09);
+  --line-2: rgba(0, 0, 0, .16);
+  --line-3: rgba(0, 0, 0, .28);
+
+  /* text */
+  --tx: #2a2a2e;
+  --tx-2: #78767f;
+  --tx-3: #a3a1aa;
+
+  /* accent — "aura" purple */
+  --ac: #534ab7;
+  --ac-tx: #3c3489;
+  --ac-bg: #eeedfe;
+
+  /* semantic */
+  --ok: #0f6e56;      --ok-bg: #e1f5ee;
+  --warn: #854f0b;    --warn-bg: #faeeda;
+  --err: #a32d2d;     --err-bg: #fcebeb;
+
+  /* diagram engine identities — badge text / badge bg */
+  --eng-mermaid: #3c3489;  --eng-mermaid-bg: #eeedfe;
+  --eng-dot: #085041;      --eng-dot-bg: #e1f5ee;
+  --eng-d2: #854f0b;       --eng-d2-bg: #faeeda;
+
+  /* type — two weights only, never 600/700 */
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  --fs-2xl: 22px;   /* document h1 */
+  --fs-xl: 17px;    /* section h1 in narrow panes */
+  --fs-lg: 15px;    /* h2 */
+  --fs-md: 13px;    /* body */
+  --fs-sm: 12px;    /* ui labels */
+  --fs-xs: 11px;    /* status bar, badges, captions */
+  --lh-body: 1.7;
+  --lh-ui: 1.45;
+
+  /* spacing */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;
+  --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;
+
+  /* radii */
+  --r-sm: 6px;   /* badges, chips, menu items */
+  --r-md: 8px;   /* buttons, inputs, tab top corners */
+  --r-lg: 12px;  /* cards, overlays, window */
+
+  /* chrome heights — fixed, never grow */
+  --h-title: 38px;
+  --h-toolbar: 40px;
+  --h-status: 26px;
+
+  /* panels */
+  --w-sidebar: 224px;
+  --w-sidebar-min: 180px;
+  --w-sidebar-max: 360px;
+  --w-outline: 200px;
+  --w-outline-min: 160px;
+  --w-outline-max: 360px;
+
+  /* reading measure — --doc-size comes from settings, --zoom from the status bar;
+     prose.css multiplies them, so neither can silently override the other.
+     --measure is a *preset* (窄 60ch / 舒适 100ch / 撑满 100%, default 100ch) written by JS; the value
+     here is only the fallback for the first paint. Every block shares it: there is no wide-content
+     exemption any more, so this one token is the whole layout. */
+  --measure: 100ch;
+  --doc-size: 15px;
+  --zoom: 1;
+
+  /* tab geometry */
+  --tab-h: 30px;
+  --tab-min: 96px;
+  --tab-max: 200px;
+
+  /* motion — short and quiet, this is a reader */
+  --t-fast: 90ms ease-out;
+  --t-base: 140ms ease-out;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg-page: #141317;
+  --bg: #201f23;
+  --chrome: #17161a;
+  --side: #1c1b1f;
+  --code: #26252a;
+  --card: #242328;
+
+  --line: rgba(255, 255, 255, .09);
+  --line-2: rgba(255, 255, 255, .16);
+  --line-3: rgba(255, 255, 255, .28);
+
+  --tx: #e9e7ec;
+  --tx-2: #9b99a3;
+  --tx-3: #6f6d78;
+
+  /* accent lifts in dark mode to hold contrast */
+  --ac: #b3adf0;
+  --ac-tx: #cecbf6;
+  --ac-bg: rgba(179, 173, 240, .15);
+
+  --ok: #5dcaa5;    --ok-bg: rgba(93, 202, 165, .12);
+  --warn: #fac775;  --warn-bg: rgba(250, 199, 117, .12);
+  --err: #f09595;   --err-bg: rgba(240, 149, 149, .12);
+
+  --eng-mermaid: #cecbf6;  --eng-mermaid-bg: rgba(206, 203, 246, .13);
+  --eng-dot: #9fe1cb;      --eng-dot-bg: rgba(159, 225, 203, .11);
+  --eng-d2: #fac775;       --eng-d2-bg: rgba(250, 199, 117, .11);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --t-fast: 0ms; --t-base: 0ms; }
+}

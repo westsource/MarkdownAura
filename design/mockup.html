@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MarkdownAura — interface mockup</title>
+<link rel="stylesheet" href="./tokens.css">
+<link rel="stylesheet" href="./components.css">
+<link rel="stylesheet" href="./prose.css">
+<style>
+  /* mockup-only: sit the window on a desktop-ish surface */
+  body { padding: 0; background: var(--bg-page); }
+  .window { height: 100vh; }
+</style>
+</head>
+<body>
+
+<div class="window" id="win">
+
+  <!-- ============ title bar + tabs ============ -->
+  <div class="titlebar" data-tauri-drag-region>
+    <div class="brand">
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M8 1l6 3.5v7L8 15l-6-3.5v-7z" fill="var(--ac)"/>
+        <path d="M5.2 10V6.2L8 8.6l2.8-2.4V10" fill="none" stroke="var(--bg)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="tabstrip" id="tabstrip"></div>
+    <button class="tabbtn" id="newTabBtn" title="new tab (ctrl T)" aria-label="new tab">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>
+    </button>
+    <button class="tabbtn" id="listTabsBtn" title="all tabs (ctrl shift A)" aria-label="all tabs">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.2" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="12.8" cy="8" r="1.2"/></svg>
+    </button>
+    <div class="win-controls">
+      <button title="minimize" aria-label="minimize"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 8h10"/></svg></button>
+      <button title="maximize" aria-label="maximize"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3.2" y="3.2" width="9.6" height="9.6" rx="1.5"/></svg></button>
+      <button class="close" title="close" aria-label="close"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+    </div>
+  </div>
+
+  <!-- ============ toolbar ============ -->
+  <div class="toolbar">
+    <button class="iconbtn on" id="toggleSidebar" title="toggle sidebar (ctrl B)" aria-label="toggle sidebar">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.1"><rect x="1.8" y="2.8" width="12.4" height="10.4" rx="2"/><path d="M6.2 2.8v10.4"/></svg>
+    </button>
+
+    <div class="segmented" id="viewSwitch" role="tablist" aria-label="view mode">
+      <button data-view="preview" class="on" role="tab" aria-selected="true" title="preview" aria-label="preview">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"><rect x="2.5" y="2.8" width="11" height="10.4" rx="1.5"/><path d="M4.8 5.8h3.2M4.8 8.2h6.4M4.8 10.6h4.8"/></svg>
+      </button>
+      <button data-view="split" role="tab" aria-selected="false" title="split" aria-label="split">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"><rect x="2.5" y="2.8" width="11" height="10.4" rx="1.5"/><path d="M8 2.8v10.4"/><path d="M4.4 6.2h2.2M4.4 9h2.2"/></svg>
+      </button>
+      <button data-view="source" role="tab" aria-selected="false" title="source" aria-label="source">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.8" width="11" height="10.4" rx="1.5"/><path d="M6.7 6.3L4.9 8l1.8 1.7M9.3 6.3L11.1 8l-1.8 1.7"/></svg>
+      </button>
+    </div>
+
+    <button class="iconbtn" id="rerender" title="re-render (ctrl R)" aria-label="re-render">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M13.5 8a5.5 5.5 0 1 1-1.8-4.1"/><path d="M13.8 1.8v3.4h-3.4"/></svg>
+    </button>
+
+    <div class="spacer"></div>
+
+    <div class="find-trigger" id="findTrigger" title="find (ctrl F)">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="7.2" cy="7.2" r="4.4"/><path d="M10.5 10.5L14 14"/></svg>
+      <span>find</span> <kbd>ctrl F</kbd>
+    </div>
+
+    <button class="iconbtn on" id="toggleOutline" title="toggle outline (ctrl alt O)" aria-label="toggle outline">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.1"><rect x="1.8" y="2.8" width="12.4" height="10.4" rx="2"/><path d="M9.8 2.8v10.4M4 6h3.6M4 8.6h3.6M4 11.2h3.6"/></svg>
+    </button>
+    <button class="iconbtn" id="measureBtn" title="reading width" aria-label="reading width">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"><path d="M2.4 4v8M13.6 4v8M4.6 8h6.8M6.5 6.2L4.7 8l1.8 1.8M9.5 6.2L11.3 8 9.5 9.8"/></svg>
+    </button>
+    <button class="iconbtn" id="toggleTheme" title="toggle theme" aria-label="toggle theme"></button>
+    <button class="iconbtn" id="openSettings" title="settings (ctrl ,)" aria-label="settings">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"><path d="M2.6 4.6h10.8M2.6 8h10.8M2.6 11.4h10.8"/><circle cx="10.4" cy="4.6" r="1.5" fill="currentColor" stroke="none"/><circle cx="5.6" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="11.4" cy="11.4" r="1.5" fill="currentColor" stroke="none"/></svg>
+    </button>
+    <button class="iconbtn" id="openAbout" title="about" aria-label="about">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"><circle cx="8" cy="8" r="6.1"/><path d="M8 7.3v4"/><path d="M8 4.9h.01"/></svg>
+    </button>
+  </div>
+
+  <!-- ============ body ============ -->
+  <div class="body">
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <span class="panel-label">explorer</span>
+        <button class="mini-btn" id="openFolderBtn" title="open folder (ctrl shift O)">open folder</button>
+      </div>
+      <div class="sidebar-search">
+        <input type="search" id="fileFilter" placeholder="filter files" aria-label="filter files">
+      </div>
+      <div class="tree" id="tree"></div>
+      <div class="sidebar-foot">
+        <span class="dot ok"></span>
+        <span id="watchLabel">watching 6 files</span>
+      </div>
+      <div class="panel-resizer" id="sidebarResizer" role="separator" aria-orientation="vertical" aria-label="resize explorer"></div>
+    </aside>
+
+    <section class="main" id="main">
+
+      <!-- empty state -->
+      <div class="empty" id="empty" hidden>
+        <div class="dropzone">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4 6.5h6.5l2 2.5H20v9H4z"/><path d="M12 3v6M9.5 6.5L12 9l2.5-2.5"/></svg>
+        </div>
+        <h1>Drop a folder or .md file here</h1>
+        <p>mermaid · dot · d2 render locally — no network, no telemetry</p>
+        <div class="actions">
+          <button class="primary-btn">open folder</button>
+          <button class="ghost-btn">open file</button>
+        </div>
+        <div class="shortcuts">
+          <span><kbd>ctrl O</kbd> open</span>
+          <span><kbd>ctrl shift P</kbd> recent</span>
+          <span><kbd>F1</kbd> help</span>
+        </div>
+        <div class="recent">recent — <a>E:\notes</a> · <a>docs\architecture.md</a></div>
+      </div>
+
+      <!-- views -->
+      <div class="view preview on" id="view-preview"><div class="prose-wrap"><div class="prose" id="out-preview"></div></div></div>
+
+      <div class="view split" id="view-split">
+        <div class="pane-src"><pre class="src" id="out-split-src"></pre></div>
+        <div class="splitter" id="splitter" role="separator" aria-orientation="vertical"></div>
+        <div class="pane-out"><div class="prose compact" id="out-split"></div></div>
+      </div>
+
+      <div class="view source" id="view-source">
+        <div class="source-view" style="flex:1;min-width:0;">
+          <span class="readonly-pill">read-only</span>
+          <pre class="src" id="out-source"></pre>
+        </div>
+      </div>
+
+      <!-- find bar -->
+      <div class="findbar" id="findbar" role="search">
+        <input type="text" id="findInput" placeholder="find in document" aria-label="find">
+        <span class="find-count" id="findCount">0/0</span>
+        <button class="iconbtn" id="findPrev" style="width:22px;height:22px;" title="previous (shift enter)" aria-label="previous match"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4 10l4-4 4 4"/></svg></button>
+        <button class="iconbtn" id="findNext" style="width:22px;height:22px;" title="next (enter)" aria-label="next match"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4 6l4 4 4-4"/></svg></button>
+        <button class="iconbtn" id="findCase" style="width:22px;height:22px;font-size:11px;" title="match case" aria-label="match case">Aa</button>
+        <button class="iconbtn" id="findClose" style="width:22px;height:22px;" title="close (esc)" aria-label="close find"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+      </div>
+
+      <!-- diagram overlay -->
+      <div class="overlay" id="diagramOverlay">
+        <div class="sheet">
+          <div class="sheet-head">
+            <span class="badge" id="ovBadge">mermaid</span>
+            <span class="diagram-title" id="ovTitle">diagram</span>
+            <div class="spacer"></div>
+            <div class="zoomer">
+              <button id="ovOut" title="zoom out">−</button>
+              <button id="ovPct" title="reset zoom">100%</button>
+              <button id="ovIn" title="zoom in">+</button>
+            </div>
+            <button class="ghost-btn" id="ovCopySvg">copy svg</button>
+            <button class="ghost-btn" id="ovCopySrc">copy source</button>
+            <button class="iconbtn" id="ovClose" title="close (esc)" aria-label="close">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+            </button>
+          </div>
+          <div class="sheet-body" id="ovBody"></div>
+          <div class="sheet-foot">
+            <span id="ovEngine">engine</span>
+            <span>scroll to zoom · drag to pan · esc to close</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- settings — an overlay sheet, not a second window (SPEC §11) -->
+      <div class="overlay" id="settingsOverlay">
+        <div class="sheet tight form">
+          <div class="sheet-head">
+            <span class="sheet-title">settings</span>
+            <div class="spacer"></div>
+            <kbd>esc</kbd>
+            <button class="iconbtn" id="setClose" title="close (esc)" aria-label="close settings">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+            </button>
+          </div>
+          <div class="sheet-body" id="setBody"></div>
+        </div>
+      </div>
+
+      <!-- help -->
+      <div class="overlay" id="helpOverlay">
+        <div class="sheet wide form">
+          <div class="sheet-head">
+            <span class="sheet-title">help</span>
+            <div class="spacer"></div>
+            <kbd>F1</kbd>
+            <button class="iconbtn" id="helpClose" title="close (esc)" aria-label="close help">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+            </button>
+          </div>
+          <div class="sheet-body">
+            <div class="help-cols">
+              <div class="help-col" id="helpKeys"></div>
+              <div class="help-col" id="helpSyntax"></div>
+            </div>
+          </div>
+          <div class="sheet-foot">
+            <span>engines — mermaid (MIT) · graphviz (Apache-2.0) · d2 (MPL-2.0)</span>
+            <div class="spacer"></div>
+            <span>MarkdownAura 0.1.0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- about — prototype copy is Chinese so the wording can be reviewed; the app ships both catalogues -->
+      <div class="overlay" id="aboutOverlay">
+        <div class="sheet tight form">
+          <div class="sheet-head">
+            <span class="sheet-title">关于</span>
+            <div class="spacer"></div>
+            <kbd>esc</kbd>
+            <button class="iconbtn" id="aboutClose" title="close (esc)" aria-label="close about">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+            </button>
+          </div>
+          <div class="sheet-body">
+            <div class="about-head">
+              <svg width="26" height="26" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M8 1l6 3.5v7L8 15l-6-3.5v-7z" fill="var(--ac)"/>
+                <path d="M5.2 10V6.2L8 8.6l2.8-2.4V10" fill="none" stroke="var(--bg)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <div>
+                <div class="about-name">MarkdownAura <span class="chip">v0.1.0</span><span class="chip">MIT</span></div>
+                <div class="about-tagline">本地渲染的 Markdown 阅读器 — 打开即读</div>
+              </div>
+            </div>
+
+            <p class="about-intro">把 .md 当书来读：排版、图表全部在本机完成，不联网、无遥测。</p>
+            <ul class="about-features">
+              <li>预览 · 分栏 · 源码</li>
+              <li>mermaid · dot · d2 本地渲染</li>
+              <li>行宽档位 · 字号 · 缩放</li>
+              <li>大纲 · 查找 · 沉浸阅读</li>
+              <li>会话恢复 · 变更自动刷新</li>
+              <li>中英双语 · 深浅主题</li>
+            </ul>
+
+            <div class="section-head">作者</div>
+            <div class="form-row">
+              <div class="grow"><div>道荣（黄超）</div><div class="form-sub">设计与开发</div></div>
+              <a class="about-link" id="aboutGithub" href="https://github.com/westsource/MarkdownAura">github.com/westsource/MarkdownAura<span class="ext">↗</span></a>
+            </div>
+
+            <div class="section-head">引擎</div>
+            <div class="form-row"><span class="badge mermaid">mermaid</span><div class="grow form-sub" style="margin:0">mermaid.js 12</div><span class="state-off">MIT</span></div>
+            <div class="form-row"><span class="badge dot">dot</span><div class="grow form-sub" style="margin:0">graphviz · @hpcc-js/wasm-graphviz</div><span class="state-off">Apache-2.0</span></div>
+            <div class="form-row"><span class="badge d2">d2</span><div class="grow form-sub" style="margin:0">可选安装（约 11 MB）</div><span class="state-off">MPL-2.0</span></div>
+
+            <div class="section-head">数据</div>
+            <div class="form-row"><div class="grow"><div class="mono-sm">%APPDATA%\MarkdownAura</div>
+              <div class="form-sub">会话、窗口几何与设置；d2 引擎装在 engines 子目录</div></div>
+              <button class="ghost-btn" id="aboutReveal">打开</button></div>
+          </div>
+          <div class="sheet-foot">
+            <div class="spacer"></div>
+            <span>无遥测 · 渲染全程本地</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="menu" id="menu"></div>
+      <div class="toasts" id="toasts"></div>
+    </section>
+
+    <aside class="outline" id="outline">
+      <div class="outline-scroll">
+        <div class="panel-label" style="padding:0 8px 8px;">outline</div>
+        <div id="outlineList"></div>
+        <div class="panel-label outline-sub">diagrams</div>
+        <div id="diagramList"></div>
+      </div>
+      <div class="panel-resizer" id="outlineResizer" role="separator" aria-orientation="vertical" aria-label="resize outline"></div>
+    </aside>
+
+  </div>
+
+  <!-- ============ status bar ============ -->
+  <div class="statusbar">
+    <span id="stPath">—</span>
+    <span id="stWords">0 words</span>
+    <span id="stEnc">utf-8</span>
+    <div class="spacer"></div>
+    <span class="cluster" id="eng-mermaid" title="mermaid engine"><span class="dot ok"></span>mermaid</span>
+    <span class="cluster" id="eng-dot" title="graphviz engine"><span class="dot ok"></span>dot</span>
+    <span class="cluster" id="eng-d2" title="d2 engine — not installed"><span class="dot off"></span>d2</span>
+    <span id="stRender">rendered in 0 ms</span>
+    <button id="stMeasure" class="status-chip" title="reading width"
+      ><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4v8M13.5 4v8M4.5 8h7M6.3 6.2L4.5 8l1.8 1.8M9.7 6.2L11.5 8 9.7 9.8"/></svg
+      ><span id="stMeasureLabel">100ch</span></button>
+    <button id="stZoom" title="reset zoom (ctrl 0)">100%</button>
+  </div>
+
+  <!-- immersive (F11): every piece of chrome is gone; this 5px hot zone is the way back -->
+  <div class="im-hot" id="imHot"></div>
+  <div class="im-bar" id="imBar">
+    <span id="imFile">—</span>
+    <div class="spacer"></div>
+    <button id="imMeasure" title="reading width"
+      ><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4v8M13.5 4v8M4.5 8h7M6.3 6.2L4.5 8l1.8 1.8M9.7 6.2L11.5 8 9.7 9.8"/></svg
+      ><span id="imMeasureLabel">72ch</span></button>
+    <button id="imZoom" title="reset zoom (ctrl 0)">100%</button>
+    <kbd>esc</kbd><span>exit</span>
+  </div>
+
+</div>
+
+<script src="./mockup.js"></script>
+</body>
+</html>

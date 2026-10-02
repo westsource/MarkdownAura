@@ -1,0 +1,34 @@
+{
+  "name": "markdownaura",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A small, fast markdown viewer for Windows — mermaid, dot and d2 render locally",
+  "license": "MIT",
+  "author": "道荣（黄超）",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "check:rawhtml": "node design/check-raw-html.mjs",
+    "check:prose": "node design/check-prose-css.mjs",
+    "notices": "node tools/make-notices.mjs",
+    "build:prod": "npm run build && npm run build:prod:rust",
+    "build:prod:rust": "cargo build --release -j 1 --manifest-path src-tauri/Cargo.toml --features tauri/custom-protocol"
+  },
+  "dependencies": {
+    "@hpcc-js/wasm-graphviz": "^1.29.2",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2",
+    "@tauri-apps/plugin-opener": "^2.7.0",
+    "mermaid": "^12"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^22",
+    "typescript": "^5.6",
+    "vite": "^6"
+  }
+}
