@@ -609,10 +609,10 @@ which carry colour because they carry identity.
 | block | content |
 |---|---|
 | brand line | logo · `MarkdownAura` · `v0.1.0` (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline |
-| update | one row between the brand and the sentence: `check for updates` (ghost) → `v0.2.0 is available` + `download and install` (primary), the state text beside the button and the opt-in note under it |
+| update | a row inside the facts block, under `author`: hanging label `update`, then `check for updates` (ghost) → `v0.2.0 is available` + `download and install` (primary), with the state text and the opt-in note as the value |
 | what it is | **one** paragraph: what the app is, then the six capabilities after a `capabilities:` lead-in — same size, same colour, no separate block |
-| facts | hanging labels (`author` / `engines` / `data`): 道荣（黄超） · the three engine badges with version and licence · the data path in mono with an `open` button |
-| foot | `LICENSE · THIRD-PARTY.md` (both ship next to the executable) · `nothing leaves this machine · every render happens locally` |
+| facts | hanging labels (`author` / `update` / `engines` / `data`): 道荣（黄超） · the update row · the three engine badges with version and licence · the data path in mono with an `open` button |
+| foot | `LICENSE · THIRD-PARTY.md` (both ship next to the executable) |
 
 Decisions inside that shape, each of which was made deliberately:
 
@@ -637,10 +637,10 @@ Decisions inside that shape, each of which was made deliberately:
   carries an adjective ("rendered locally", not "renders instantly"). The lead may name the product
   in its own voice — 2026-10-03, product owner's call: 极速极简 / "fast, minimal" — because that is
   a statement of what the app is for, not a claim about how it performs.
-- **The privacy line says "nothing leaves this machine", not "no telemetry".** Telemetry is
-  industry jargon; the sentence a reader should not have to decode says plainly that nothing is
-  sent anywhere. The installer's optional WebView2 bootstrapper is a request the installer makes,
-  not the app, and the foot is about the app.
+- **The foot carries the notices and nothing else.** It used to also carry a privacy claim ("nothing
+  leaves this machine"); 2026-10-03, product owner's call: removed. The claim itself still holds — the
+  app's runtime fetches nothing except the update check a reader asks for (below) — but it is a claim,
+  and the foot is where facts about the build live.
 
 - **The update check is the app's only network call, and it takes a click.** No startup check, no
   background poll, no telemetry: the row says so out loud, and what it fetches is one GitHub release

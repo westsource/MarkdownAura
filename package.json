@@ -1,7 +1,7 @@
 {
   "name": "markdownaura",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "A small, fast markdown viewer for Windows — mermaid, dot and d2 render locally",
   "license": "MIT",

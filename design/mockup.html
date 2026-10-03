@@ -240,18 +240,20 @@
               </div>
 
               <hr class="about-rule">
-              <p class="about-lede">极速极简的 Markdown 阅读器，排版和图表都在本机完成，不联网，也不向任何地方发送数据。能力：预览 · 分栏 · 源码　mermaid · dot · d2 本地渲染　行宽档位 · 字号 · 缩放　大纲 · 查找 · 沉浸阅读　会话恢复 · 变更自动刷新　中英双语 · 深浅主题</p>
-              <hr class="about-rule">
-              <div class="about-update">
-                <button class="ghost-btn" id="aboutUpdateCheck">check for updates</button>
-                <button class="primary-btn" id="aboutUpdateInstall" hidden>download and install</button>
-                <span class="about-update-state" id="aboutUpdateState"></span>
-              </div>
-              <p class="about-update-hint">the app's only network call — it happens when you click, never on its own</p>
-              <hr class="about-rule">
 
               <div class="about-facts">
                 <div class="row"><span class="k">作者</span><span class="v">道荣（黄超）</span></div>
+                <div class="row">
+                  <span class="k">更新</span>
+                  <span class="v">
+                    <div class="about-update">
+                      <button class="ghost-btn" id="aboutUpdateCheck">check for updates</button>
+                      <button class="primary-btn" id="aboutUpdateInstall" hidden>download and install</button>
+                      <span class="about-update-state" id="aboutUpdateState"></span>
+                    </div>
+                    <div class="about-update-hint">the app's only network call — it happens when you click, never on its own</div>
+                  </span>
+                </div>
                 <div class="row"><span class="k">引擎</span><span class="v"><span class="badge mermaid">mermaid</span>mermaid.js 12<span class="lic">MIT</span></span></div>
                 <div class="row"><span class="k"></span><span class="v"><span class="badge dot">dot</span>graphviz · @hpcc-js/wasm-graphviz<span class="lic">Apache-2.0</span></span></div>
                 <div class="row"><span class="k"></span><span class="v"><span class="badge d2">d2</span>已内置 — wasm 内联（约 11.5 MB）<span class="lic">MPL-2.0</span></span></div>
@@ -260,8 +262,7 @@
             </div>
           </div>
           <div class="sheet-foot">
-            <div class="spacer"></div>
-            <span>不向任何地方发送数据 · 渲染全程本地</span>
+            <span>随程序分发：LICENSE · THIRD-PARTY.md</span>
           </div>
         </div>
       </div>
