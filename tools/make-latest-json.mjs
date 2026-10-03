@@ -15,7 +15,9 @@
  * the installer. Everything lands in `var/release/` (gitignored) ready to upload.
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -63,8 +65,6 @@ const assets = [
   sigPath,
   path.join(root, "LICENSE"),
   path.join(root, "THIRD-PARTY.md"),
-  path.join(root, "src-tauri", "target", "release", "markdownaura.exe"),
-  path.join(root, "src-tauri", "target", "release", "WebView2Loader.dll"),
 ];
 
 const manifestPath = path.join(releaseDir, "latest.json");
@@ -72,6 +72,31 @@ fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
 for (const asset of assets) {
   if (fs.existsSync(asset)) fs.copyFileSync(asset, path.join(releaseDir, path.basename(asset)));
+}
+
+/* The two-file portable is distributed as a zip rather than as two loose assets: the pair only works
+ * together (the exe imports the DLL), so a reader who downloads one of them has nothing. The zip has a
+ * single top-level folder, which keeps "Extract All" from scattering two files into Downloads. */
+const appExe = path.join(root, "src-tauri", "target", "release", "markdownaura.exe");
+const loaderDll = path.join(root, "src-tauri", "target", "release", "WebView2Loader.dll");
+const portableFolder = `MarkdownAura-${version}-portable`;
+const zipPath = path.join(releaseDir, `${portableFolder}.zip`);
+
+if (fs.existsSync(appExe) && fs.existsSync(loaderDll)) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ma-portable-"));
+  const folder = path.join(tmp, portableFolder);
+  fs.mkdirSync(folder);
+  fs.copyFileSync(appExe, path.join(folder, "markdownaura.exe"));
+  fs.copyFileSync(loaderDll, path.join(folder, "WebView2Loader.dll"));
+  try {
+    // bsdtar, which Windows has shipped since 1803, picks the format from the extension.
+    execFileSync("tar", ["-a", "-c", "-f", zipPath, "-C", tmp, portableFolder], { stdio: "inherit" });
+  } catch {
+    execFileSync("powershell", ["-NoProfile", "-Command", `Compress-Archive -Path '${folder}' -DestinationPath '${zipPath}' -Force`], { stdio: "inherit" });
+  }
+  fs.rmSync(tmp, { recursive: true, force: true });
+} else {
+  console.warn("warning: the portable pair is missing, so no zip was staged — build first");
 }
 
 console.log(`latest.json -> ${path.relative(root, manifestPath)}`);
@@ -84,8 +109,6 @@ for (const file of fs.readdirSync(releaseDir).sort()) {
   console.log(`  ${(size / 1048576).toFixed(2).padStart(7)} MB  ${file}`);
 }
 
-// The portable pair is what a reader downloads instead of the installer; name it clearly on the
-// release page by keeping the exe's own name. Nothing else to do here.
-if (!fs.existsSync(path.join(releaseDir, "MarkdownAura.exe"))) {
-  console.warn("warning: the portable exe is not in var/release — build first");
+if (!fs.existsSync(path.join(releaseDir, "MarkdownAura.exe")) && !fs.existsSync(zipPath)) {
+  console.warn("warning: no portable asset was staged — build first");
 }

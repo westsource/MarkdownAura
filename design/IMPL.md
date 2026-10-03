@@ -858,10 +858,13 @@ beside the installer. `plugins.updater.windows.installMode` is `passive`: a smal
 prompts.
 
 **Manifest and assets.** `node tools/make-latest-json.mjs --notes "…"` reads the version from `package.json`
-and the signature from the bundle, writes `var/release/latest.json` and stages every asset (installer, its
-`.sig`, `latest.json`, `LICENSE`, `THIRD-PARTY.md`, the portable exe and `WebView2Loader.dll`). Run
-`node tools/make-portable.mjs --stage` after it to add the single-file portable (it embeds the same build,
-and `make-latest-json` clears the staging directory first, so the order matters). The endpoint
+and the signature from the bundle, writes `var/release/latest.json` and stages every asset: the installer,
+its `.sig`, `latest.json`, `LICENSE`, `THIRD-PARTY.md`, and — as one **zip** with a single top-level folder —
+the portable pair (`markdownaura.exe` + `WebView2Loader.dll`), because that pair only works together and two
+loose assets invite downloading one of them. Run `node tools/make-portable.mjs --stage` after it to add the
+single-file portable (it embeds the same build, and `make-latest-json` clears the staging directory first, so
+the order matters). `bash var/publish-release.sh --prune-missing` makes the release mirror that directory,
+deleting assets that are no longer staged — that is how the loose pair was retired. The endpoint
 in `tauri.conf.json` is `…/releases/latest/download/latest.json`, which GitHub resolves to the *newest*
 release — so the manifest has to be uploaded to the release tagged `v<version>`; leaving it on an older
 release points the updater at an older installer, which the version check then refuses.

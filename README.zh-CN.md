@@ -90,11 +90,11 @@
 
 ## 安装与运行
 
-- **免安装版**：把 `MarkdownAura.exe` 与同目录的 `WebView2Loader.dll` 放在一起，双击 exe 即可（只单独拷走 exe 会因缺少该 DLL 而无法启动）。
+- **免安装版（zip）**：`MarkdownAura-0.1.0-portable.zip` 里是 `markdownaura.exe` 与它需要的 `WebView2Loader.dll`。解压到任意位置双击 exe 即可（只拷 exe 无法启动）。
 - **免安装版（单文件）**：`MarkdownAura-0.1.0-portable.exe` 把上面两个文件装进一个文件里。首次启动时解包到 `%LOCALAPPDATA%\MarkdownAura\portable\0.1.0\` 并从中运行，因此它不需要旁边有任何东西，可以直接当"一个文件"发给人；解包出来的 exe 与构建产物字节一致。
-- **安装版**：`MarkdownAura_0.1.0_x64-setup.exe`。安装向导含许可页，并把 `LICENSE` 与 `THIRD-PARTY.md` 放进安装目录。它同时也是升级通道：关于面板的 **检查更新** 会从 GitHub release 下载下一个已签名的安装包并运行。免安装版这样升级后会变成正式安装；想保持免安装，就到 release 页手动下载新的 exe 与 DLL。
+- **安装版**：`MarkdownAura_0.1.0_x64-setup.exe`。安装向导含许可页，并把 `LICENSE` 与 `THIRD-PARTY.md` 放进安装目录。它同时也是升级通道：关于面板的 **检查更新** 会从 GitHub release 下载下一个已签名的安装包并运行。免安装版这样升级后会变成正式安装；想保持免安装，就到 release 页手动下载新的 zip。
 - **系统要求**：Windows 10 / 11（x64）+ WebView2 Runtime（Win11 与装了 Edge 的 Win10 已自带）。
-- **体积**：免安装版 exe 约 14.7 MB（另需同目录 161 KB 的 `WebView2Loader.dll`）；安装包 11.6 MB。
+- **体积**：免安装 zip 约 12.1 MB；单文件版约 16.6 MB（未压缩）；安装包 11.6 MB。
 
 ---
 
