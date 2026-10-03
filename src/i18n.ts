@@ -254,7 +254,7 @@ const zh: Record<Key, string> = {
   "sidebar.noMarkdown": "这里没有 Markdown 文件",
   "sidebar.watching": "正在监视 {n} 个文件",
   "empty.title": "把文件夹或 .md 文件拖到这里",
-  "empty.subtitle": "mermaid · dot · d2 本地渲染 — 不联网、无遥测",
+  "empty.subtitle": "mermaid · dot · d2 本地渲染 — 不联网、不采集任何数据",
   "empty.openFolder": "打开文件夹",
   "empty.openFile": "打开文件",
   "empty.shortcutOpen": "打开",
