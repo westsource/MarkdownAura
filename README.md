@@ -1,121 +1,123 @@
+**English** · [简体中文](README.zh-CN.md)
+
 # MarkdownAura
 
-给 Windows 的一个 Markdown **阅读器**——为"读得舒服"而做，不为编辑。
+A Markdown **reader** for Windows — built for reading well, not for editing.
 
-- 三种视图：预览 / 分屏 / 源码，一键切换，分屏宽度可拖
-- 图表**本地**渲染：mermaid、graphviz (dot)、d2 三个引擎全部内置，运行时零联网、无遥测
-- 关掉再打开，标签页、滚动位置、文件夹、窗口大小与全部设置都回来
-
----
-
-## 为什么用它
-
-**它是阅读器，不是编辑器。**
-源码视图只读——没有光标、没有撤销、没有保存，也没有"未保存"的打扰。侧栏、大纲、工具栏随时可收，纵向空间留给正文。
-
-**三个图表引擎全部内置，全程不联网。**
-`mermaid`、`dot` / `graphviz`、`d2` 都在本地渲染，不请求任何远端服务，也不需要先"安装引擎"。引擎出错时在图表卡片内就地报错（带源码行号），不会清空页面。
-
-**大文件与各种编码都不挡路。**
-单文件读取上限 8 MiB，超出部分明确标注"已截断"而不是悄悄丢内容；UTF-8、UTF-8 BOM、UTF-16LE、UTF-16BE 自动识别，LF / CRLF 也在状态栏标明。
-
-**每个标签页记住自己的状态。**
-视图模式、滚动位置、查找词与命中位置按标签页保存，切回来不重新渲染。
-
-**会话恢复是"回来了"，不是"重开了"。**
-再次启动时，标签页（含预览标签）、打开过的文件夹、窗口几何、主题、字号、缩放、阅读宽度、侧栏与大纲宽度全部还原；文件临时不在也只是划掉，不会消失。
-
-**中文排版有真实字重。**
-标题与粗体用 600 而不是 500：`Microsoft YaHei UI` 只有 Regular/Bold 两档，500 会被就近渲染成 Regular，中文标题会看不出加粗。
-
-**字号只有一套基准。**
-正文、标题、代码、表格、源码窗格都相对"字号设置 × 缩放"，调任一项时整篇文档一起变——不会出现标题比正文还小、源码窗格跟预览不一样大这类事。
-
-**安装不需要联网。**
-安装包自带 WebView2 加载器；只有当目标机缺 WebView2 Runtime（Win11 与装了 Edge 的 Win10 已自带）时，安装器才会去获取它。
+- Three views — preview / split / source — one click apart, with a draggable split
+- Diagrams render **locally**: mermaid, graphviz (dot) and d2 all ship inside the app, with no network at runtime and no telemetry
+- Close it and open it again: tabs, scroll positions, folder, window size and every setting come back
 
 ---
 
-## 功能
+## Why use it
 
-| 区域 | 能力 |
+**It is a reader, not an editor.**
+The source view is read-only — no caret, no undo, no save, and no unsaved-changes nagging. Sidebar, outline and toolbar fold away on demand, so the vertical space goes to the text.
+
+**All three diagram engines ship inside the app, and nothing goes over the network.**
+`mermaid`, `dot` / `graphviz` and `d2` render locally: there is no remote service to call and no engine to install first. When an engine fails, the error lands inside the diagram card with the source line number — it never blanks the page.
+
+**Big files and odd encodings do not get in the way.**
+A single file is read up to 8 MiB, and anything past that is marked "truncated" rather than quietly dropped. UTF-8, UTF-8 BOM, UTF-16LE and UTF-16BE are detected, and LF / CRLF is reported in the status bar.
+
+**Every tab remembers its own state.**
+View mode, scroll position, the find query and the hit you were on are kept per tab, so switching back does not re-render.
+
+**Session restore means "it came back", not "it started over".**
+The next launch restores the tabs (preview tab included), the folder you had open, window geometry, theme, font size, zoom, reading width and both panel widths. A file that is temporarily missing is struck through, not dropped.
+
+**Chinese text gets real weight.**
+Headings and bold use 600 rather than 500: `Microsoft YaHei UI` has only Regular and Bold, so a request for 500 is matched down to Regular and a Chinese heading looks un-bolded.
+
+**One size base for everything.**
+Body text, headings, code, tables and the source pane are all relative to "font-size setting × zoom", so changing either moves the whole document together — a heading can never end up smaller than the body it introduces, and the source pane never disagrees with the preview.
+
+**Installing needs no network.**
+The installer carries the WebView2 loader. It only fetches the WebView2 Runtime on a machine that does not have it (Windows 11 and Windows 10 with Edge already do).
+
+---
+
+## Features
+
+| Area | What it does |
 |---|---|
-| 资源管理器 | 打开文件夹；宽度可拖（180–640px）；**只列 md** 开关（默认开）；文件名筛选；目录始终显示；忽略的目录：`.` 开头、`node_modules`、`target`、`dist`；底部显示 `正在监视 N 个文件` |
-| 标签页 | 单击树中文件开"预览标签"（斜体），双击固定；`⋯` 列出全部标签；`ctrl W` 关闭；`+` 新建标签 |
-| 视图 | 预览 / 分屏 / 源码；分屏可拖分隔条；两种窗格各自记住滚动位置 |
-| 图表 | mermaid / dot / d2 卡片：引擎徽章、首行标题、源码行号；`放大` 打开查看器（滚轮缩放、拖拽平移、复制 SVG、复制源码、`esc` 关闭） |
-| 查找 | `ctrl F`、区分大小写、命中计数、上/下一处 |
-| 大纲 | 1–4 级标题与图表列表，点击跳转，宽度可拖 |
-| 阅读 | 正文字号 12–22px；阅读宽度三档（窄 60ch / 舒适 100ch / 撑满）；浅色 / 深色 / 跟随系统；语言跟随系统（中 / 英）；减少动效 |
-| 沉浸 | `F11` 收掉全部界面 chrome，`esc` 或 `F11` 退出 |
-| 帮助 | `F1` 快捷键表与许可证说明 |
-| 关于 | 版本、作者、许可证、引擎清单与体积、数据目录（可直接打开）、项目主页链接 |
-| 设置（覆盖层，非第二个窗口） | 主题 / 语言 / 字号 / 阅读宽度 / 减少动效 / 引擎体积 / 监视去抖 / 渲染缓存大小与清空 |
-| 数据 | `%APPDATA%\MarkdownAura\session.json`，原子写入（崩溃不丢上一次会话）；渲染缓存按 SVG 字节计，可一键清空 |
+| Explorer | open a folder; drag its width (180–640px); an **md only** switch (on by default); filter by file name, revealed from the foot row on demand; directories always listed; ignored directories are dot-prefixed names plus `node_modules`, `target`, `dist`; the foot shows `watching N files` |
+| Tabs | a single click in the tree opens a *preview tab* (italic), a double click pins it; `⋯` lists every tab; `ctrl W` closes one; `+` opens a new one |
+| Views | preview / split / source; the splitter drags; each pane keeps its own scroll position |
+| Diagrams | mermaid / dot / d2 cards with an engine badge, the first source line as a title and the source line number; `zoom` opens the viewer (wheel to zoom, drag to pan, copy SVG, copy source, `esc` to close) |
+| Find | `ctrl F`, match case, a hit counter, next / previous |
+| Outline | headings (levels 1–4) and diagrams, click to jump, draggable width |
+| Reading | body size 12–22px; three reading widths (narrow 60ch / comfortable 100ch / full); light / dark / follow the system; UI language follows the system (Chinese / English); reduce motion |
+| Immersive | `F11` hides every piece of chrome; `esc` or `F11` leaves |
+| Help | `F1` — the keyboard map and the licence summary |
+| About | version, author, licence, the engines with their sizes, the data folder (openable from there) and a link to the project |
+| Settings (an overlay, not a second window) | theme / language / font size / reading width / reduce motion / engine sizes / watch debounce / render-cache size and clear |
+| Data | `%APPDATA%\MarkdownAura\session.json`, written atomically (a crash cannot lose the previous session); the render cache is measured in SVG bytes and clears in one click |
 
-原始 HTML 只放行一小段固定标签（`details`、`summary`、`kbd`、`sub`、`sup`、`br`、`hr`），其余一律丢弃——文档里写什么都不会影响应用界面。
+Raw HTML: only a short fixed list of tags is allowed through (`details`, `summary`, `kbd`, `sub`, `sup`, `br`, `hr`) and everything else is dropped — what a document contains cannot touch the app's own interface.
 
 ---
 
-## 图表引擎
+## Diagram engines
 
-| 引擎 | 围栏标注 | 许可证 | 随包体积 |
+| Engine | Fence label | Licence | Shipped size |
 |---|---|---|---|
-| mermaid | `mermaid` | MIT | 29 KB 入口 + 按需分块（磁盘 5.18 MB，只加载用到的图类型） |
-| graphviz | `dot`、`graphviz` | Apache-2.0 | 约 0.9 MB（wasm 内联在 JS 中） |
-| d2 | `d2` | MPL-2.0 | 11.5 MB（wasm 内联在 JS 中） |
+| mermaid | `mermaid` | MIT | 29 KB entry + chunks on demand (5.18 MB on disk; only the diagram types you use are loaded) |
+| graphviz | `dot`, `graphviz` | Apache-2.0 | ~0.9 MB (wasm inlined in the JS) |
+| d2 | `d2` | MPL-2.0 | 11.5 MB (wasm inlined in the JS) |
 
-三者都在应用内运行，任何文档都不需要网络。
+All three run inside the application, so no document needs a network connection.
 
 ---
 
-## 快捷键
+## Keyboard
 
-| 分组 | 按键 | 作用 |
+| Group | Keys | Action |
 |---|---|---|
-| 文件 | `ctrl O` / `ctrl shift O` | 打开文件 / 打开文件夹 |
-| 文件 | `ctrl shift P` / `ctrl shift A` | 最近文件 / 标签页列表 |
-| 文件 | `ctrl W` / `ctrl tab` / `ctrl 1-9` | 关闭 / 下一个 / 跳转标签页 |
-| 视图 | `ctrl B` / `ctrl alt O` | 侧栏 / 大纲 |
-| 视图 | `ctrl R` | 重新渲染当前文档 |
-| 视图 | `ctrl ,` / `F1` | 设置 / 帮助 |
-| 视图 | `F11` | 沉浸模式 |
-| 视图 | `ctrl +` `ctrl -` / `ctrl 0` | 缩放 / 重置缩放 |
-| 视图 | `ctrl shift M` | 切换阅读宽度 |
-| 查找 | `ctrl F`，`enter` / `shift enter`，`esc` | 查找、下一处 / 上一处、关闭 |
+| File | `ctrl O` / `ctrl shift O` | open file / open folder |
+| File | `ctrl shift P` / `ctrl shift A` | recent files / list tabs |
+| File | `ctrl W` / `ctrl tab` / `ctrl 1-9` | close / next / jump to tab |
+| View | `ctrl B` / `ctrl alt O` | sidebar / outline |
+| View | `ctrl R` | re-render the current document |
+| View | `ctrl ,` / `F1` | settings / help |
+| View | `F11` | immersive mode |
+| View | `ctrl +` `ctrl -` / `ctrl 0` | zoom / reset zoom |
+| View | `ctrl shift M` | cycle the reading width |
+| Find | `ctrl F`, `enter` / `shift enter`, `esc` | find, next / previous, close |
 
 ---
 
-## 安装与运行
+## Install and run
 
-- **免安装版**：把 `MarkdownAura.exe` 与同目录的 `WebView2Loader.dll` 放在一起，双击 exe 即可（只单独拷走 exe 会因缺少该 DLL 而无法启动）。
-- **安装版**：`MarkdownAura_0.1.0_x64-setup.exe`。安装向导含许可页，并把 `LICENSE` 与 `THIRD-PARTY.md` 放进安装目录。
-- **系统要求**：Windows 10 / 11（x64）+ WebView2 Runtime（Win11 与装了 Edge 的 Win10 已自带）。
-- **体积**：免安装版 exe 约 14.7 MB（另需同目录 161 KB 的 `WebView2Loader.dll`）；安装包 11.6 MB。
+- **Portable**: keep `MarkdownAura.exe` and `WebView2Loader.dll` side by side and double-click the exe. Copying the exe on its own will not start — it needs that DLL.
+- **Installer**: `MarkdownAura_0.1.0_x64-setup.exe`. The wizard shows the licence page and puts `LICENSE` and `THIRD-PARTY.md` in the install directory.
+- **Requirements**: Windows 10 / 11 (x64) with the WebView2 Runtime (already present on Windows 11 and on Windows 10 with Edge).
+- **Sizes**: portable exe ≈ 14.7 MB (plus the 161 KB `WebView2Loader.dll` beside it); installer 11.6 MB.
 
 ---
 
-## 从源码构建
+## Build from source
 
-前置：Node 22+、Rust（MSVC 工具链）、WebView2 Runtime。
+Prerequisites: Node 22+, Rust (MSVC toolchain) and the WebView2 Runtime.
 
 ```bash
 npm install
-npm run dev          # 只起前端，在浏览器里看界面
-npm run tauri dev    # 真正的应用窗口
-npm run build:prod   # 生产构建：前端 + release 二进制
-npm run typecheck    # TypeScript 检查
-npm run check:prose  # 设计约束检查（阅读栏居中、字号相对基准）
+npm run dev          # frontend only, in a browser
+npm run tauri dev    # the real window
+npm run build:prod   # production build: frontend + release binary
+npm run typecheck    # TypeScript check
+npm run check:prose  # design-constraint check (centred column, relative sizes)
 ```
 
 ---
 
-## 界面预览
+## UI preview
 
-`design/mockup.html` 用浏览器直接打开即可：不需要构建、不需要联网，能点一遍全部界面。它同时是设计参考稿。
+Open `design/mockup.html` in a browser: no build step, no network, and you can click through the whole interface. It doubles as the design reference.
 
 ---
 
-## 许可证
+## Licence
 
-本项目为 MIT，见 [`LICENSE`](LICENSE)。第三方组件与许可证见 [`THIRD-PARTY.md`](THIRD-PARTY.md)，由 `npm run notices` 依据构建实际解析到的依赖生成。
+MIT — see [`LICENSE`](LICENSE). Third-party components and licences are in [`THIRD-PARTY.md`](THIRD-PARTY.md), generated by `npm run notices` from what the build actually resolves.
