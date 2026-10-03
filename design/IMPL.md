@@ -65,9 +65,7 @@ MarkdownAura/
 ├─ tools/
 │  ├─ make-icons.mjs           # regenerates src-tauri/icons from one geometry description
 │  ├─ make-notices.mjs         # regenerates THIRD-PARTY.md from cargo metadata + node_modules
-│  ├─ make-portable.mjs        # builds and stages the single-file portable exe (§12)
 │  ├─ make-latest-json.mjs     # writes var/release/latest.json and stages the release assets (§12)
-│  ├─ portable/                # the single-file launcher crate (no dependencies, include_bytes!)
 │  ├─ unpack-binutils.mjs      # Windows/GNU only; see the note below
 │  └─ rc-preprocessor.rs       # Windows/GNU only; a no-op `gcc` for windres, see below
 ├─ index.html                  # shell markup, mirrors design/mockup.html
@@ -692,18 +690,16 @@ centred, `decorations: false`, `drag_and_drop(true)`. `transparent` is not set.
   find it was tried and fails: its objects are MSVC-compiled, so `ld` reports undefined
   `__security_cookie` / `__security_check_cookie` and MSVC-mangled names. Static linking therefore needs
   the MSVC toolchain, which would also mean re-checking the GNU-specific repairs in this file. Leaving it
-  dynamic costs one 161 KB file that both deliverables already ship. A single-file wrapper exists for the
-  "one file to double-click" case: `tools/portable/` is a zero-dependency launcher that embeds the app and
-  the loader at compile time (`include_bytes!`, so the payload cannot drift from the build), unpacks them
-  into `%LOCALAPPDATA%\MarkdownAura\portable\<version>\` and starts the app with the arguments it was given.
-  `npm run build:portable -- --stage` builds it — measured 16.62 MiB for 0.1.1, uncompressed, because a PE
-  does not compress usefully. A launch whose files are already unpacked only reads them to confirm they
-  match, and the unpacked app is byte-identical to the build. It **prefers a newer installed copy**: an
-  update taken from inside the app installs through the NSIS installer into `%LOCALAPPDATA%\MarkdownAura\`,
-  so launching the single file again would otherwise start the version it shipped with — which is exactly
-  what it did before 2026-10-03. The comparison reads the PE version resource of both files
-  (`GetFileVersionInfoW`, resolved from `version.dll` at runtime because this toolchain has no
-  `libversion.a`); equal or older means the launcher runs its own payload, as a portable build should.
+  dynamic costs one 161 KB file that both deliverables already ship.
+- **There was a single-file edition; 0.1.2 removed it.** `tools/portable/` was a zero-dependency launcher
+  that embedded the app and the loader at compile time (`include_bytes!`, so the payload could not drift
+  from the build) and unpacked them into `%LOCALAPPDATA%\MarkdownAura\portable\<version>\`. It earned its
+  complexity twice over: it had to prefer a *newer installed copy* — an update taken from inside the app
+  installs through the NSIS installer, so re-launching the single file would otherwise start the version it
+  shipped with — which meant comparing PE version resources at runtime (`GetFileVersionInfoW`, resolved from
+  `version.dll` because this toolchain has no `libversion.a`). "One file to double-click" is not worth a
+  second updater of the app's own, so the crate, its build script and the `build:portable` script are gone.
+  Portable means the zip: `markdownaura.exe` plus the loader, which is also what the installer unpacks.
 - `capabilities/default.json` is the app's whole permission surface: `core:default`, the ten window
   permissions the custom titlebar and the session's window rect need, `core:event:allow-listen` /
   `allow-unlisten` for the `fs://` and `app://` events, `dialog:allow-open`, the updater pair
@@ -864,7 +860,7 @@ them is gone. Regenerating the pair and shipping a new public key only helps ver
 the bundle step produces no `.sig`:
 
 ```bash
-TAURI_SIGNING_PRIVATE_KEY="$(cygpath -w var/updater/markdownaura.key)" npm run tauri build
+TAURI_SIGNING_PRIVATE_KEY="$(cygpath -wa var/updater/markdownaura.key)" npm run tauri build
 ```
 
 `bundle.createUpdaterArtifacts: true` is what makes the bundle emit `MarkdownAura_<v>_x64-setup.exe.sig`
@@ -875,9 +871,7 @@ prompts.
 and the signature from the bundle, writes `var/release/latest.json` and stages every asset: the installer,
 its `.sig`, `latest.json`, `LICENSE`, `THIRD-PARTY.md`, and — as one **zip** with a single top-level folder —
 the portable pair (`markdownaura.exe` + `WebView2Loader.dll`), because that pair only works together and two
-loose assets invite downloading one of them. Run `node tools/make-portable.mjs --stage` after it to add the
-single-file portable (it embeds the same build, and `make-latest-json` clears the staging directory first, so
-the order matters). `bash var/publish-release.sh --prune-missing` makes the release mirror that directory,
+loose assets invite downloading one of them. `bash var/publish-release.sh --prune-missing` makes the release mirror that directory,
 deleting assets that are no longer staged — that is how the loose pair was retired. The endpoint
 in `tauri.conf.json` is `…/releases/latest/download/latest.json`, which GitHub resolves to the *newest*
 release — so the manifest has to be uploaded to the release tagged `v<version>`; leaving it on an older
@@ -899,7 +893,7 @@ installer, which is the only part that cannot be exercised without installing.
 
 **The portable pair has no self-update.** The updater installs through the NSIS installer, so a copy that
 was unpacked by hand gets a proper installation when it updates. Someone who wants to stay portable
-downloads the new exe and DLL from the release page.
+downloads the new zip from the release page.
 
 **Two naming traps in the update path.** The capability id is `process:allow-restart` — the plugin's
 command is `restart`, while its JavaScript wrapper is called `relaunch()`, so guessing
@@ -908,8 +902,11 @@ plugin's default TLS backend is `rustls-tls`, which drags in `ring`; this machin
 cannot build `ring` (`ar` cannot find the objects `cc` just wrote), so the dependency is declared with
 `native-tls` instead — schannel, the system stack, no C build (see `Cargo.toml`).
 
-**The key path must be absolute.** `TAURI_SIGNING_PRIVATE_KEY` accepts either a path or the key's
-contents; a *relative* path that the bundler cannot resolve is silently treated as contents, and the
-build dies with `failed to decode base64 secret key: Invalid symbol 46` — symbol 46 is `.`, the first
-character of the relative path it tried to decode. `cygpath -w var/updater/markdownaura.key` is the
-reliable way to hand it over on this machine.
+**The key path must be absolute, and `cygpath -w` is not enough.** `TAURI_SIGNING_PRIVATE_KEY` accepts
+either a path or the key's contents; anything the bundler cannot resolve is silently treated as contents and
+base64-decoded, so the error names a character of the *path*: a posix relative path dies on symbol 46 (`.`,
+the first character of `var/…`), and a relative *Windows* path dies on symbol 92 (`\`, at offset 3 of
+`var\updater\…`) — which is what `cygpath -w` produces, because it converts a relative path into a relative
+path. Use `cygpath -wa var/updater/markdownaura.key`. The 0.1.2 build failed exactly this way, and it fails
+*after* the bundle has been written, so it leaves an installer with no `.sig` beside it — `make-latest-json`
+then refuses, which is the right outcome.

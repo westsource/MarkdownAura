@@ -15,7 +15,6 @@ use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use notify::event::{CreateKind, ModifyKind, RemoveKind};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
@@ -236,6 +235,7 @@ fn flush(app: &AppHandle, changed: &mut HashSet<PathBuf>, removed: &mut HashSet<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use notify::event::{CreateKind, ModifyKind, RemoveKind};
 
     #[test]
     fn counting_skips_the_same_dirs_the_tree_hides() {

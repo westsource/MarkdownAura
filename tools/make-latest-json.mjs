@@ -108,7 +108,3 @@ for (const file of fs.readdirSync(releaseDir).sort()) {
   const size = fs.statSync(path.join(releaseDir, file)).size;
   console.log(`  ${(size / 1048576).toFixed(2).padStart(7)} MB  ${file}`);
 }
-
-if (!fs.existsSync(path.join(releaseDir, "MarkdownAura.exe")) && !fs.existsSync(zipPath)) {
-  console.warn("warning: no portable asset was staged — build first");
-}
