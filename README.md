@@ -90,9 +90,9 @@ All three run inside the application, so no document needs a network connection.
 
 ## Install and run
 
-- **Portable (zip)**: `MarkdownAura-0.1.0-portable.zip` holds `markdownaura.exe` together with the `WebView2Loader.dll` it needs. Unzip it anywhere and double-click the exe; the exe on its own will not start.
-- **Portable, single file**: `MarkdownAura-0.1.0-portable.exe` is both of those in one file. It unpacks them into `%LOCALAPPDATA%\MarkdownAura\portable\0.1.0\` on first launch and runs the app from there, so it needs nothing beside it and can be handed to someone as one file. The unpacked app is byte-identical to the build.
-- **Installer**: `MarkdownAura_0.1.0_x64-setup.exe`. The wizard shows the licence page and puts `LICENSE` and `THIRD-PARTY.md` in the install directory. This is also the update path: the About sheet's **check for updates** downloads the next signed installer from the GitHub release and runs it. A portable copy that updates this way becomes a proper installation; staying portable means downloading the new zip by hand.
+- **Portable (zip)**: `MarkdownAura-<version>-portable.zip` holds `markdownaura.exe` together with the `WebView2Loader.dll` it needs. Unzip it anywhere and double-click the exe; the exe on its own will not start.
+- **Portable, single file**: `MarkdownAura-<version>-portable.exe` is both of those in one file. It unpacks them into `%LOCALAPPDATA%\MarkdownAura\portable\<version>\` on first launch and runs the app from there, so it needs nothing beside it and can be handed to someone as one file. The unpacked app is byte-identical to the build, and if the app has since been updated the launcher runs that newer copy instead of its own frozen one.
+- **Installer**: `MarkdownAura_<version>_x64-setup.exe`. The wizard shows the licence page and puts `LICENSE` and `THIRD-PARTY.md` in the install directory. This is also the update path: the About sheet's **check for updates** downloads the next signed installer from the GitHub release and runs it. A portable copy that updates this way becomes a proper installation; staying portable means downloading the new zip by hand.
 - **Requirements**: Windows 10 / 11 (x64) with the WebView2 Runtime (already present on Windows 11 and on Windows 10 with Edge).
 - **Sizes**: portable zip ≈ 12.1 MB; portable single file ≈ 16.6 MB (uncompressed); installer 11.6 MB.
 

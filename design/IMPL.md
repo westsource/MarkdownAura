@@ -693,7 +693,12 @@ centred, `decorations: false`, `drag_and_drop(true)`. `transparent` is not set.
   into `%LOCALAPPDATA%\MarkdownAura\portable\<version>\` and starts the app with the arguments it was given.
   `node tools/make-portable.mjs --stage` builds it — measured 16.61 MB for 0.1.0, uncompressed, because a PE
   does not compress usefully. A launch whose files are already unpacked only reads them to confirm they
-  match, and the unpacked app is byte-identical to the build.
+  match, and the unpacked app is byte-identical to the build. It **prefers a newer installed copy**: an
+  update taken from inside the app installs through the NSIS installer into `%LOCALAPPDATA%\MarkdownAura\`,
+  so launching the single file again would otherwise start the version it shipped with — which is exactly
+  what it did before 2026-10-03. The comparison reads the PE version resource of both files
+  (`GetFileVersionInfoW`, resolved from `version.dll` at runtime because this toolchain has no
+  `libversion.a`); equal or older means the launcher runs its own payload, as a portable build should.
 - `capabilities/default.json` is the app's whole permission surface: the window controls it needs,
   `dialog:allow-open`, and **one scoped opener permission** —
   `opener:allow-open-url` with `allow: [{ "url": "https://github.com/westsource/MarkdownAura" }]`.
