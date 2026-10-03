@@ -15,6 +15,7 @@
     "check:rawhtml": "node design/check-raw-html.mjs",
     "check:prose": "node design/check-prose-css.mjs",
     "notices": "node tools/make-notices.mjs",
+    "build:portable": "node tools/make-portable.mjs",
     "build:prod": "npm run build && npm run build:prod:rust",
     "build:prod:rust": "cargo build --release -j 1 --manifest-path src-tauri/Cargo.toml --features tauri/custom-protocol"
   },

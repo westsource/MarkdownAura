@@ -687,8 +687,13 @@ centred, `decorations: false`, `drag_and_drop(true)`. `transparent` is not set.
   find it was tried and fails: its objects are MSVC-compiled, so `ld` reports undefined
   `__security_cookie` / `__security_check_cookie` and MSVC-mangled names. Static linking therefore needs
   the MSVC toolchain, which would also mean re-checking the GNU-specific repairs in this file. Leaving it
-  dynamic costs one 161 KB file that both deliverables already ship; a self-extracting single-file wrapper
-  is the cheap way to give someone "one file to double-click".
+  dynamic costs one 161 KB file that both deliverables already ship. A single-file wrapper exists for the
+  "one file to double-click" case: `tools/portable/` is a zero-dependency launcher that embeds the app and
+  the loader at compile time (`include_bytes!`, so the payload cannot drift from the build), unpacks them
+  into `%LOCALAPPDATA%\MarkdownAura\portable\<version>\` and starts the app with the arguments it was given.
+  `node tools/make-portable.mjs --stage` builds it — measured 16.61 MB for 0.1.0, uncompressed, because a PE
+  does not compress usefully. A launch whose files are already unpacked only reads them to confirm they
+  match, and the unpacked app is byte-identical to the build.
 - `capabilities/default.json` is the app's whole permission surface: the window controls it needs,
   `dialog:allow-open`, and **one scoped opener permission** —
   `opener:allow-open-url` with `allow: [{ "url": "https://github.com/westsource/MarkdownAura" }]`.
@@ -854,7 +859,9 @@ prompts.
 
 **Manifest and assets.** `node tools/make-latest-json.mjs --notes "…"` reads the version from `package.json`
 and the signature from the bundle, writes `var/release/latest.json` and stages every asset (installer, its
-`.sig`, `latest.json`, `LICENSE`, `THIRD-PARTY.md`, the portable exe and `WebView2Loader.dll`). The endpoint
+`.sig`, `latest.json`, `LICENSE`, `THIRD-PARTY.md`, the portable exe and `WebView2Loader.dll`). Run
+`node tools/make-portable.mjs --stage` after it to add the single-file portable (it embeds the same build,
+and `make-latest-json` clears the staging directory first, so the order matters). The endpoint
 in `tauri.conf.json` is `…/releases/latest/download/latest.json`, which GitHub resolves to the *newest*
 release — so the manifest has to be uploaded to the release tagged `v<version>`; leaving it on an older
 release points the updater at an older installer, which the version check then refuses.
