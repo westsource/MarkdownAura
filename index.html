@@ -84,13 +84,11 @@
         <span class="panel-label" data-i18n="sidebar.label">explorer</span>
         <button class="mini-btn" id="openFolderBtn" data-i18n="sidebar.openFolder" data-i18n-title="sidebar.openFolderTitle" title="open folder (ctrl shift O)">open folder</button>
       </div>
-      <div class="sidebar-search" hidden>
-        <input type="search" id="fileFilter" data-i18n-placeholder="sidebar.filter" data-i18n-aria-label="sidebar.filter" placeholder="filter files" aria-label="filter files">
-      </div>
       <div class="tree" id="tree"></div>
       <div class="sidebar-foot">
         <span class="dot ok"></span>
         <span id="watchLabel">watching 0 files</span>
+        <input type="search" id="fileFilter" data-i18n-placeholder="sidebar.filter" data-i18n-aria-label="sidebar.filter" placeholder="filter by name · esc closes" aria-label="filter by file name" hidden>
         <button class="iconbtn" id="filterToggle" data-i18n-title="sidebar.showFilter" data-i18n-aria-label="sidebar.showFilter" title="filter by file name" aria-label="filter by file name" aria-expanded="false"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2.5 3.5h11l-4.2 5v4l-2.6 1.4V8.5z"/></svg></button>
         <button class="switch on" id="mdOnlyBtn" data-i18n-title="sidebar.mdOnlyTitle" data-i18n-aria-label="sidebar.mdOnlyTitle" title="list markdown files only" aria-label="list markdown files only" aria-pressed="true"></button>
       </div>
@@ -222,40 +220,35 @@
             </button>
           </div>
           <div class="sheet-body">
-            <div class="about-head">
-              <svg width="26" height="26" viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M8 1l6 3.5v7L8 15l-6-3.5v-7z" fill="var(--ac)"/>
-                <path d="M5.2 10V6.2L8 8.6l2.8-2.4V10" fill="none" stroke="var(--bg)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <div>
-                <div class="about-name">MarkdownAura <span class="chip" id="aboutVersionChip">v0.1.0</span><span class="chip">MIT</span></div>
-                <div class="about-tagline" data-i18n="about.tagline">local markdown reader — open and read</div>
+            <div class="about-page">
+              <div class="about-brand">
+                <svg width="22" height="22" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M8 1l6 3.5v7L8 15l-6-3.5v-7z" fill="var(--ac)"/>
+                  <path d="M5.2 10V6.2L8 8.6l2.8-2.4V10" fill="none" stroke="var(--bg)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span class="about-name">MarkdownAura</span>
+                <span class="about-ver" id="aboutVersionChip">v0.1.0</span>
+                <span class="about-lic">MIT</span>
+                <a class="about-link" id="aboutGithub" href="https://github.com/westsource/MarkdownAura">github.com/westsource/MarkdownAura<span class="ext">↗</span></a>
+              </div>
+
+              <hr class="about-rule">
+              <p class="about-lede" data-i18n="about.intro"></p>
+              <hr class="about-rule">
+
+              <div class="about-facts">
+                <div class="row"><span class="k" data-i18n="about.k.author">author</span><span class="v" data-i18n="about.author"></span></div>
+                <div class="row"><span class="k" data-i18n="about.k.engines">engines</span><span class="v"><span class="badge mermaid">mermaid</span>mermaid.js 12<span class="lic">MIT</span></span></div>
+                <div class="row"><span class="k"></span><span class="v"><span class="badge dot">dot</span>graphviz · @hpcc-js/wasm-graphviz<span class="lic">Apache-2.0</span></span></div>
+                <div class="row"><span class="k"></span><span class="v"><span class="badge d2">d2</span><span data-i18n="about.d2Note">bundled — wasm inlined (~11.5 MB)</span><span class="lic">MPL-2.0</span></span></div>
+                <div class="row"><span class="k" data-i18n="about.k.data">data</span><span class="v"><span class="about-path" id="aboutDataPath">—</span><button class="ghost-btn about-open" id="aboutReveal" data-i18n="about.reveal">open</button></span></div>
               </div>
             </div>
-
-            <p class="about-intro" data-i18n="about.intro"></p>
-            <ul class="about-features" id="aboutFeatures"></ul>
-
-            <div class="section-head" data-i18n="about.section.author">author</div>
-            <div class="form-row">
-              <div class="grow"><div data-i18n="about.author"></div><div class="form-sub" data-i18n="about.authorRole">design and development</div></div>
-              <a class="about-link" id="aboutGithub" href="https://github.com/westsource/MarkdownAura">github.com/westsource/MarkdownAura<span class="ext">↗</span></a>
-            </div>
-
-            <div class="section-head" data-i18n="about.section.engines">engines</div>
-            <div class="form-row"><span class="badge mermaid">mermaid</span><div class="grow form-sub" style="margin:0">mermaid.js 12</div><span class="state-off">MIT</span></div>
-            <div class="form-row"><span class="badge dot">dot</span><div class="grow form-sub" style="margin:0">graphviz · @hpcc-js/wasm-graphviz</div><span class="state-off">Apache-2.0</span></div>
-            <div class="form-row"><span class="badge d2">d2</span><div class="grow form-sub" style="margin:0" data-i18n="about.d2Note">opt-in install (~11 MB)</div><span class="state-off">MPL-2.0</span></div>
-
-            <div class="section-head" data-i18n="about.section.data">data</div>
-            <div class="form-row"><div class="grow"><div class="mono-sm" id="aboutDataPath">—</div>
-              <div class="form-sub" data-i18n="about.dataSub">session, window geometry and settings</div></div>
-              <button class="ghost-btn" id="aboutReveal" data-i18n="about.reveal">open</button></div>
           </div>
           <div class="sheet-foot">
             <span data-i18n="about.notices">shipped with the app: LICENSE · THIRD-PARTY.md</span>
             <div class="spacer"></div>
-            <span data-i18n="about.privacy">no telemetry · rendering happens locally</span>
+            <span data-i18n="about.privacy">nothing leaves this machine · every render happens locally</span>
           </div>
         </div>
       </div>

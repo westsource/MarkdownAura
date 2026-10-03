@@ -86,12 +86,17 @@ tokens (`--h-title`, `--h-toolbar`, `--h-status`) and must never grow.
   narrower than the paths the tree has to show on a wide display.
   `ctrl B` collapses it entirely.
 - Skips the ignored directory names (`node_modules`, `.git`, build output).
-- **Lists markdown only, by default.** A `md` chip sits inside the filter box — accent tinted when on,
-  grey when off — and shows files whose extension is `md` / `markdown` / `mdx` / `mdown` / `mkd`;
-  switching it off lists every file.
+- **Lists markdown only, by default.** A `md` switch at the right end of the foot row — accent when on,
+  grey when off — shows files whose extension is `md` / `markdown` / `mdx` / `mdown` / `mkd`; switching it
+  off lists every file.
   Directories always show — the tree is read a level at a time, so whether a folder holds markdown is
   not knowable without opening it. The rule is one list in `src/ipc.ts`, shared with the open dialog's
   filter and the drop/argument check.
+- **The name filter is asked for, not in the way.** It sits in the foot row too, hidden until the funnel
+  beside it reveals it — the input appears *before* the funnel and takes the free space, the watcher label
+  yielding with an ellipsis. Revealing focuses the field, and its placeholder says how to leave: `esc`
+  closes it. Closing **clears** the filter: a filtered tree with an invisible control is a state the
+  reader can neither see nor undo. The reveal is a control, not a preference, so it is not persisted.
 - Single click opens a **preview tab**, double click pins it (VS Code semantics — this is
   what keeps a folder with 200 files from becoming 200 tabs).
 - Filter box narrows the visible tree; it does not search content.
@@ -106,7 +111,7 @@ UX, not shipped.
 
 **The explorer's markdown-only toggle ships, on by default.** It is a *view* filter in
 `src/ui/tree.ts`, not a change to `fs_ops::list_dir`: `TreeEntry.ext` (lowercase, dotless) decides,
-the `md` chip inside the filter box is the control, and the choice persists in the session
+the `md` switch in the foot row is the control, and the choice persists in the session
 (`IMPL.md` §6). Applying it in Rust was the other candidate and was rejected: the watcher's
 `watching N files` counts what is *watched*, not what is *shown* — a `.txt` beside a document still
 reloads it — and a listing that hides files would have to be re-fetched on every toggle. An empty
@@ -586,7 +591,7 @@ and persisted.
 |---|---|---|
 | settings | `.sheet.tight` (560px) | top-aligned, scrolling (`.sheet.form`) |
 | help | `.sheet.wide` (640px) | top-aligned, two columns |
-| about | `.sheet.tight` (560px) | top-aligned, scrolling — same rows as settings |
+| about | `.sheet.tight` (560px) | top-aligned, scrolling — a colophon page, not form rows |
 | diagram viewer | `.sheet` (full bleed) | centred (unchanged, §4) |
 
 ### About
@@ -595,34 +600,45 @@ The toolbar's last control answers "what is this, who made it, and where does it
 without leaving the window, in that order. Its own overlay sheet, because a separate window for a
 few read-only rows would cost a window lifecycle for nothing.
 
+The sheet is a **colophon page, not a form** — revised 2026-10-03 from the settings-shaped first
+version. No section heads, no cards, no bullet lists: hairlines, type and hanging labels, read like
+the front matter of the book this app wants `.md` to be. The only boxes left are the engine badges,
+which carry colour because they carry identity.
+
 | block | content |
 |---|---|
-| brand | logo · `MarkdownAura` · `v0.1.0` chip · `MIT` chip · one tagline |
-| what it is | a sentence, then **six capabilities** in two columns: layout / engines / reading / navigation / session / language |
-| author | 道荣（黄超） · design and development · `github.com/westsource/MarkdownAura ↗` |
-| engines | badge, engine, version, licence right-aligned; d2 carries its bundled cost |
-| data | `%APPDATA%\MarkdownAura` (mono), what lives there, and an `open` button |
-| foot | `LICENSE · THIRD-PARTY.md` (both ship next to the executable) · `no telemetry · rendering happens locally` |
+| brand line | logo · `MarkdownAura` · `v0.1.0` (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline |
+| what it is | **one** paragraph: what the app is, then the six capabilities after a `capabilities:` lead-in — same size, same colour, no separate block |
+| facts | hanging labels (`author` / `engines` / `data`): 道荣（黄超） · the three engine badges with version and licence · the data path in mono with an `open` button |
+| foot | `LICENSE · THIRD-PARTY.md` (both ship next to the executable) · `nothing leaves this machine · every render happens locally` |
 
 Decisions inside that shape, each of which was made deliberately:
 
 - **The licence sits in the brand, not the foot.** It is a fact about the build like the version is,
   so it belongs beside the version; the foot is left for the one claim that is not a noun.
+- **The homepage sits on the brand line too**, right after the licence and separated by a hairline.
+  It is a fact about the build, and the brand line is where those facts live; it also keeps the
+  facts block to the three questions the sheet exists to answer.
 - **The version comes from `package.json`, injected at build time** (`vite.config.ts` →
   `__APP_VERSION__`). The help panel's footer reads the same constant, so bumping the package version
   is the whole change and no panel can lie about its own build.
 - **No runtime block.** Tauri 2 / WebView2 is how the app is built, not something a reader of the
   About sheet needs; it was in the first version and was removed on review.
-- **The author line keeps a role subtitle** and the row is a plain form row, so a second contributor
-  later is another row, not a redesign.
-- **The author's name is not transliterated** — the Chinese catalogue and the English one carry it
-  identically, because a name is spelled the way its owner spells it.
-- **Feature copy states capabilities, never adjectives.** No "fast", no "lightweight": those are the
-  claims the app is supposed to make by being used, and the About sheet is the wrong place to assert
-  them.
-- **The foot says "no telemetry · rendering happens locally", not "no network requests."** The app's
-  own runtime fetches nothing (§4); the installer's optional WebView2 bootstrapper is a request the
-  installer makes, not the app, and the foot is about the app.
+- **The author's name carries no role subtitle and is not transliterated** — the Chinese catalogue
+  and the English one carry it identically, because a name is spelled the way its owner spells it.
+  A second contributor later is another facts row, not a redesign.
+- **Capabilities are the tail of the sentence, not a block.** They run on in the same paragraph,
+  at the same size and the same colour as the sentence that introduces them (`　`-separated
+  phrases), because they are the same claim. A reader opening About wants a reminder of what the
+  app does, not a feature matrix to scan — and not a second, quieter grey that reads as a footnote.
+- **The capabilities list states facts; the one adjective lives in the lead.** No capability phrase
+  carries an adjective ("rendered locally", not "renders instantly"). The lead may name the product
+  in its own voice — 2026-10-03, product owner's call: 极速极简 / "fast, minimal" — because that is
+  a statement of what the app is for, not a claim about how it performs.
+- **The privacy line says "nothing leaves this machine", not "no telemetry".** Telemetry is
+  industry jargon; the sentence a reader should not have to decode says plainly that nothing is
+  sent anywhere. The installer's optional WebView2 bootstrapper is a request the installer makes,
+  not the app, and the foot is about the app.
 
 **The GitHub line is the only external URL in the app**, and it is opened through
 `tauri-plugin-opener` rather than by shelling out to `cmd /C start`. The capability allows **that

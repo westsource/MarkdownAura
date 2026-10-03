@@ -30,7 +30,10 @@ export function isOpen(): boolean {
 export function openById(id: string): void {
   const card = document.querySelector<HTMLElement>(`figure.diagram[data-diagram="${CSS.escape(id)}"]`);
   if (!card) return;
-  const svg = card.querySelector("svg")?.outerHTML;
+  // `.diagram-body svg`, not `svg`: the card head's zoom and copy buttons are `<svg>` icons and come
+  // first in document order, so a bare `querySelector("svg")` cloned a 12×12 button glyph into a
+  // full-panel viewer — a blank overlay for every engine.
+  const svg = card.querySelector(".diagram-body svg")?.outerHTML;
   if (!svg) {
     toast(t("viewer.noOutput"), "warn");
     return;

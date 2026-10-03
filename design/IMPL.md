@@ -225,7 +225,7 @@ path).
 specified in the first draft for the opt-in d2 download. d2 is bundled (SPEC §4), so there is nothing
 to install and the only engine command is `engine_status`.
 
-Payload shapes (all `#[serde(rename_all = "camelCase")]`):
+The payload shapes (all `#[serde(rename_all = "camelCase")]`):
 
 ```ts
 type TreeEntry  = { name: string; path: string; isDir: boolean; ext: string };   // ext lowercased, no dot
@@ -396,6 +396,20 @@ either side**. This is the weakest seam in the whole architecture.
 - `node design/check-raw-html.mjs` asserts the same allow-list holds in the mockup, so the
   two renderers cannot quietly disagree.
 - `src/render/pipeline.ts` copies mockup.js's card markup verbatim; review keeps it so.
+
+**The seam has bitten.** The card head holds two `<svg>` **icons** (zoom, copy), so anything that wants
+the diagram itself must select `.diagram-body svg`: a bare `querySelector("svg")` returns the first
+button's 12×12 glyph. That is what the viewer cloned until 2026-10-03 — a full-panel overlay showing a
+speck, which reads as "blank" — and it was blank for all three engines for the same reason, because the
+icon is always first. When a selector is about to pick an element out of rendered content, name the
+container (`figcaption`, `.diagram-body`), not the tag.
+
+**The same seam, the other half.** Of the three engines only dot writes a size into its SVG (`265pt`);
+mermaid writes `width="100%"`, and d2 writes neither, relying on being 100% of a parent that has a
+width. So a cloned diagram needs a parent with a definite width: the card's `.diagram-body` is one, and
+the viewer's `.ov-stage` had no rule at all, which made the d2 clone 0×0 — present in the DOM, invisible
+on screen. `.ov-stage` now mirrors `.diagram-body`'s sizing. A new engine is a new answer to "does this
+SVG size itself?", and the card is the thing to check it against.
 
 **What does not exist yet, and should:** `insta` is a dev-dependency but there is no
 snapshot test and no `src-tauri/tests/` directory, and there is no class-name lint that

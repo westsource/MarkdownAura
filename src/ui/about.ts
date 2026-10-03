@@ -1,9 +1,9 @@
 /* About (SPEC §10) — the fourth panel, same overlay shell as settings and help.
  *
- * It answers three questions in order: what is this (name, version, one tagline, six capabilities),
- * who made it (author + the one link that leaves the app), and where does it keep my data (path,
- * openable). Engine licences sit between the last two because naming them is part of the licence
- * story, not decoration.
+ * A colophon page, not a form: it answers three questions in order — what is this (name, version,
+ * licence, the one link that leaves the app, then a sentence and the capabilities as prose), who
+ * made it, and where does it keep my data (path, openable). Engine licences sit inside the facts
+ * because naming them is part of the licence story, not decoration.
  *
  * Two details are load-bearing:
  *
@@ -14,21 +14,11 @@
  *    plugin, which the capability scopes to that single URL.
  */
 import { dataDirectory, openExternal, revealInExplorer } from "../ipc";
-import { t, type Key } from "../i18n";
-import { $, esc, toast } from "./dom";
+import { t } from "../i18n";
+import { $, toast } from "./dom";
 
 /** The only external URL in the app, and the only one the capability allows. */
 const GITHUB_URL = "https://github.com/westsource/MarkdownAura";
-
-/** Capabilities, in scan order: layout / engines / reading / navigation / session / language. */
-const FEATURES: Key[] = [
-  "about.feature.layout",
-  "about.feature.engines",
-  "about.feature.reading",
-  "about.feature.navigation",
-  "about.feature.session",
-  "about.feature.language",
-];
 
 let path = "";
 
@@ -47,7 +37,6 @@ export function close(): void {
 
 function render(): void {
   $("#aboutVersionChip").textContent = `v${__APP_VERSION__}`;
-  $("#aboutFeatures").innerHTML = FEATURES.map((key) => `<li>${esc(t(key))}</li>`).join("");
   $("#aboutDataPath").textContent = path || "—";
   $("#aboutGithub").setAttribute("title", t("about.github"));
 }

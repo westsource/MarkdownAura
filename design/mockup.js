@@ -857,15 +857,15 @@ Errors render inline with the line number instead of blanking the page.`
   }
 
   $("#fileFilter").addEventListener("input", renderTree);
-  // The filter box is revealed on demand from the foot; hiding it clears it, like the app (SPEC §3).
-  const filterRow = document.querySelector(".sidebar-search");
+  // The filter box sits in the foot row, hidden until the funnel asks for it; hiding it clears it, like
+  // the app (SPEC §3).
   const revealFilter = (on) => {
-    filterRow.hidden = !on;
+    $("#fileFilter").hidden = !on;
     $("#filterToggle").setAttribute("aria-expanded", String(on));
     if (on) $("#fileFilter").focus();
     else if ($("#fileFilter").value) { $("#fileFilter").value = ""; renderTree(); }
   };
-  $("#filterToggle").addEventListener("click", () => revealFilter(filterRow.hidden));
+  $("#filterToggle").addEventListener("click", () => revealFilter($("#fileFilter").hidden));
   $("#fileFilter").addEventListener("keydown", (event) => { if (event.key === "Escape") revealFilter(false); });
   $("#mdOnlyBtn").addEventListener("click", () => {
     mdOnly = !mdOnly;

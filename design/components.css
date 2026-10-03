@@ -314,13 +314,25 @@ kbd {
 }
 [data-theme="dark"] .mini-btn { color: var(--ac-tx); }
 .mini-btn:hover { filter: brightness(.97); }
-/* The foot row is a status line that also carries the explorer's two controls, right-aligned: the funnel
-   reveals the filter box (hidden by default, so the tree is just a tree until you ask), and the switch is
-   the markdown-only facet. Both are 22px inside the 30px row; the watcher label pushes them right. */
-.sidebar-foot #watchLabel { margin-right: auto; }
+/* The foot row is a status line that also carries the explorer's controls: the watcher label, then the
+   filter box when it is asked for (`[hidden]` by default, revealed by the funnel), the funnel, and the
+   markdown-only switch — all 22px inside the 30px row. The label yields its space first, with an
+   ellipsis, so revealing the filter never pushes the row wider than the panel. */
+.sidebar-foot #watchLabel {
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .sidebar-foot .iconbtn { width: 22px; height: 22px; }
+.sidebar-foot #fileFilter {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2px 8px;
+  font-size: var(--fs-sm);
+}
 
-.sidebar-search { padding: 0 10px var(--sp-2); }
 input[type="search"], input[type="text"] {
   width: 100%;
   font: inherit;
@@ -537,6 +549,13 @@ input:focus { border-color: var(--ac); }
 .diagram-title { font-size: var(--fs-xs); color: var(--tx-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .diagram-body { padding: var(--sp-3); display: flex; justify-content: center; overflow: auto; }
 .diagram-body svg { max-width: 100%; height: auto; }
+
+/* The viewer's stage mirrors `.diagram-body`'s sizing on purpose: d2's SVG carries no width of its own,
+   so it needs a parent with a definite width or it resolves to nothing — the diagram was in the DOM at
+   0×0 in the overlay while the card showed it fine, because the card's body is a block child and the
+   stage had no rule at all. `height: auto` keeps each engine's aspect from its viewBox. */
+.ov-stage { width: 100%; display: flex; justify-content: center; }
+.ov-stage svg { max-width: 100%; height: auto; }
 
 /* render failures stay inline — never blank the page */
 .diagram-error {
@@ -818,38 +837,43 @@ mark.current { background: var(--ac); color: #fff; }
   padding: 2px 9px;
 }
 
-/* about sheet (SPEC §10): a brand block above the same form rows everything else uses */
-.about-head { display: flex; align-items: flex-start; gap: var(--sp-3); padding: var(--sp-2) 14px var(--sp-3); }
-.about-name { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-lg); font-weight: 500; }
-.about-tagline { margin-top: 2px; font-size: var(--fs-sm); color: var(--tx-2); }
-/* What it is, then what it does. Plain prose first: a reader opening About wants a sentence, not a
-   feature matrix. */
-.about-intro { margin: 0; padding: 0 14px var(--sp-3); font-size: var(--fs-sm); color: var(--tx); }
-.about-features {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 5px 18px;
-  margin: 0;
-  padding: 0 14px var(--sp-4);
-  list-style: none;
-  font-size: 11.5px;
-  color: var(--tx-2);
+/* about sheet (SPEC §10): a colophon page, not a form. No section heads and no cards — hairlines,
+   type and hanging labels, read like the front matter of the book this app wants .md to be. The
+   only boxes left are the engine badges, which carry colour because they carry identity. */
+.about-page { padding: 22px 28px 18px; }
+.about-brand { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+.about-name { font-size: 16px; font-weight: var(--fw-emphasis); }
+.about-ver { font-family: var(--font-mono); font-size: 11.5px; color: var(--tx-2); }
+.about-lic { font-size: 11.5px; color: var(--tx-3); }
+/* The homepage sits on the brand line, right after the licence and set off by a hairline: it is a
+   fact about the build like the version is, and the brand line is where those facts live. */
+.about-link {
+  margin-left: 2px;
+  padding-left: 9px;
+  border-left: 0.5px solid var(--line-2);
+  color: var(--ac);
+  text-decoration: none;
+  cursor: pointer;
+  font-size: 12px;
 }
-.about-features li { display: flex; gap: 7px; }
-.about-features li::before {
-  content: "";
-  flex: 0 0 auto;
-  width: 3px; height: 3px;
-  margin-top: 6px;
-  border-radius: 50%;
-  background: var(--tx-3);
-}
-/* The one interactive line: it looks like the app's other links (accent, quiet underline) and the
-   arrow says it leaves the app. */
-.about-link { color: var(--ac); text-decoration: none; cursor: pointer; font-size: var(--fs-sm); }
 .about-link:hover { text-decoration: underline; text-decoration-color: var(--line-3); text-underline-offset: 2px; }
-.about-link .ext { color: var(--tx-3); margin-left: 5px; }
-.mono-sm { font-family: var(--font-mono); font-size: 11.5px; color: var(--tx-2); overflow-wrap: anywhere; }
+.about-link .ext { color: var(--tx-3); margin-left: 4px; }
+.about-rule { border: 0; border-top: 0.5px solid var(--line-2); margin: 14px 0; }
+/* What it is, then what it does: one paragraph, one type size, one colour. The capabilities are a
+   tail on the sentence — not a block of their own and not a second, quieter colour, because they
+   are the same claim the sentence makes. */
+.about-lede { margin: 0; font-size: 13px; line-height: 1.85; color: var(--tx); }
+.about-facts { font-size: 12.5px; line-height: 2.05; color: var(--tx); }
+.about-facts .row { display: flex; align-items: baseline; }
+.about-facts .row + .row { margin-top: 2px; }
+/* hanging label column: the label is a caption, not a field, and an empty one keeps the engine
+   rows aligned under the first */
+.about-facts .k { flex: 0 0 40px; font-size: var(--fs-xs); color: var(--tx-3); }
+.about-facts .v { flex: 1 1 auto; min-width: 0; }
+.about-facts .badge { vertical-align: 1px; margin-right: 6px; }
+.about-facts .lic { margin-left: 6px; font-size: 11px; color: var(--tx-3); }
+.about-path { font-family: var(--font-mono); font-size: 11.5px; color: var(--tx-2); overflow-wrap: anywhere; }
+.about-open { margin-left: 8px; vertical-align: 1px; }
 
 /* ---------- help ---------- */
 
