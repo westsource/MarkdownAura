@@ -314,23 +314,11 @@ kbd {
 }
 [data-theme="dark"] .mini-btn { color: var(--ac-tx); }
 .mini-btn:hover { filter: brightness(.97); }
-/* The filter box carries the markdown-only facet inside it — a small `md` chip on its right edge, accent
-   tinted when on like every other engaged control. It belongs to the list it filters, not to the header,
-   which is why it is not beside `open folder` (SPEC §3). The chip is 24px inside a 28px input, and the
-   longhand padding leaves the search glyph where `input[type="search"]` puts it. */
-.search-wrap { position: relative; }
-.search-wrap input[type="search"] { padding-right: 34px; }
-.search-wrap .iconbtn {
-  position: absolute;
-  right: 3px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 24px;
-  height: 24px;
-  border-radius: var(--r-sm);
-  font-size: 10.5px;
-  letter-spacing: .02em;
-}
+/* The foot row is a status line that also carries the explorer's two controls, right-aligned: the funnel
+   reveals the filter box (hidden by default, so the tree is just a tree until you ask), and the switch is
+   the markdown-only facet. Both are 22px inside the 30px row; the watcher label pushes them right. */
+.sidebar-foot #watchLabel { margin-right: auto; }
+.sidebar-foot .iconbtn { width: 22px; height: 22px; }
 
 .sidebar-search { padding: 0 10px var(--sp-2); }
 input[type="search"], input[type="text"] {

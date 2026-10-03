@@ -857,9 +857,20 @@ Errors render inline with the line number instead of blanking the page.`
   }
 
   $("#fileFilter").addEventListener("input", renderTree);
+  // The filter box is revealed on demand from the foot; hiding it clears it, like the app (SPEC §3).
+  const filterRow = document.querySelector(".sidebar-search");
+  const revealFilter = (on) => {
+    filterRow.hidden = !on;
+    $("#filterToggle").setAttribute("aria-expanded", String(on));
+    if (on) $("#fileFilter").focus();
+    else if ($("#fileFilter").value) { $("#fileFilter").value = ""; renderTree(); }
+  };
+  $("#filterToggle").addEventListener("click", () => revealFilter(filterRow.hidden));
+  $("#fileFilter").addEventListener("keydown", (event) => { if (event.key === "Escape") revealFilter(false); });
   $("#mdOnlyBtn").addEventListener("click", () => {
     mdOnly = !mdOnly;
     $("#mdOnlyBtn").classList.toggle("on", mdOnly);
+    $("#mdOnlyBtn").setAttribute("aria-pressed", String(mdOnly));
     renderTree();
   });
   $("#openFolderBtn").addEventListener("click", () => toast("opens the native folder picker (tauri dialog plugin)"));

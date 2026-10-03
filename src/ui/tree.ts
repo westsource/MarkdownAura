@@ -149,8 +149,31 @@ async function toggleDir(node: Node): Promise<void> {
   renderTree();
 }
 
+/** Wires the filter box and the funnel that reveals it. The box is hidden by default so the tree is just
+ *  a tree; hiding it again **clears** the filter, because a filtered tree whose control is invisible is a
+ *  state the reader can neither see nor undo (SPEC §3). The reveal itself is not persisted — it is a
+ *  transient control, not a preference. */
 export function wireFilter(): void {
-  $("#fileFilter").addEventListener("input", renderTree);
+  const input = $<HTMLInputElement>("#fileFilter");
+  const row = input.closest<HTMLElement>(".sidebar-search");
+  const toggle = $<HTMLButtonElement>("#filterToggle");
+
+  const show = (on: boolean): void => {
+    if (row) row.hidden = !on;
+    toggle.setAttribute("aria-expanded", String(on));
+    if (on) {
+      input.focus();
+    } else if (input.value !== "") {
+      input.value = "";
+      renderTree();
+    }
+  };
+
+  input.addEventListener("input", renderTree);
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") show(false);
+  });
+  toggle.addEventListener("click", () => show(row?.hidden ?? false));
 }
 
 /** One muted line when the tree has nothing to show — and the message depends on *why*, because "the
