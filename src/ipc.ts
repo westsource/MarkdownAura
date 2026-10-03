@@ -47,6 +47,24 @@ export function describeError(err: unknown): { message: string; silent: boolean 
   }
 }
 
+// ---------------------------------------------------------------- file kinds
+
+/* The one definition of "this is a markdown file" (SPEC §3). Three callers read it: the open
+ * dialog's extension filter, the drop/argument check, and the explorer's markdown-only toggle — which
+ * is what `TreeEntry.ext` was being carried for. Rust deliberately has no copy of this list: the tree
+ * filters what it *shows*, and the watcher counts what it *watches*, so the two are allowed to differ
+ * (a `.txt` next to a document is still watched and still reloads). */
+export const MD_EXTENSIONS = ["md", "markdown", "mdx", "mdown", "mkd"];
+
+const MD_RE = new RegExp(`\\.(${MD_EXTENSIONS.join("|")})$`, "i");
+const MD_SET = new Set(MD_EXTENSIONS);
+
+/** For a path as the dialog, a drop or a command-line argument delivers it. */
+export const isMarkdownPath = (path: string): boolean => MD_RE.test(path);
+
+/** For `TreeEntry.ext`, which is lowercase, dotless, and empty for directories and extensionless files. */
+export const isMarkdownExt = (ext: string): boolean => MD_SET.has(ext);
+
 // ---------------------------------------------------------------- shapes
 
 export interface TreeEntry {
@@ -108,8 +126,6 @@ export interface EngineInfo {
   version: string;
   installed: boolean;
   bytes: number;
-  path: string;
-  optIn: boolean;
 }
 
 export interface WatcherStatus {
@@ -136,6 +152,9 @@ export interface Session {
   sidebar: { open: boolean; width: number };
   outlineOpen: boolean;
   outlineWidth?: number;
+  /** Explorer shows markdown files only (SPEC §3). Optional so a session from before this existed
+   *  still loads; the loader treats absence as `true`, which is the shipped default. */
+  mdOnly?: boolean;
   activeTab: number;
   tabs: SessionTab[];
   recent: string[];

@@ -29,8 +29,10 @@ const SPECS: PanelSpec[] = [
     id: "sidebarResizer",
     minToken: "--w-sidebar-min",
     maxToken: "--w-sidebar-max",
+    // Kept equal to the tokens: these are what a drag falls back to if the token cannot be read, and a
+    // fallback that disagrees with the design is a bound nobody can find in `tokens.css`.
     fallbackMin: 180,
-    fallbackMax: 360,
+    fallbackMax: 640,
     set: (px) => {
       state.sidebar.width = px;
     },

@@ -80,11 +80,17 @@ tokens (`--h-title`, `--h-toolbar`, `--h-status`) and must never grow.
 
 ### Sidebar (explorer)
 
-- Resizable **180–360px** by dragging its right edge; the bounds are the `--w-sidebar-min` /
-  `--w-sidebar-max` tokens, read at drag time so the design file stays the single source.
+- Resizable **180–640px** by dragging its right edge; the bounds are the `--w-sidebar-min` /
+  `--w-sidebar-max` tokens, read at drag time so the design file stays the single source. The floor
+  and the cap exist so a drag cannot leave the reading column no room; 360px was the cap and it is
+  narrower than the paths the tree has to show on a wide display.
   `ctrl B` collapses it entirely.
-- Skips the ignored directory names (`node_modules`, `.git`, build output) but otherwise
-  **lists every file**, not only markdown — see the v1 status note below.
+- Skips the ignored directory names (`node_modules`, `.git`, build output).
+- **Lists markdown only, by default.** An `md only` toggle sits in the sidebar head and shows files
+  whose extension is `md` / `markdown` / `mdx` / `mdown` / `mkd`; switching it off lists every file.
+  Directories always show — the tree is read a level at a time, so whether a folder holds markdown is
+  not knowable without opening it. The rule is one list in `src/ipc.ts`, shared with the open dialog's
+  filter and the drop/argument check.
 - Single click opens a **preview tab**, double click pins it (VS Code semantics — this is
   what keeps a folder with 200 files from becoming 200 tabs).
 - Filter box narrows the visible tree; it does not search content.
@@ -97,13 +103,14 @@ setting — the tree and the watcher's `N files` counter read the same function,
 cannot disagree about what exists. The settings-panel chips in §10 are therefore target
 UX, not shipped.
 
-**v1 status — the tree is not markdown-only.** `fs_ops::list_dir` returns every entry that
-is not an ignored directory; there is no extension filter, and `TreeEntry.ext` is carried
-but unused. So a folder of images shows images. The target (markdown plus directories) is
-the better reader experience and the extension list already exists in `main.ts`
-(`MD_EXTENSIONS`), but the filter is not applied to the tree. Deviates — decide whether to
-apply the filter in Rust (so the tree and the watcher share one rule again) or drop the
-target.
+**The explorer's markdown-only toggle ships, on by default.** It is a *view* filter in
+`src/ui/tree.ts`, not a change to `fs_ops::list_dir`: `TreeEntry.ext` (lowercase, dotless) decides,
+the `md only` button in the sidebar head is the control, and the choice persists in the session
+(`IMPL.md` §6). Applying it in Rust was the other candidate and was rejected: the watcher's
+`watching N files` counts what is *watched*, not what is *shown* — a `.txt` beside a document still
+reloads it — and a listing that hides files would have to be re-fetched on every toggle. An empty
+result says `no files match the filter` when the filter box has text, and `no markdown files here`
+otherwise.
 
 **v1 status — resizing ships.** Both side panels are draggable: the sidebar's right edge and
 the outline's left edge. Widths live in `--w-sidebar` / `--w-outline`, written by JS, so a drag
@@ -150,7 +157,10 @@ existing signal for "this one is on"; do not replace it with a subtler one.
 
 `split` stays. Diagram-heavy docs are maintained by comparing source and output; removing
 it would push users back into an editor. The right pane gets `.prose.compact` (13px, and
-`prose.css` multiplies `--doc-size` by .867 with `--zoom`) because it has half the width.
+`prose.css` multiplies `--doc-size` by .867 with `--zoom`) because it has half the width; the left
+pane multiplies the *same* two knobs by the *same* .867, so the source and its rendering sit beside
+each other at one size. In the source *view* there is no compaction — the pane is set at exactly the
+prose body size, which is what makes source and preview the same document at the same scale.
 
 **Source text soft-wraps.** Both the source view and the split source pane wrap
 (`white-space: pre-wrap`), and long unbreakable tokens break (`overflow-wrap: anywhere`) — otherwise
@@ -322,13 +332,19 @@ packaging plan.
 | mermaid | `mermaid@12` (MIT) | **29 KB entry**, chunks on demand | The ESM build is code-split: 104 chunks, 5.18 MB on disk, but only the entry plus the chunks for the diagram types actually used get loaded. `dist/mermaid.min.js` — the monolith — is 5.3 MB and must **not** be used. |
 | dot | `@hpcc-js/wasm-graphviz@1.29.2` (Apache-2.0) | **~0.9 MB** | 13 files, zero dependencies. The wasm is inlined into the JS, so there is no separate `.wasm` to ship or fetch. |
 | dot (alternative) | `@viz-js/viz@3.31.0` (MIT) | ~1.2 MB | One self-contained file, MIT rather than Apache-2.0. Take this one only if the Apache licence or the `@hpcc-js` API is a problem. |
-| d2 | `@d2lang/d2@0.1.34` (MPL-2.0) | **11.0 MB** | `dist/browser/index.js` alone is 11.0 MB. That is 5× the old estimate and about half of a sane total installer budget. |
+| d2 | `@d2lang/d2@0.1.34` (MPL-2.0) | **11.5 MB** | `dist/browser/index.js` (11,514,165 bytes) is the one file the frontend imports: wasm inlined, and the package runs it in its own worker. Bundled, like the other two. The document's text paints before any card does, so the first `d2` block is the only thing that waits — measured 3.8 s for that parse on this machine, and 19 ms for a re-render once the module is resident. |
 
 Consequences, in order:
 
-1. **d2 cannot ship in the base bundle.** At 11 MB it would dominate the installer and contradict
-   "small and fast". It becomes an opt-in download driven from settings, which means the status
-   bar's d2 health dot needs a fourth state — `off` — distinct from `warn`.
+1. **d2 ships bundled — a reversal, decided 2026-10-03.** The first pass kept it out of the bundle on
+   size grounds (11 MB against a then-3.4 MB installer) and made it an opt-in download driven from
+   settings. The product owner reversed that: the offline guarantee is worth more than the bytes, so
+   all three engines ship and nothing has an install step. The download it replaces — `engine_install`,
+   `engine://progress`, a scan of `%APPDATA%/MarkdownAura/engines/d2/` — was never built and is now
+   deleted rather than deferred (`IMPL.md` §3, §7). What it cost, measured: `dist/` is 17 MB, of which
+   the d2 chunk is **11.0 MB and is not part of the initial load** — Vite code-splits it and the
+   browser fetches it on the first `d2` block, like mermaid's chunks — and the release binary grew
+   from 6.9 MB to **14.7 MB**. Installer figures: `IMPL.md` §9.
 2. **Never import the mermaid monolith.** 5.3 MB versus a 29 KB entry point. This is the single
    largest packaging decision in the app. Verified in production: the code-split chunks resolve
    over the `tauri://` asset protocol.
@@ -342,16 +358,13 @@ Consequences, in order:
    SPDX identifier rather than with each crate's full licence text — if the app is ever published,
    generate the texts (e.g. `cargo about`) and ship those too.
 
-In the base configuration nothing is fetched at runtime — the WASM is inlined in the bundle, which
-is what makes "no network calls" literally true. The opt-in d2 download is the one exception, and
-the settings UI must say so plainly rather than inheriting the offline claim.
+Nothing is fetched at runtime — every engine's wasm is inlined in the bundle, which is what makes
+"no network calls" literally true. The one network request the app can cause at all is the
+installer's WebView2 bootstrapper, and only on a machine with no WebView2 Runtime (`IMPL.md` §8).
 
-**v1 status — d2.** The download is **not implemented**. `engine_status` scans
-`%APPDATA%/MarkdownAura/engines/d2/<version>/` so a manually unpacked build is detected
-and the status bar dot turns green, but the settings `install` button only reports that
-the download is not implemented. Until it ships, `d2` is the honest fourth dot: grey, and
-a d2 card renders an inline error card that names the engine and says it is not installed.
-`IMPL.md` §7 records the intended fetch path.
+**v1 status — d2 ships.** It was the one opt-in download, and the download was never built; it is a
+bundled engine now, so `engine_status` reports `installed: true` for all three and there is no install
+step left to detect. `IMPL.md` §7 has the loading details, §9 the resulting sizes.
 
 ## 5. Tabs
 
@@ -502,7 +515,18 @@ adding a key means editing two files and the help panel can silently go stale.
 
 - **Flat.** No gradients, no shadows, no blur. Elevation comes from 0.5px hairlines at three
   strengths (`--line`, `--line-2`, `--line-3`) plus background shifts.
-- **Two font weights**, 400 and 500. Never 600/700 — bold is carried by weight 500 plus colour.
+- **Two weights on the reading surface**, 400 and 600 (`--fw-emphasis`). 500 would be the obvious
+  middle and it is the one weight these fonts do not have: "Microsoft YaHei UI" ships Regular and
+  Bold only, so a request for 500 was rendered as Regular and every heading and every `**bold**` run
+  in a Chinese document came out at body-text weight — the failure was invisible in English and
+  total in Chinese. 600 takes Segoe UI Variable's Semibold and makes YaHei reach for Bold, so
+  emphasis reads in both scripts. Chrome may still ask for 500 on a UI label
+  (`.segmented button.on`), where colour is carrying the state anyway.
+- **Heading sizes are `em`, never px** — multiples of the prose base (`--doc-size` x `--zoom`), so one
+  control moves the whole document. The scale is 1.47 / 1.27 / 1.13 / 1em for h1–h4 (22 / 19 / 17 /
+  15px at the default size; h5 and h6 are grouped with h4 and carry their level through weight and
+  spacing). Fixed-px headings fell behind the body the moment the reader raised the size or the zoom,
+  and h3–h6 shipped *smaller* than body text because their values were lifted from the 13px UI scale.
 - **One accent.** Purple `#534ab7` (the "aura"), used for: active tab bar, active tree row,
   links, focus rings, primary buttons, mermaid badge. Nothing else is saturated.
 - **Sentence case everywhere** — `open folder`, not `Open Folder`. Lowercase UI reads as
@@ -575,7 +599,7 @@ few read-only rows would cost a window lifecycle for nothing.
 | brand | logo · `MarkdownAura` · `v0.1.0` chip · `MIT` chip · one tagline |
 | what it is | a sentence, then **six capabilities** in two columns: layout / engines / reading / navigation / session / language |
 | author | 道荣（黄超） · design and development · `github.com/westsource/MarkdownAura ↗` |
-| engines | badge, engine, version, licence right-aligned; d2 marked as the opt-in install |
+| engines | badge, engine, version, licence right-aligned; d2 carries its bundled cost |
 | data | `%APPDATA%\MarkdownAura` (mono), what lives there, and an `open` button |
 | foot | `LICENSE · THIRD-PARTY.md` (both ship next to the executable) · `no telemetry · rendering happens locally` |
 
@@ -595,8 +619,9 @@ Decisions inside that shape, each of which was made deliberately:
 - **Feature copy states capabilities, never adjectives.** No "fast", no "lightweight": those are the
   claims the app is supposed to make by being used, and the About sheet is the wrong place to assert
   them.
-- **The foot says "no telemetry · rendering happens locally", not "no network requests."** The
-  opt-in d2 download will be a network request when it ships (§4); the wording has to survive that.
+- **The foot says "no telemetry · rendering happens locally", not "no network requests."** The app's
+  own runtime fetches nothing (§4); the installer's optional WebView2 bootstrapper is a request the
+  installer makes, not the app, and the foot is about the app.
 
 **The GitHub line is the only external URL in the app**, and it is opened through
 `tauri-plugin-opener` rather than by shelling out to `cmd /C start`. The capability allows **that
@@ -615,8 +640,8 @@ Content order — reading, engines, files, cache:
 
 | section | rows (shipped) |
 |---|---|
-| reading | theme (`system` / `light` / `dark`, segmented), language (`system` / `English` / `简体中文`, segmented), document font size (stepper, 12–22px, the `--doc-size` token), reading width (5 presets, the `--measure` token), reduce motion |
-| engines | mermaid and dot are static "bundled" rows with their measured costs; d2 is the only `.form-row.hot` row in the app — it is the one row that would touch the network, the row says so, and its button is currently a truthful dead end (`SPEC` §4 v1 status) |
+| reading | theme (`system` / `light` / `dark`, segmented), language (`system` / `English` / `简体中文`, segmented), document font size (stepper, 12–22px, the `--doc-size` token), reading width (3 presets — 60ch / 100ch / full, the `--measure` token), reduce motion |
+| engines | all three are static `bundled` rows with their measured costs; nothing here can touch the network (SPEC §4) |
 | files | watch debounce (read-out only; the value lives in `IMPL.md` §3) |
 | cache | rendered-SVG size + clear (the in-memory cap is 6 MB, `IMPL.md` §5) |
 

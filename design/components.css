@@ -296,6 +296,9 @@ kbd {
   justify-content: space-between;
   padding: 10px 10px 6px var(--sp-3);
 }
+/* The head's controls travel together, so `space-between` keeps the label on the left and the pair on
+   the right — a third child in the row itself would land in the middle. */
+.sidebar-actions { display: flex; align-items: center; gap: var(--sp-1); }
 .panel-label {
   font-size: var(--fs-xs);
   font-weight: 500;
@@ -314,6 +317,16 @@ kbd {
 }
 [data-theme="dark"] .mini-btn { color: var(--ac-tx); }
 .mini-btn:hover { filter: brightness(.97); }
+/* The markdown-only toggle is the quieter of the two controls in the sidebar head, so it inverts
+   `.mini-btn`'s default: hairline outline when off, the accent tint when on. The outline is an inset
+   shadow rather than a border because `.mini-btn` is borderless — a border would shift the row 1px. */
+.mini-btn.toggle {
+  background: transparent;
+  color: var(--tx-2);
+  box-shadow: inset 0 0 0 0.5px var(--line-2);
+}
+.mini-btn.toggle:hover { filter: none; color: var(--tx); }
+.mini-btn.toggle.on { background: var(--ac-bg); color: var(--ac-tx); box-shadow: none; }
 
 .sidebar-search { padding: 0 10px var(--sp-2); }
 input[type="search"], input[type="text"] {
@@ -347,6 +360,8 @@ input:focus { border-color: var(--ac); }
 [data-theme="dark"] .tree-row.active { color: var(--ac); }
 .tree-row svg { flex: 0 0 auto; color: var(--tx-2); }
 .tree-row .chev { width: 9px; height: 9px; }
+/* Shown when the tree has nothing to show: same left padding as a row, muted, and not interactive. */
+.tree-hint { padding: var(--sp-3) 8px; font-size: var(--fs-sm); color: var(--tx-3); }
 /* nesting is driven by a --depth custom property, not fixed classes */
 .tree-row { padding-left: calc(7px + var(--depth, 0) * 17px); }
 
@@ -434,8 +449,7 @@ input:focus { border-color: var(--ac); }
 
 .view { flex: 1 1 auto; min-height: 0; display: none; }
 .view.on { display: flex; }
-.view.preview .prose-wrap,
-.view.source .prose-wrap { flex: 1 1 auto; min-width: 0; overflow: auto; }
+.view.preview .prose-wrap { flex: 1 1 auto; min-width: 0; overflow: auto; }
 .view.split .pane-src {
   flex: 1 1 0; min-width: 0; overflow: auto;
   background: var(--code);
@@ -456,16 +470,36 @@ input:focus { border-color: var(--ac); }
    cards) can exceed the text column — see the reading-measure block in prose.css. */
 .prose { margin: 0 auto; user-select: text; }
 
-.source-view { padding: var(--sp-4) var(--sp-5) var(--sp-8); overflow: auto; background: var(--code); }
+/* `flex: 1 1 auto; min-width: 0` is not decoration. `.view.on` is a flex row, and a lone flex item
+   left at the default `flex: 0 1 auto` is sized by its **content** — here, the longest line of the
+   source — so a document with short lines rendered the source pane at a fraction of the window width
+   (it read as "the split pane's width") and only a document with a very long line filled it. That is
+   why the bug looked intermittent and turned up on whatever file a restored session happened to open.
+   `min-width: 0` lets the wrapped `pre` shrink instead of forcing the pane wider. The mockup used to
+   patch this in with an inline `style="flex:1;min-width:0"`, which hid the missing rule for as long as
+   the mockup was the thing being looked at. */
+.source-view {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--sp-4) var(--sp-5) var(--sp-8);
+  overflow: auto;
+  background: var(--code);
+}
+/* The source pane is set at the same size as the prose body it belongs to, so a source view and the
+   preview it replaces — or the two halves of a split — cannot drift apart. `--doc-size` and `--zoom`
+   are the same two knobs prose.css reads, and the compact factor is here because in split view this
+   pane sits next to `.prose.compact`. This used to be a bare `12px`, which is why the source pane
+   never matched the preview and ignored the size control and the zoom entirely. */
 .source-view pre {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: calc(var(--doc-size, 15px) * var(--zoom, 1));
   line-height: 1.8;
   white-space: pre-wrap;
   color: var(--tx);
   user-select: text;
 }
+.view.split .pane-src pre { font-size: calc(var(--doc-size, 15px) * .867 * var(--zoom, 1)); }
 .readonly-pill {
   position: sticky;
   top: 0;

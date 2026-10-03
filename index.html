@@ -82,7 +82,10 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-head">
         <span class="panel-label" data-i18n="sidebar.label">explorer</span>
-        <button class="mini-btn" id="openFolderBtn" data-i18n="sidebar.openFolder" data-i18n-title="sidebar.openFolderTitle" title="open folder (ctrl shift O)">open folder</button>
+        <div class="sidebar-actions">
+          <button class="mini-btn toggle on" id="mdOnlyBtn" data-i18n="sidebar.mdOnly" data-i18n-title="sidebar.mdOnlyTitle" data-i18n-aria-label="sidebar.mdOnlyTitle" title="list markdown files only" aria-pressed="true">md only</button>
+          <button class="mini-btn" id="openFolderBtn" data-i18n="sidebar.openFolder" data-i18n-title="sidebar.openFolderTitle" title="open folder (ctrl shift O)">open folder</button>
+        </div>
       </div>
       <div class="sidebar-search">
         <input type="search" id="fileFilter" data-i18n-placeholder="sidebar.filter" data-i18n-aria-label="sidebar.filter" placeholder="filter files" aria-label="filter files">

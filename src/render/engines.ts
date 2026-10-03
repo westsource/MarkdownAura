@@ -2,14 +2,16 @@
  *
  * Rules this file exists to enforce:
  *  - Every engine is a lazy `import()` behind one four-state machine, `off → loading → ready /
- *    failed`. `off` exists only for d2, and it is a *different thing* from `failed` — the
- *    status bar shows a different colour for each, because "you have not installed this" and
- *    "this is broken" are not the same message.
+ *    failed`. `off` means "not loaded yet" and is a *different thing* from `failed`: the status bar
+ *    colours them differently, because "this has not run yet" and "this is broken" are not the same
+ *    message. All three engines start `off` — d2 included, even though it ships in the bundle.
  *  - mermaid is never imported as the monolith. The ESM entry is 29 KB and code-splits the
  *    rest on demand; `dist/mermaid.min.js` is 5.3 MB for the same functionality (SPEC §4).
  *  - Colours come from `design/tokens.css` via `getComputedStyle`, so the design file stays the
  *    single source of truth and a theme change does not need a second palette in TypeScript.
  */
+import { clear as clearCache } from "./cache";
+import type { D2 } from "@d2lang/d2";
 import type { EngineId } from "./types";
 
 export type EngineState = "off" | "loading" | "ready" | "failed";
@@ -105,10 +107,35 @@ async function renderDot(source: string): Promise<string> {
 
 // ---------------------------------------------------------------- d2
 
-async function renderD2(): Promise<string> {
-  // d2 is an 11 MB opt-in download and is not bundled (SPEC §4). Until the download ships, the
-  // honest answer is "not installed" rather than a silent failure.
-  throw new Error("d2 is not installed — enable it in settings to download it (~11 MB)");
+/* d2 ships in the bundle (SPEC §4): the package's browser build is one 11.5 MB module with its wasm
+ * inlined, and it runs its own worker internally — `dispose()` is what shuts that worker down. So there
+ * is no install step, no `engine_install` command and nothing fetched at runtime; the first d2 block in
+ * a document pays for parsing the module, and later ones reuse it. */
+
+let d2Promise: Promise<D2> | null = null;
+
+async function loadD2(): Promise<D2> {
+  if (!d2Promise) d2Promise = import("@d2lang/d2").then((mod) => new mod.D2());
+  return d2Promise;
+}
+
+/* d2's own catalogue, by the ids its source assigns: 0 Neutral Default (light), 200 Dark Mauve. The
+   *app's* theme picks one — never the OS — because the app's theme can disagree with it. */
+const D2_THEME_LIGHT = 0;
+const D2_THEME_DARK = 200;
+
+let d2Seq = 0;
+
+async function renderD2(source: string): Promise<string> {
+  const d2 = await loadD2();
+  const compiled = await d2.compile(source);
+  return d2.render(compiled.diagram, {
+    themeID: document.documentElement.dataset.theme === "dark" ? D2_THEME_DARK : D2_THEME_LIGHT,
+    // Two identical diagrams in one document would otherwise emit the same element ids.
+    salt: `d2-${++d2Seq}`,
+    // The SVG is injected into the page, not written to a file.
+    noXMLTag: true,
+  });
 }
 
 // ---------------------------------------------------------------- registry
@@ -125,6 +152,10 @@ export function engineState(id: EngineId): EngineState {
 
 /** Called after a theme change so the next render picks up the new variables. */
 export function invalidateEngineThemes(): void {
+  // The cache as well as the engines: every engine bakes its palette into the SVG it returns, so a
+  // cached one would come back wearing the old theme. This used to be forgotten and a theme switch
+  // left already-rendered diagrams in the previous theme.
+  clearCache();
   for (const runtime of Object.values(runtimes)) {
     runtime.resetTheme?.();
     if (runtime.state === "ready") runtime.state = "off";

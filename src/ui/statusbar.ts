@@ -2,11 +2,12 @@
  *
  * The engine dots are the honest answer to "is this thing offline?" — which is the product's
  * whole claim — so the four states are distinct:
- *   off     (grey)   not installed, and installing it is a choice the user has not made
- *   loading (amber)  the wasm module is being fetched
+ *   off     (grey)   not loaded yet: the engine runs on demand, and nothing has needed it
+ *   loading (amber)  the module is being parsed
  *   ready   (green)
  *   failed  (red)
- * `off` and `failed` are not the same thing and must not share a colour (SPEC §3).
+ * `off` and `failed` are not the same thing and must not share a colour (SPEC §3). All three engines
+ * ship in the bundle, so no dot can mean "you have not installed this" any more.
  *
  * Every label here is generated, never in the shell markup, so a language change re-renders it
  * through `main.ts applyLang()` rather than leaving a stale string behind.
@@ -72,14 +73,6 @@ export function applyEngineDots(engines: EngineInfo[]): void {
   for (const engine of engines) {
     const cluster = document.querySelector<HTMLElement>(`#eng-${engine.id}`);
     if (!cluster) continue;
-    if (engine.optIn && !engine.installed) {
-      cluster.title = t("status.engineMissing", {
-        id: engine.id,
-        mb: (engine.bytes / 1048576).toFixed(1),
-      });
-      cluster.innerHTML = `<span class="dot off"></span>${engine.id}`;
-      continue;
-    }
     cluster.title = t("status.engine", { id: engine.id });
     cluster.innerHTML = `<span class="dot ${dotClass(engine.id as EngineId)}"></span>${engine.id}`;
   }

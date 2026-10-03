@@ -16,23 +16,29 @@
 /* ---------- headings ---------- */
 
 .prose :is(h1, h2, h3, h4, h5, h6) {
-  font-weight: 500;
+  font-weight: var(--fw-emphasis);   /* see the token: 500 is not a weight CJK fonts have */
   line-height: 1.3;
   scroll-margin-top: var(--sp-4);   /* outline jumps land below the toolbar */
 }
+/* Sizes are `em` — multiples of the prose base (`--doc-size` x `--zoom`) — never px. A heading fixed
+   in px silently falls behind the body text the moment the reader raises the size or the zoom, and
+   h3/h4-h6 shipped *smaller* than the body even at the default size (14px and 13px against a 15px
+   base), because the old values were lifted from the 13px UI scale. The ratios below keep the scale
+   the design had at its default size while making it follow the two reading controls:
+   22 / 19 / 17 / 15px at a 15px base. */
 .prose h1 {
-  font-size: var(--fs-2xl);
+  font-size: 1.47em;   /* 22px at the default base */
   letter-spacing: -.01em;
   margin-block: 0 var(--sp-2);
 }
 .prose h2 {
-  font-size: var(--fs-lg);
+  font-size: 1.27em;   /* 19px — a section header has to outrank the body text it introduces */
   margin-block: var(--sp-6) var(--sp-2);
   padding-bottom: 6px;
   border-bottom: 0.5px solid var(--line);
 }
-.prose h3 { font-size: 14px; margin-block: var(--sp-5) 6px; }
-.prose :is(h4, h5, h6) { font-size: var(--fs-md); margin-block: var(--sp-4) 4px; }
+.prose h3 { font-size: 1.13em; margin-block: var(--sp-5) 6px; }              /* 17px */
+.prose :is(h4, h5, h6) { font-size: 1em; margin-block: var(--sp-4) 4px; }    /* 15px; weight and spacing carry the level */
 .prose :is(h2, h3, h4, h5, h6):first-child { margin-top: 0; }
 
 /* anchor shown on hover, used by "copy as link" */
@@ -51,7 +57,7 @@
 .prose > :first-child { margin-top: 0; }
 .prose a { color: var(--ac); text-decoration: underline; text-decoration-color: var(--line-3); text-underline-offset: 2px; }
 .prose a:hover { text-decoration-color: currentColor; }
-.prose strong { font-weight: 500; }
+.prose strong { font-weight: var(--fw-emphasis); }
 .prose em { font-style: italic; }
 
 .prose ul, .prose ol { margin-block: 0 var(--sp-3); padding-left: 22px; }
@@ -94,7 +100,7 @@
   background: none;
   border: 0;
   padding: 0;
-  font-size: 12.5px;
+  font-size: .833em;   /* 12.5px at the default base; inline code is .88em */
   line-height: 1.65;
   color: var(--tx);
 }
@@ -105,7 +111,7 @@
   width: 100%;
   margin-block: 0 var(--sp-3);
   border-collapse: collapse;
-  font-size: 13.5px;
+  font-size: .9em;   /* 13.5px at the default base */
   display: block;
   overflow-x: auto;
 }
@@ -114,7 +120,7 @@
   border: 0.5px solid var(--line);
   text-align: left;
 }
-.prose th { background: var(--side); font-weight: 500; white-space: nowrap; }
+.prose th { background: var(--side); font-weight: var(--fw-emphasis); white-space: nowrap; }
 .prose tbody tr:nth-child(even) { background: var(--side); }
 
 /* ---------- images ---------- */
@@ -126,14 +132,14 @@
   border: 0.5px solid var(--line);
 }
 .prose figure { margin-block: 0 var(--sp-3); }
-.prose figcaption { margin-top: 6px; font-size: var(--fs-xs); color: var(--tx-2); text-align: center; }
+.prose figcaption { margin-top: 6px; font-size: .73em; color: var(--tx-2); text-align: center; }   /* 11px: the --fs-xs size, relative */
 
 /* ---------- frontmatter ----------
    rendered as a row of pills above h1, never as a table */
 
 .frontmatter { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--sp-3); }
 .frontmatter .pill {
-  font-size: var(--fs-xs);
+  font-size: .73em;   /* 11px, relative so it tracks the reading size */
   color: var(--tx-2);
   background: var(--side);
   border: 0.5px solid var(--line);
@@ -144,7 +150,7 @@
 /* ---------- footnotes ---------- */
 
 .prose sup a { text-decoration: none; padding: 0 1px; }
-.prose .footnotes { margin-top: var(--sp-6); padding-top: var(--sp-3); border-top: 0.5px solid var(--line); font-size: 13px; color: var(--tx-2); }
+.prose .footnotes { margin-top: var(--sp-6); padding-top: var(--sp-3); border-top: 0.5px solid var(--line); font-size: .87em; color: var(--tx-2); }   /* 13px at the default base */
 
 /* ---------- allow-listed raw HTML ----------
    Only the tags on IMPL §4's allow-list can reach here; everything else a source document
@@ -160,7 +166,7 @@
   border-radius: var(--r-md);
   padding: var(--sp-2) var(--sp-3);
 }
-.prose summary { cursor: pointer; font-weight: 500; }
+.prose summary { cursor: pointer; font-weight: var(--fw-emphasis); }
 .prose summary::marker { color: var(--tx-2); }
 .prose details[open] > summary { margin-bottom: var(--sp-2); }
 .prose details > :last-child { margin-bottom: 0; }
@@ -188,19 +194,18 @@
   overflow-wrap: anywhere;
 }
 
-.src .h { color: var(--ac); font-weight: 500; }          /* headings, links */
-.src .em { font-weight: 500; }                            /* bold */
+.src .h { color: var(--ac); font-weight: var(--fw-emphasis); }          /* headings, links */
+.src .em { font-weight: var(--fw-emphasis); }                            /* bold */
 .src .code { color: var(--ok); }                          /* fences, inline code */
 .src .meta { color: var(--tx-2); }                        /* fence markers, frontmatter */
 .src .quote { color: var(--tx-2); font-style: italic; }
 
-/* ---------- compact density (split view halves the width) ---------- */
-
+/* ---------- compact density (split view halves the width) ----------
+   Only the base shrinks; every size above is `em`, so headings, fences and tables follow it down
+   together instead of being overridden one by one with px — which is what used to happen here, and
+   what left the compact pane with sizes that ignored both the reading size and the zoom. */
 .prose.compact { font-size: calc(var(--doc-size, 15px) * .867 * var(--zoom, 1)); }
-.prose.compact h1 { font-size: var(--fs-xl); }
-.prose.compact h2 { font-size: 13.5px; margin-top: var(--sp-4); }
-.prose.compact pre code { font-size: 11.5px; }
-.prose.compact table { font-size: 12px; }
+.prose.compact h1 { font-size: 1.31em; }   /* 17px at the compact base: a section h1 in a narrow pane */
 
 /* ---------- reading measure ---------- */
 

@@ -61,7 +61,7 @@ MarkdownAura/
 ├─ design/                     # spec: tokens.css, components.css, prose.css, SPEC.md, IMPL.md
 │  ├─ mockup.html / mockup.js  # interactive reference + behaviour spec
 │  ├─ check-raw-html.mjs       # asserts the mockup honours §4's allow-list
-│  └─ check-prose-css.mjs      # asserts the reading column stays centred (§5)
+│  └─ check-prose-css.mjs      # asserts the reading column stays centred and its sizes stay relative (§5)
 ├─ tools/
 │  ├─ make-icons.mjs           # regenerates src-tauri/icons from one geometry description
 │  ├─ make-notices.mjs         # regenerates THIRD-PARTY.md from cargo metadata + node_modules
@@ -105,13 +105,14 @@ MarkdownAura/
 └─ var/                        # local verification scratch (gitignored): fixtures, CDP probes, shots
 ```
 
-`vendor/d2/` from the earlier draft **does not exist**: d2 is unbundled and its download is
-not implemented, so there is nowhere to vendor it to yet (§7).
+`vendor/d2/` from the earlier draft **does not exist and is not needed**: d2 is a bundled npm
+dependency (`@d2lang/d2`), not something vendored into the tree (§7).
 
 The five overlay modules (find, viewer, settings, help, immersive) are implemented and wired in
-`main.ts`. Two of them deliberately stop short of a full feature: the settings panel's d2 install
-button reports that the download is not implemented, and `ctrl shift P` shows the recent list as a
-menu rather than a picker. The `index.html` shell carries the markup for all five.
+`main.ts`. One of them deliberately stops short of a full feature: `ctrl shift P` shows the recent
+list as a menu rather than a picker. The settings panel used to have a second one — a d2 install
+button that reported the unimplemented download — and that row is gone now that d2 is bundled. The
+`index.html` shell carries the markup for all five.
 
 Three things in `src-tauri/` are repairs for this machine and must not be "cleaned up":
 
@@ -220,9 +221,9 @@ path).
 //    which until then had been implemented and unused since the first pass.
 ```
 
-**Not implemented:** `engine_install(id)` and `engine_remove(id)` were specified in the
-first draft and do not exist. The only engine command is `engine_status`; d2's install is a
-UI dead end until §7's download lands.
+**Not implemented, and no longer wanted:** `engine_install(id)` and `engine_remove(id)` were
+specified in the first draft for the opt-in d2 download. d2 is bundled (SPEC §4), so there is nothing
+to install and the only engine command is `engine_status`.
 
 Payload shapes (all `#[serde(rename_all = "camelCase")]`):
 
@@ -277,8 +278,8 @@ disk while you were not looking" check would come from if one is ever wanted.
 | `app://open` | `string` (a path) | a second launch ("Open with MarkdownAura") hands its path to the running window. |
 | `tauri://drag-enter` / `drag-leave` / `drag-drop` | `{ paths: string[] }` | Tauri core events, not ours. Under `dragDropEnabled` the WebView fires no HTML5 drop events, so these are the only drop signal there is (§8). |
 
-**Not implemented:** `engine://progress`. It was specified for the opt-in d2 download; there
-is no download, so there is no progress to report.
+**Not implemented, and no longer needed:** `engine://progress`. It was specified for the opt-in d2
+download; d2 is bundled now, so there is nothing to report progress about.
 
 Watcher ignore rules live in Rust, not the frontend: `fs_ops::is_ignored_dir` skips any name
 starting with `.` plus `node_modules`, `target`, `dist`. The tree and the `watching N files`
@@ -456,6 +457,7 @@ type WindowState = {
   sidebar: { open: boolean; width: number };   // width -> `--w-sidebar`
   outlineOpen: boolean;
   outlineWidth: number;          // -> `--w-outline`
+  mdOnly: boolean;               // explorer lists markdown files only; default true (SPEC §3)
   activeTab: number;
   tabs: Tab[];
   recent: string[];
@@ -498,6 +500,18 @@ Invariants worth stating because they are the bugs:
   `--measure` and the number feeds back on itself (745px → 386px → 278px, once per re-layout). It
   must be recomputed on every font-size or zoom change (`applyLayout`) and once after
   `document.fonts.ready`.
+- **Every size on the reading surface is relative to that same base**, and the source panes are part of
+  the reading surface. `prose.css` sizes headings and everything else in `em` off `.prose`'s
+  `calc(var(--doc-size) * var(--zoom))`; a px heading silently stops following the size control and the
+  zoom, and if it comes from the 13px UI scale (`--fs-*`) it also starts *below* the body text it
+  heads — which is what h3–h6 did until 2026-10-03. The source panes are set from the same two
+  variables (`.source-view pre` at the prose body size, `.view.split .pane-src pre` at the compact
+  0.867 of it) so source, split and preview are one document at one scale. `design/check-prose-css.mjs`
+  enforces this; both halves of it were reported broken from the running app, which is the only place
+  they are visible.
+- `.source-view` carries `flex: 1 1 auto; min-width: 0` and must keep it: `.view.on` is a flex row, so
+  a lone item at the default `flex: 0 1 auto` is sized by its **content** — the longest line of the
+  source — and the pane came out a fraction of the window for any document with short lines.
 - The measure lives on the **children** of `.prose`, not on `.prose` itself, and **every** child takes
   it — there is no wide-content exemption (`prose.css`). Both facts are load-bearing: on the
   container a table could be neither narrower nor wider than the text column, and re-adding an
@@ -552,6 +566,7 @@ that matters, the fix is a `getCurrentWindow().onCloseRequested()` that flushes 
   "theme": "system", "zoom": 100, "fontSize": 15, "reduceMotion": false,
   "lang": "system", "measure": "comfortable",
   "sidebar": { "open": true, "width": 343 }, "outlineOpen": true, "outlineWidth": 259,
+  "mdOnly": true,
   "activeTab": 1,
   "tabs": [
     { "file": "E:\\notes\\README.md", "view": "preview", "scroll": 0, "preview": false,
@@ -563,9 +578,13 @@ that matters, the fix is a `getCurrentWindow().onCloseRequested()` that flushes 
 
 - `version` is checked on load. Unknown version → ignore the file and start empty; never migrate
   destructively. Missing/unreadable/corrupt → `None`, which is not an error.
-- `fontSize`, `reduceMotion`, `lang`, `measure` and `outlineWidth` were each added after the first
-  session format; all five are `#[serde(default)]`, so an older file still loads. Keep that property
-  on any new field — the version stays 1 and a missing field must never mean "start clean".
+- `fontSize`, `reduceMotion`, `lang`, `measure`, `outlineWidth` and `mdOnly` were each added after the
+  first session format; all six are `#[serde(default)]`, so an older file still loads. Keep that
+  property on any new field — the version stays 1 and a missing field must never mean "start clean".
+  `mdOnly` is the one whose default is `true`, so it uses a named function rather than a bare
+  `#[serde(default)]` (which would mean `false` and silently list every file in the explorer); the
+  test `a_session_without_the_toggle_opens_with_it_on` is what keeps that honest, and `round_trips`
+  sets the field away from its default so a round trip that drops it fails.
 - `measure` stores the *preset name* (`comfortable`), not a pixel count: the values are a design
   decision that may be retuned, and a stored `90ch` would then be a stale copy. It also makes
   retiring a preset cheap — an unknown name falls back to the default on load (verified with a
@@ -595,24 +614,21 @@ that matters, the fix is a `getCurrentWindow().onCloseRequested()` that flushes 
 Each engine is a lazy `import()` behind one registry (`src/render/engines.ts`) with a four-state
 machine — `off` → `loading` → `ready` / `failed`. All three engines start at `off`, not only d2;
 `off` is what the status bar renders grey (`statusbar.ts` maps `off`→`grey`, `loading`→amber,
-`ready`→green, `failed`→red, and an `optIn && !installed` engine is forced to grey with its size
-in the tooltip). Renders run **in sequence, not in parallel** — mermaid's `render()` is not safe
-to call concurrently.
+ready→green, `failed`→red). All three engines ship in the bundle (SPEC §4), so no dot means "not
+installed" any more: `off` is simply "not loaded yet". Renders run **in sequence, not in parallel** —
+mermaid's `render()` is not safe to call concurrently.
 
 | engine | package | load | notes |
 |---|---|---|---|
 | mermaid | `mermaid` | `await import("mermaid")` | **Never** import the monolith (SPEC §4). `initialize({ startOnLoad: false, securityLevel: "strict", theme: "base", themeVariables })`, where the variables are read from `tokens.css` with `getComputedStyle` so the design file stays the colour source. A theme switch nulls the cached promise so the next render re-initialises. The ESM build is code-split; chunk resolution over the Tauri asset protocol was **verified in a release build**, because a wrong `base` silently breaks every diagram at runtime. |
 | dot | `@hpcc-js/wasm-graphviz` | `await import(...)` → `Graphviz.load()` → `graphviz.dot(source)` | Wasm is inlined in the JS, so nothing extra ships. Note the API: the method is `.dot()`, **not** `.layout(src, "svg", "dot")` as an earlier draft said. There is no `unload()` call; graphviz stays resident once loaded. |
-| d2 | `@d2lang/d2` | **not implemented** | `renderD2()` throws "d2 is not installed — enable it in settings to download it (~11 MB)"; `pipeline.ts` catches it and renders the inline error card. `engines.rs::status()` detects a manually unpacked build by scanning `%APPDATA%/MarkdownAura/engines/d2/<version>/` and reports the largest one. |
+| d2 | `@d2lang/d2` | `await import("@d2lang/d2")` → `new D2()` → `compile(source)` → `render(diagram, opts)` | The browser build inlines its wasm and runs it in its **own worker** (`dispose()` shuts that worker down), so no worker or second artifact is ours to manage; `worker-src 'self' blob:` in the CSP is what lets it start. The SVG is returned as a string: `themeID` picks the palette — d2's own ids, **0** Neutral Default for light and **200** Dark Mauve for dark, chosen from the app's theme (`data-theme`), never from the OS, because the app's theme can disagree with it — `salt` keeps element ids unique across identical diagrams in one page, and `noXMLTag` because the SVG is injected rather than saved. `themeID` is read per render, so there is no reset hook; the *cache* is what has to be dropped on a theme switch, and `invalidateEngineThemes()` does that (`./cache`). The first d2 block in a document pays the parse of the module. |
 
-**The d2 download does not exist yet.** When it does, the shape is fixed by `engines.rs`:
-fetch the `@d2lang/d2` tarball from **registry.npmjs.org** (GitHub release assets are
-unreachable from this network; the npm registry is reachable), verify a pinned SHA-256,
-unpack into `d2_dir()` — `%APPDATA%/MarkdownAura/engines/d2/<version>/` — and only then flip
-the registry `off → loading → ready`. That needs `engine_install`, which does not exist
-(§3), and an `engine://progress` event, which does not exist either (§3). d2 is expected to
-run in a **web worker**, so the worker and the 11 MB payload must both resolve from the
-asset protocol; `worker-src 'self' blob:` is already in the CSP for it.
+**The d2 download was dropped.** It existed as `engine_install` + `engine://progress` + a scan of
+`%APPDATA%/MarkdownAura/engines/d2/`; on 2026-10-03 d2 became a bundled dependency instead (SPEC §4)
+and all of that went with it: no install command, no progress event, no `engines/` directory, and
+`EngineInfo` no longer carries `path` or `optIn`. The remaining CSP line it needed — `worker-src
+'self' blob:` — is still required, for the package's own worker.
 
 CSP (from `tauri.conf.json`, verbatim — the earlier three-line version was incomplete and
 would have broken the worker and the asset protocol):
@@ -630,8 +646,8 @@ worker-src  'self' blob:;
 `assetProtocol.enable: true` with an empty static scope: the scope is widened at runtime to
 the folder the user opens (`open_folder`), not declared up front.
 
-d2 stays out of the installer. The settings panel must state that its install is the one action in
-the app that would touch the network (SPEC §4) — it does.
+d2 is in the installer like every other engine, which is what makes the app's "no network at
+runtime" claim unconditional. `IMPL.md` §9 carries the resulting sizes.
 
 ## 8. Shell details
 
@@ -700,6 +716,17 @@ error): dev-mode first render ≈336 ms including both engines; the release buil
 cache-hit re-render of the same document reported 4 ms. The budgets above stay as the
 contract; these are one data point each, not a pass.
 
+**Bundle cost, measured 2026-10-03 (release).** `dist/` is 17 MB; the d2 chunk alone is 11.0 MB and is
+code-split, so it is fetched on the first `d2` block rather than at boot. The release binary is 14.7 MB
+(6.9 MB before d2 was bundled) and the NSIS installer is 11.58 MiB (3.36 MiB before). All of it is
+install-time bytes — nothing is fetched at runtime (SPEC §4).
+
+**d2's first card is the slow one, measured 2026-10-03** on `var/typecheck/diagrams.md`: the first d2
+block reported 3837 ms (parsing the 11 MB module) and a re-render of the same document reported 19 ms.
+The document's own text is painted before any card is resolved, so the wait is one card, not the page.
+That is the whole price of not making d2 a download: no install step, and a slow first d2 block — the
+status bar's `rendered in N ms` is where a reader sees it.
+
 ## 10. Testing
 
 - **Rust: 31 unit tests, in-module** (`cargo test --lib`) — `session` (round-trip, unknown
@@ -730,6 +757,15 @@ contract; these are one data point each, not a pass.
   shorthand zeroes `margin-inline` for that one block type with a specificity that beats the centring
   rule, which is invisible to every measurement that looks at widths. Verified against the real bug
   by reintroducing `.prose p { margin: … }` and watching the check fail.
+- The same script asserts the second invariant of the reading surface: **every `font-size` in
+  `prose.css` is relative to the prose base, the two source panes read `--doc-size` and `--zoom`, and
+  `.source-view` is `flex: 1 1 auto` with `min-width: 0`**. All three failures were reported from the
+  running app on 2026-10-03 (headings smaller than body text; the source pane never matching the
+  preview; the source pane sometimes only as wide as the split pane). Verified against those bugs the
+  same way, by reintroducing each defect in a temp copy: `node var/guardtest.mjs` does exactly that
+  and asserts the checker fails on each one and passes on the fix. The harness lives in `var/`
+  (gitignored) because it is a one-off proof, not a gate; if these assertions start changing often,
+  move it next to the checker and wire it into `npm run check:prose`.
 - **Anything that spawns a process fails misleadingly from a bash-launched app.** The About sheet's
   "open data folder" button calls `reveal_in_explorer`, which returns `io` / `os error 50`
   (ERROR_NOT_SUPPORTED) when the app was started from the MSYS bash here and succeeds from a
@@ -755,14 +791,9 @@ contract; these are one data point each, not a pass.
 
 - **The two contract guards in §4**: the `insta` snapshot over fixture documents and the
   class-name lint against `design/*.css`. `insta` is already a dev-dependency.
-- **d2 download** (`engine_install` + `engine://progress`), per §7. Blocked on nothing now;
-  it was left as a product decision.
 - **`KEYMAP` and the dispatcher** are still two hand-kept lists (SPEC §7). They agree today;
   nothing enforces it.
 - **`.tab.pinned`** has no CSS rule while the class is emitted (SPEC §5).
-- **Explorer tree filter:** `fs_ops::list_dir` returns every non-ignored entry, so the explorer
-  lists images and arbitrary files; the target is markdown-only (SPEC §3). Apply
-  `MD_EXTENSIONS` in Rust so the tree and the watcher keep sharing one rule.
 - **Per-tab outline highlight** (SPEC §5): the field exists, but the spy does not remember it per
   tab. The outline jump landing both panes on the same anchor ships, as does continuous split-view
   sync (IMPL §5); what is left is remembering the highlight per tab.

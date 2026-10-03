@@ -52,6 +52,10 @@ export interface WindowState {
   outlineOpen: boolean;
   /** Outline width in px, written to `--w-outline` (SPEC §3). */
   outlineWidth: number;
+  /** The explorer lists markdown files only. Default `true`: a folder of images should not bury the
+   *  documents. Directories always show — the tree is loaded a level at a time, so "does this folder
+   *  hold markdown?" is not knowable without reading it (SPEC §3). */
+  mdOnly: boolean;
   activeTab: number;
   tabs: Tab[];
   recent: string[];
@@ -100,6 +104,7 @@ export const state: WindowState = {
   sidebar: { open: true, width: 224 },
   outlineOpen: true,
   outlineWidth: 200,
+  mdOnly: true,
   activeTab: 0,
   tabs: [],
   recent: [],
@@ -160,6 +165,7 @@ export function toSession(windowRect: WindowRect): Session {
     sidebar: { open: state.sidebar.open, width: state.sidebar.width },
     outlineOpen: state.outlineOpen,
     outlineWidth: state.outlineWidth,
+    mdOnly: state.mdOnly,
     activeTab: state.activeTab,
     tabs,
     recent: state.recent.slice(),
@@ -181,6 +187,7 @@ export function applySession(session: Session): void {
   state.sidebar = { ...session.sidebar };
   state.outlineOpen = session.outlineOpen;
   state.outlineWidth = session.outlineWidth ?? 200;
+  state.mdOnly = session.mdOnly ?? true;
   state.recent = session.recent.slice();
   state.tabs = session.tabs.map((t) => {
     const name = t.file.split(/[\\/]/).pop() ?? t.file;

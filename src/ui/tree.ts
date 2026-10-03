@@ -7,7 +7,8 @@
  * Directories are skipped by Rust (`fs_ops::is_ignored_dir`), not here, so the tree and the
  * watcher's file count can never disagree about what exists.
  */
-import { describeError, readDir, type FolderView, type TreeEntry } from "../ipc";
+import { describeError, isMarkdownExt, readDir, type FolderView, type TreeEntry } from "../ipc";
+import { t } from "../i18n";
 import { $, $$, CHEV_OPEN, CHEV_SHUT, DIR_ICON, esc, FILE_ICON, toast } from "./dom";
 
 interface Node extends TreeEntry {
@@ -20,6 +21,16 @@ interface Node extends TreeEntry {
 let root: Node | null = null;
 let pick: (path: string, preview: boolean) => void = () => {};
 let activePath: string | null = null;
+
+/** Markdown files only (SPEC §3). Pushed in by `main.ts` rather than read from app state, the same
+ *  split as `setActiveFile`: this module renders, `main.ts` decides. */
+let markdownOnly = true;
+
+export function setMarkdownOnly(on: boolean): void {
+  if (markdownOnly === on) return;
+  markdownOnly = on;
+  renderTree();
+}
 
 const toNode = (entry: TreeEntry, depth: number): Node => ({
   ...entry,
@@ -64,7 +75,12 @@ function visibleRows(): Array<{ node: Node; index: number }> {
 
   const filter = $<HTMLInputElement>("#fileFilter").value.trim().toLowerCase();
   const walk = (node: Node) => {
-    if (filter && !node.name.toLowerCase().includes(filter) && !node.isDir) return;
+    // Directories are never filtered, by either rule: the tree is read one level at a time, so
+    // whether a folder holds markdown is not knowable without opening it (SPEC §3).
+    if (!node.isDir) {
+      if (markdownOnly && !isMarkdownExt(node.ext)) return;
+      if (filter && !node.name.toLowerCase().includes(filter)) return;
+    }
     rows.push({ node, index: rows.length });
     if (node.isDir && node.open && node.children) node.children.forEach(walk);
   };
@@ -94,6 +110,7 @@ export function renderTree(): void {
       );
     })
     .join("");
+  if (rows.length === 0) container.insertAdjacentHTML("beforeend", emptyHint());
 
   $$(".tree-row", container).forEach((el) => {
     const index = Number(el.dataset.i);
@@ -134,4 +151,16 @@ async function toggleDir(node: Node): Promise<void> {
 
 export function wireFilter(): void {
   $("#fileFilter").addEventListener("input", renderTree);
+}
+
+/** One muted line when the tree has nothing to show — and the message depends on *why*, because "the
+ *  filter matched nothing" and "this folder has no markdown" are different situations. A folder that
+ *  is simply empty still shows nothing, which is what it did before the toggle existed. */
+function emptyHint(): string {
+  if (!root) return "";
+  if ($<HTMLInputElement>("#fileFilter").value.trim() !== "") {
+    return `<div class="tree-hint">${esc(t("sidebar.noMatches"))}</div>`;
+  }
+  if (markdownOnly) return `<div class="tree-hint">${esc(t("sidebar.noMarkdown"))}</div>`;
+  return "";
 }

@@ -199,6 +199,7 @@ Errors render inline with the line number instead of blanking the page.`
     { name: "README.md", depth: 2, file: "README.md" },
     { name: "architecture.md", depth: 2, file: "architecture.md" },
     { name: "quickstart.md", depth: 2, file: "quickstart.md" },
+    { name: "notes.txt", depth: 2, file: "docs/notes.txt" },
     { name: "examples", depth: 1, dir: true, open: true },
     { name: "diagrams.md", depth: 2, file: "examples/diagrams.md" },
     { name: "CHANGELOG.md", depth: 1, file: "CHANGELOG.md" }
@@ -811,6 +812,12 @@ Errors render inline with the line number instead of blanking the page.`
   const DIR_ICON = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.1"><path d="M1.9 4.4h4.2l1.5 2h6.5v7.7H1.9z"/></svg>';
   const FILE_TREE_ICON = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.1"><path d="M4 1.9h4.9L12 5v9.1H4z"/><path d="M8.9 1.9V5H12"/></svg>';
 
+  /** Markdown files only (default on). Directories are never hidden by this: the tree is a flat
+   *  fixture here and one level at a time in the app, so whether a folder holds markdown is not
+   *  knowable without reading it. */
+  let mdOnly = true;
+  const MD_EXT = /\.(md|markdown|mdx|mdown|mkd)$/i;
+
   function renderTree() {
     const filter = $("#fileFilter").value.trim().toLowerCase();
     const hidden = new Set();
@@ -821,14 +828,21 @@ Errors render inline with the line number instead of blanking the page.`
       }
     });
     const cur = tab();
-    $("#tree").innerHTML = TREE.map((n, i) => {
+    const html = TREE.map((n, i) => {
       if (hidden.has(i)) return "";
-      if (filter && !n.name.toLowerCase().includes(filter)) return "";
+      // The text filter exempts directories, like the app's: the tree is read one level at a time, and
+      // hiding a folder because its *name* does not match hides the files inside it too.
+      if (filter && !n.dir && !n.name.toLowerCase().includes(filter)) return "";
+      if (mdOnly && !n.dir && !MD_EXT.test(n.name)) return "";
       const icon = n.dir ? DIR_ICON : FILE_TREE_ICON;
       const chev = n.dir ? (n.open ? CHEV_OPEN : CHEV_SHUT) : '<span class="chev"></span>';
       const active = cur && cur.file === n.file;
       return `<div class="tree-row${active ? " active" : ""}" style="--depth:${n.depth}" data-i="${i}" data-file="${n.file || ""}" title="${esc(n.name)}">${chev}${icon}<span style="overflow:hidden;text-overflow:ellipsis;">${esc(n.name)}</span></div>`;
     }).join("");
+    // No empty-tree hint in the mockup: its fixture draws the root as a row and directories are never
+    // filtered, so this list cannot be empty. The app's tree shows a folder's *children* (no row for the
+    // root), so a folder whose files are all filtered out does get a one-line hint — SPEC §3.
+    $("#tree").innerHTML = html;
 
     $$("#tree .tree-row").forEach((el) => {
       const i = +el.dataset.i;
@@ -843,6 +857,11 @@ Errors render inline with the line number instead of blanking the page.`
   }
 
   $("#fileFilter").addEventListener("input", renderTree);
+  $("#mdOnlyBtn").addEventListener("click", () => {
+    mdOnly = !mdOnly;
+    $("#mdOnlyBtn").classList.toggle("on", mdOnly);
+    renderTree();
+  });
   $("#openFolderBtn").addEventListener("click", () => toast("opens the native folder picker (tauri dialog plugin)"));
   $("#newTabBtn").addEventListener("click", (e) => { e.stopPropagation(); openMenuAt($("#newTabBtn"), newTabMenu()); });
   $("#listTabsBtn").addEventListener("click", (e) => { e.stopPropagation(); openMenuAt($("#listTabsBtn"), allTabsMenu()); });

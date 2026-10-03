@@ -9,9 +9,9 @@
  * wrong if the toolchain says it is.
  *
  * Only what *ships* is listed: the frontend's runtime dependencies (devDependencies never reach the
- * bundle) and every crate in the default dependency graph. The engines that are downloaded rather
- * than bundled (d2) are called out separately, because their licence obligations land on whoever
- * performs that download.
+ * bundle) and every crate in the default dependency graph. All three diagram engines ship bundled, so
+ * there is no "downloaded later" section any more; d2 is called out in its own sentence because it is
+ * the one MPL-2.0 component and that licence has an obligation the others do not.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -103,18 +103,17 @@ installed \`node_modules\`: do not edit it by hand, and re-run the generator whe
 
 | component | version | licence | copyright |
 |---|---|---|---|
-${[frontend.find((d) => d.name === "mermaid"), frontend.find((d) => d.name === "@hpcc-js/wasm-graphviz")]
+${["mermaid", "@hpcc-js/wasm-graphviz", "@d2lang/d2"]
+  .map((name) => frontend.find((d) => d.name === name))
   .map((e) => row([`\`${e.name}\``, e.version, e.license, optional(e.holder)]))
   .join("\n")}
 
 The mermaid ESM build is code-split: the entry plus the chunks for the diagram types actually used
 are bundled, and the rest ship in the installer as chunks (\`SPEC.md\` §4).
 
-## Downloaded on demand (not bundled)
-
-| component | version | licence | notes |
-|---|---|---|---|
-| \`@d2lang/d2\` | 0.1.x | MPL-2.0 | Opt-in download, **not implemented yet** (\`SPEC.md\` §4, \`IMPL.md\` §7). MPL-2.0 is file-level copyleft: the engine's own files must stay separable and its licence text must accompany the download. |
+**d2 is the one MPL-2.0 component.** MPL-2.0 is file-level copyleft: its files ship unmodified inside
+the frontend bundle, separate from the app's own files, which is what the licence asks for. Its
+licence text is \`node_modules/@d2lang/d2/LICENSE.txt\` in the source tree.
 
 ## Frontend runtime dependencies
 

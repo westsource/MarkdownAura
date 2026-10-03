@@ -38,13 +38,20 @@
   --eng-dot: #085041;      --eng-dot-bg: #e1f5ee;
   --eng-d2: #854f0b;       --eng-d2-bg: #faeeda;
 
-  /* type — two weights only, never 600/700 */
+  /* type — chrome and UI only. The reading surface deliberately does not use these: prose.css sizes
+     everything in `em` off `--doc-size` x `--zoom`, so that one control moves the whole document and
+     no heading can silently fall behind the body text (which is what fixed px headings did).
+
+     Two weights: 400 for text, `--fw-emphasis` for emphasis. 500 would be the obvious middle, but it
+     is the one weight this app's fonts do not have — "Microsoft YaHei UI" ships Regular and Bold
+     only, so a request for 500 renders as Regular and every heading and every `**bold**` run in a
+     Chinese document came out indistinguishable from body text. 600 asks Segoe UI Variable for its
+     Semibold and makes YaHei reach for Bold, so emphasis is visible in both scripts. */
   --font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
   --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
-  --fs-2xl: 22px;   /* document h1 */
-  --fs-xl: 17px;    /* section h1 in narrow panes */
-  --fs-lg: 15px;    /* h2 */
-  --fs-md: 13px;    /* body */
+  --fw-emphasis: 600;   /* headings, `strong`, table headers, summary, source-view roles */
+  --fs-lg: 15px;    /* section titles in panels */
+  --fs-md: 13px;    /* default UI text (the root font size) */
   --fs-sm: 12px;    /* ui labels */
   --fs-xs: 11px;    /* status bar, badges, captions */
   --lh-body: 1.7;
@@ -64,10 +71,13 @@
   --h-toolbar: 40px;
   --h-status: 26px;
 
-  /* panels */
+  /* Panels. The bounds are read at drag time (`src/ui/panels.ts`), so these two numbers are the whole
+     contract. The sidebar's cap was 360px — on a wide display that is narrower than the paths it has
+     to show, so it is 640 now; the floor and the cap together are what keeps a drag from leaving the
+     reading column no room. Both must stay plain lengths: the reader parses them with `parseFloat`. */
   --w-sidebar: 224px;
   --w-sidebar-min: 180px;
-  --w-sidebar-max: 360px;
+  --w-sidebar-max: 640px;
   --w-outline: 200px;
   --w-outline-min: 160px;
   --w-outline-max: 360px;

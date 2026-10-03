@@ -43,8 +43,8 @@ import * as tabs from "./ui/tabs";
 import * as tree from "./ui/tree";
 import * as viewer from "./ui/viewer";
 
-const MD_EXTENSIONS = ["md", "markdown", "mdx", "mdown", "mkd"];
-const IS_MARKDOWN = /\.(md|markdown|mdx|mdown|mkd)$/i;
+// The markdown extension test lives in `ipc.ts` now: the open dialog's filter, the drop and argument
+// checks, and the explorer's markdown-only toggle all read one definition (SPEC §3).
 
 const basename = (path: string): string => path.split(/[\\/]/).pop() ?? path;
 
@@ -342,7 +342,7 @@ async function applyFolder(root: string): Promise<void> {
  * separator handling, and `C:\file.md` minus its last path segment is `C:` — not `C:\`.
  */
 async function openPath(path: string): Promise<void> {
-  if (!IS_MARKDOWN.test(path)) {
+  if (!ipc.isMarkdownPath(path)) {
     await applyFolder(path);
     return;
   }
@@ -363,7 +363,7 @@ async function pickFile(): Promise<void> {
   const chosen = await openDialog({
     multiple: false,
     title: "Open markdown",
-    filters: [{ name: "Markdown", extensions: MD_EXTENSIONS }],
+    filters: [{ name: "Markdown", extensions: ipc.MD_EXTENSIONS }],
   });
   if (typeof chosen === "string") await openFile(chosen, false);
 }
@@ -383,7 +383,7 @@ function renderRecent(): void {
     link.addEventListener("click", () => {
       const path = decodeURIComponent(link.dataset.recent ?? "");
       if (!path) return;
-      void (IS_MARKDOWN.test(path) ? openFile(path, false) : applyFolder(path));
+      void (ipc.isMarkdownPath(path) ? openFile(path, false) : applyFolder(path));
     });
   });
 }
@@ -484,6 +484,15 @@ async function restoreWindowRect(rect: WindowRect): Promise<void> {
 
 let saveTimer: number | undefined;
 
+/** The explorer's markdown-only toggle (SPEC §3). One writer: state -> button -> tree, so a restored
+ *  session and a click cannot disagree about what the tree is showing. */
+function applyMdOnly(): void {
+  const button = $<HTMLButtonElement>("#mdOnlyBtn");
+  button.classList.toggle("on", state.mdOnly);
+  button.setAttribute("aria-pressed", String(state.mdOnly));
+  tree.setMarkdownOnly(state.mdOnly);
+}
+
 /** 500 ms debounce, per IMPL.md §6. Saving on every scroll frame would be absurd. */
 function scheduleSave(): void {
   window.clearTimeout(saveTimer);
@@ -511,6 +520,7 @@ async function restoreSession(): Promise<void> {
   renderRecent();
   applyTheme();
   applyLayout();
+  applyMdOnly();
   await restoreWindowRect(session.window);
 
   // The folder comes back from `recent`. Tabs come back by path, and a path that no longer
@@ -762,6 +772,11 @@ async function boot(): Promise<void> {
   });
 
   $("#openFolderBtn").addEventListener("click", () => void pickFolder());
+  $("#mdOnlyBtn").addEventListener("click", () => {
+    state.mdOnly = !state.mdOnly;
+    applyMdOnly();
+    scheduleSave();
+  });
   $("#emptyOpenFolder").addEventListener("click", () => void pickFolder());
   $("#emptyOpenFile").addEventListener("click", () => void pickFile());
   $("#toggleSidebar").addEventListener("click", () => {
@@ -849,7 +864,6 @@ async function boot(): Promise<void> {
 
   const engineList = await ipc.engineStatus();
   status.applyEngineDots(engineList);
-  settings.setEngines(engineList);
   // The measure is resolved to pixels against the prose font (measure.ts), so a webfont that
   // arrives after the first layout changes the right answer.
   void document.fonts?.ready.then(() => applyLayout());

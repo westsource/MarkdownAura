@@ -12,20 +12,20 @@ installed `node_modules`: do not edit it by hand, and re-run the generator when 
 |---|---|---|---|
 | `mermaid` | 12.0.0 | MIT | Copyright (c) 2014 - 2022 Knut Sveidqvist |
 | `@hpcc-js/wasm-graphviz` | 1.29.2 | Apache-2.0 | — |
+| `@d2lang/d2` | 0.1.34 | MPL-2.0 | Copyright 2022 Terrastruct Inc. |
 
 The mermaid ESM build is code-split: the entry plus the chunks for the diagram types actually used
 are bundled, and the rest ship in the installer as chunks (`SPEC.md` §4).
 
-## Downloaded on demand (not bundled)
-
-| component | version | licence | notes |
-|---|---|---|---|
-| `@d2lang/d2` | 0.1.x | MPL-2.0 | Opt-in download, **not implemented yet** (`SPEC.md` §4, `IMPL.md` §7). MPL-2.0 is file-level copyleft: the engine's own files must stay separable and its licence text must accompany the download. |
+**d2 is the one MPL-2.0 component.** MPL-2.0 is file-level copyleft: its files ship unmodified inside
+the frontend bundle, separate from the app's own files, which is what the licence asks for. Its
+licence text is `node_modules/@d2lang/d2/LICENSE.txt` in the source tree.
 
 ## Frontend runtime dependencies
 
 | package | version | licence | copyright |
 |---|---|---|---|
+| `@d2lang/d2` | 0.1.34 | MPL-2.0 | Copyright 2022 Terrastruct Inc. |
 | `@hpcc-js/wasm-graphviz` | 1.29.2 | Apache-2.0 | — |
 | `@tauri-apps/api` | 2.12.1 | Apache-2.0 OR MIT | — |
 | `@tauri-apps/plugin-dialog` | 2.8.1 | MIT OR Apache-2.0 | — |

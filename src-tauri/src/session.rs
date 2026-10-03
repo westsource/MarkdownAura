@@ -95,6 +95,10 @@ pub struct Session {
     /// Outline width in px (SPEC §3), written to `--w-outline`.
     #[serde(default = "default_outline_width")]
     pub outline_width: f64,
+    /// Explorer shows markdown files only (SPEC §3). Carried here only so a round trip through this
+    /// struct does not drop it — the rule itself lives in `src/ipc.ts`, and the tree applies it.
+    #[serde(default = "default_md_only")]
+    pub md_only: bool,
     pub active_tab: usize,
     pub tabs: Vec<TabState>,
     pub recent: Vec<String>,
@@ -114,6 +118,12 @@ fn default_measure() -> String {
 
 fn default_outline_width() -> f64 {
     200.0
+}
+
+/// The explorer's markdown-only toggle ships **on** (SPEC §3): a folder of images should not bury the
+/// documents. Defaulted so a session written before the toggle existed opens like a fresh one.
+fn default_md_only() -> bool {
+    true
 }
 
 impl Default for Session {
@@ -139,6 +149,7 @@ impl Default for Session {
             },
             outline_open: true,
             outline_width: default_outline_width(),
+            md_only: default_md_only(),
             active_tab: 0,
             tabs: Vec::new(),
             recent: Vec::new(),
@@ -220,6 +231,9 @@ mod tests {
         let path = tmp("roundtrip");
         let mut session = Session::default();
         session.theme = "dark".into();
+        // Away from the default, so a field the round trip quietly drops fails this test. `true` would
+        // compare equal to the default and hide exactly that bug.
+        session.md_only = false;
         session.tabs.push(TabState {
             file: "E:\\notes\\README.md".into(),
             view: "split".into(),
@@ -231,6 +245,29 @@ mod tests {
         save_to(&path, &session).unwrap();
         let back = load_from(&path).expect("session should load");
         assert_eq!(back, session);
+    }
+
+    /// The toggle's shipped default is *on* and the field is optional, so a session written before it
+    /// existed must not come back listing every file. A bare `#[serde(default)]` would flip that
+    /// silently (a missing `bool` is `false`), which is why the default is a named function.
+    #[test]
+    fn a_session_without_the_toggle_opens_with_it_on() {
+        let path = tmp("mdonly-default");
+        let mut session = Session::default();
+        session.md_only = false;
+        save_to(&path, &session).unwrap();
+
+        // Remove the field, the way a session file written before the toggle existed would not have it.
+        let raw = std::fs::read_to_string(&path).unwrap();
+        let mut value: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        assert!(
+            value.as_object_mut().unwrap().remove("mdOnly").is_some(),
+            "the saved session should have carried mdOnly at all"
+        );
+        std::fs::write(&path, serde_json::to_string(&value).unwrap()).unwrap();
+
+        let back = load_from(&path).expect("session should load");
+        assert!(back.md_only, "a session from before the toggle must open in markdown-only mode");
     }
 
     #[test]
