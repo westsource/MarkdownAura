@@ -238,22 +238,19 @@
 
               <div class="about-facts">
                 <div class="row"><span class="k" data-i18n="about.k.author">author</span><span class="v" data-i18n="about.author"></span></div>
-                <div class="row">
-                  <span class="k" data-i18n="about.k.update">update</span>
-                  <span class="v">
-                    <div class="about-update">
-                      <button class="ghost-btn" id="aboutUpdateCheck" data-i18n="about.checkUpdate">check for updates</button>
-                      <button class="primary-btn" id="aboutUpdateInstall" hidden data-i18n="about.installUpdate">download and install</button>
-                      <span class="about-update-state" id="aboutUpdateState"></span>
-                    </div>
-                    <div class="about-update-hint" data-i18n="about.updateHint"></div>
-                  </span>
-                </div>
                 <div class="row"><span class="k" data-i18n="about.k.engines">engines</span><span class="v"><span class="badge mermaid">mermaid</span>mermaid.js 12<span class="lic">MIT</span></span></div>
                 <div class="row"><span class="k"></span><span class="v"><span class="badge dot">dot</span>graphviz · @hpcc-js/wasm-graphviz<span class="lic">Apache-2.0</span></span></div>
                 <div class="row"><span class="k"></span><span class="v"><span class="badge d2">d2</span><span data-i18n="about.d2Note">bundled — wasm inlined (~11.5 MB)</span><span class="lic">MPL-2.0</span></span></div>
                 <div class="row"><span class="k" data-i18n="about.k.data">data</span><span class="v"><span class="about-path" id="aboutDataPath">—</span><button class="ghost-btn about-open" id="aboutReveal" data-i18n="about.reveal">open</button></span></div>
               </div>
+
+              <hr class="about-rule">
+              <div class="about-update">
+                <button class="ghost-btn" id="aboutUpdateCheck" data-i18n="about.checkUpdate">check for updates</button>
+                <button class="primary-btn" id="aboutUpdateInstall" hidden data-i18n="about.installUpdate">download and install</button>
+                <span class="about-update-state" id="aboutUpdateState"></span>
+              </div>
+              <div class="about-update-hint" data-i18n="about.updateHint"></div>
             </div>
           </div>
           <div class="sheet-foot">

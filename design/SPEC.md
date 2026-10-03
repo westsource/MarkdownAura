@@ -609,9 +609,9 @@ which carry colour because they carry identity.
 | block | content |
 |---|---|
 | brand line | logo · `MarkdownAura` · `v0.1.0` (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline |
-| update | a row inside the facts block, under `author`: hanging label `update`, then `check for updates` (ghost) → `v0.2.0 is available` + `download and install` (primary), with the state text and the opt-in note as the value |
+| update | its own area below the facts block, after a hairline: `check for updates` (ghost) → `v0.2.0 is available` + `download and install` (primary), the state beside the button and the opt-in note under it |
 | what it is | **one** paragraph: what the app is, then the six capabilities after a `capabilities:` lead-in — same size, same colour, no separate block |
-| facts | hanging labels (`author` / `update` / `engines` / `data`): 道荣（黄超） · the update row · the three engine badges with version and licence · the data path in mono with an `open` button |
+| facts | hanging labels (`author` / `engines` / `data`): 道荣（黄超） · the three engine badges with version and licence · the data path in mono with an `open` button |
 | foot | `LICENSE · THIRD-PARTY.md` (both ship next to the executable) |
 
 Decisions inside that shape, each of which was made deliberately:
@@ -647,6 +647,10 @@ Decisions inside that shape, each of which was made deliberately:
   asset — a version and the URL plus signature of an installer. The installer is verified against the
   public key baked into `tauri.conf.json`, so an artifact that did not come from this project's signing
   key is refused before it reaches the disk. `IMPL.md` §12 carries the key custody and the release steps.
+- **It sits below the facts block, not inside it.** Tried under `author` first (2026-10-03, product
+  owner's request) and moved again the same day: the facts block is hanging labels answering "what is
+  this build", and a button and its state are a control, not one of those answers. A hairline and the
+  opt-in note are enough to say what it is.
 - **The GitHub line is the only external URL in the app**, and it is opened through
 `tauri-plugin-opener` rather than by shelling out to `cmd /C start`. The capability allows **that
 one URL** (`opener:allow-open-url` with a single-entry `allow` scope); anything else is refused by

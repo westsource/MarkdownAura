@@ -113,7 +113,6 @@ const en = {
   "about.installing": "installing… the app will restart",
   "about.updateFailed": "update failed: {msg}",
   "about.updateHint": "the app's only network call — it happens when you click, never on its own",
-  "about.k.update": "update",
   "about.notices": "shipped with the app: LICENSE · THIRD-PARTY.md",
 
   // ---- outline ----
@@ -313,7 +312,6 @@ const zh: Record<Key, string> = {
   "about.installing": "安装中…应用将自动重启",
   "about.updateFailed": "更新失败：{msg}",
   "about.updateHint": "应用唯一会联网的动作，只在你点击时发生",
-  "about.k.update": "更新",
   "about.notices": "随程序分发：LICENSE · THIRD-PARTY.md",
 
   "outline.label": "大纲",
