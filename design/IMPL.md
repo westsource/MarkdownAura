@@ -883,6 +883,15 @@ in `tauri.conf.json` is `…/releases/latest/download/latest.json`, which GitHub
 release — so the manifest has to be uploaded to the release tagged `v<version>`; leaving it on an older
 release points the updater at an older installer, which the version check then refuses.
 
+**Gitee gets the same artifacts, as a mirror.** `node var/publish-gitee-release.mjs` publishes `var/release/`
+as a Gitee release for the same tag: it creates the release when the tag has none (`MarkdownAura v<version>`,
+with the same notes read from `latest.json`) and uploads every staged file, skipping any already attached —
+Gitee's delete-attachment path is not documented well enough to trust, so a file whose content changed has to
+be detached in the web UI first. The token (scope `projects`) comes from `GITEE_TOKEN` or
+`var/gitee-token.txt`; no proxy is involved, because gitee.com is reachable from this machine even when
+github.com is not. The Gitee repository is private, so its assets need a login to download, and the updater
+endpoint above still points at GitHub: this release is a download mirror, not an update channel.
+
 **Testing the path without shipping a downgrade.** Build once at the released version (the manifest's), and
 once with `package.json`'s version temporarily lowered (say `0.0.9`): the lowered build sees the release as
 newer, downloads it, verifies the signature, and stops before `install()`. The install step runs the NSIS
