@@ -2,7 +2,7 @@
  *
  * Matches are `<mark>` elements inserted around text nodes, never around markup — wrapping a
  * node's parent would break the diagram cards and the tables. The current hit is scrolled into
- * view and given `.on`, which is the only visual difference between hits.
+ * view and given `.current`, which is the only visual difference between hits.
  *
  * State lives on the tab (IMPL.md §5): switching tabs must not lose the query, the case flag or
  * the position.

@@ -1010,7 +1010,6 @@ Errors render inline with the line number instead of blanking the page.`
     // control can be reviewed. Keep the values in step with src/measure.ts.
     measure: "comfortable",
     ignore: ["node_modules", ".git", "target", "dist"],
-    d2: "off",                 // off | downloading | ready | failed
     cacheBytes: 12400000,
   };
 
@@ -1121,11 +1120,6 @@ Errors render inline with the line number instead of blanking the page.`
         `<button data-val="${id}" class="${id === settings.measure ? "on" : ""}">${label}</button>`).join("")
       + `</div>`;
 
-    const d2ctl = settings.d2 === "ready" ? `<span class="state-ok">installed</span>`
-      : settings.d2 === "downloading" ? `<span class="state-off">downloading…</span>`
-      : settings.d2 === "failed" ? `<span class="state-off">failed — retry</span>`
-      : `<button class="primary-btn" id="d2Install">install</button>`;
-
     $("#setBody").innerHTML =
       `<div class="section-head">reading</div>`
       + formRow("theme", "follows the system by default", seg)
@@ -1145,9 +1139,9 @@ Errors render inline with the line number instead of blanking the page.`
       + `<div class="form-row"><span class="badge dot">dot</span>`
         + `<div class="grow form-sub" style="margin:0">~0.9 MB</div>`
         + `<span class="state-ok">bundled</span></div>`
-      + `<div class="form-row hot"><span class="badge d2">d2</span>`
-        + `<div class="grow">${settings.d2 === "ready" ? "installed" : "not installed"}`
-        + `<div class="form-sub">11 MB · the only action here that uses the network</div></div>${d2ctl}</div>`
+      + `<div class="form-row"><span class="badge d2">d2</span>`
+        + `<div class="grow form-sub" style="margin:0">11 MB, wasm inlined in its chunk</div>`
+        + `<span class="state-ok">bundled</span></div>`
 
       + `<div class="section-head">files</div>`
       + formRow("ignore", "", `<div class="chips">${settings.ignore.map((i) => `<span class="chip">${esc(i)}</span>`).join("")}<span class="chip">+</span></div>`,
@@ -1176,7 +1170,6 @@ Errors render inline with the line number instead of blanking the page.`
     body.querySelectorAll('[data-set="theme"] button, [data-set="lang"] button, [data-stepper] button, [data-toggle]').forEach((b) =>
       b.addEventListener("click", (e) => e.stopPropagation()));
 
-    if ($("#d2Install")) $("#d2Install").addEventListener("click", installD2);
     if ($("#clearCache") && settings.cacheBytes) {
       $("#clearCache").addEventListener("click", () => { settings.cacheBytes = 0; renderSettings(); toast("cache cleared", "ok"); });
     }
@@ -1190,28 +1183,6 @@ Errors render inline with the line number instead of blanking the page.`
   }
   function applyDocSize() { document.documentElement.style.setProperty("--doc-size", settings.fontSize + "px"); applyMeasure(); }
   function applyMotion() { document.documentElement.dataset.motion = settings.reduceMotion ? "reduce" : ""; }
-
-  function setEngineDot(id, kind) {
-    const d = document.querySelector("#" + id + " .dot");
-    if (!d) return;
-    d.className = "dot " + kind;
-    const cluster = document.getElementById(id);
-    if (cluster) cluster.title = "d2 engine — " + (kind === "off" ? "not installed" : kind === "warn" ? "downloading" : "ready");
-  }
-
-  /* the only action in the app that touches the network (SPEC §4) */
-  function installD2() {
-    if (settings.d2 === "downloading" || settings.d2 === "ready") return;
-    settings.d2 = "downloading";
-    setEngineDot("eng-d2", "warn");
-    renderSettings();
-    setTimeout(() => {
-      settings.d2 = "ready";
-      setEngineDot("eng-d2", "ok");
-      renderSettings();
-      toast("d2 engine installed — 11 MB", "ok");
-    }, 1400);
-  }
 
   const isOn = (id) => $("#" + id).classList.contains("on");
   function openSettings() { renderSettings(); $("#settingsOverlay").classList.add("on"); }

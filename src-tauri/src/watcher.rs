@@ -15,6 +15,7 @@ use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use notify::event::{CreateKind, ModifyKind, RemoveKind};
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
@@ -153,6 +154,31 @@ fn count_files(roots: &[PathBuf]) -> usize {
     count.min(COUNT_CAP)
 }
 
+/// Folds one raw event into the batch being collected.
+///
+/// A removal wins over a pending change for the same path, and a create or modify cancels a
+/// pending removal. That second half is the one that matters: saving through a temporary file
+/// (write, delete, rename) looks like a removal followed by a create, and the tab has to come
+/// back rather than go `missing` (IMPL.md §3).
+fn classify(
+    kind: &EventKind,
+    path: PathBuf,
+    changed: &mut HashSet<PathBuf>,
+    removed: &mut HashSet<PathBuf>,
+) {
+    match kind {
+        EventKind::Remove(_) => {
+            changed.remove(&path);
+            removed.insert(path);
+        }
+        EventKind::Create(_) | EventKind::Modify(_) => {
+            removed.remove(&path);
+            changed.insert(path);
+        }
+        _ => {}
+    }
+}
+
 /// Coalesces raw notify events into one batch per quiet window.
 fn spawn_coalescer(app: AppHandle, rx: mpsc::Receiver<notify::Result<Event>>) {
     thread::Builder::new()
@@ -171,20 +197,7 @@ fn spawn_coalescer(app: AppHandle, rx: mpsc::Receiver<notify::Result<Event>>) {
                 match rx.recv_timeout(wait) {
                     Ok(Ok(event)) => {
                         for path in event.paths {
-                            match event.kind {
-                                EventKind::Remove(_) => {
-                                    changed.remove(&path);
-                                    removed.insert(path);
-                                }
-                                EventKind::Create(_) | EventKind::Modify(_) => {
-                                    // A file that was removed then recreated is a change, not a
-                                    // removal — the tab must come back, not go `missing`.
-                                    if !removed.contains(&path) {
-                                        changed.insert(path);
-                                    }
-                                }
-                                _ => {}
-                            }
+                            classify(&event.kind, path, &mut changed, &mut removed);
                         }
                         // Every event pushes the window out, which is what makes a burst of
                         // twenty notifications collapse into one.
@@ -254,5 +267,34 @@ mod tests {
     fn a_missing_root_counts_zero_instead_of_panicking() {
         let missing = std::env::temp_dir().join("markdownaura-does-not-exist-9f3a");
         assert_eq!(count_files(&[missing]), 0);
+    }
+
+    #[test]
+    fn a_removed_then_recreated_file_is_a_change_not_a_removal() {
+        let path = PathBuf::from("E:\\notes\\a.md");
+        let mut changed = HashSet::new();
+        let mut removed = HashSet::new();
+
+        classify(&EventKind::Remove(RemoveKind::File), path.clone(), &mut changed, &mut removed);
+        assert!(removed.contains(&path) && changed.is_empty(), "a removal is pending");
+
+        classify(&EventKind::Create(CreateKind::File), path.clone(), &mut changed, &mut removed);
+        assert!(changed.contains(&path), "the recreated file is a change");
+        assert!(!removed.contains(&path), "the pending removal has to be dropped");
+
+        classify(&EventKind::Modify(ModifyKind::Any), path.clone(), &mut changed, &mut removed);
+        assert!(changed.contains(&path) && !removed.contains(&path));
+    }
+
+    #[test]
+    fn a_removal_after_a_change_wins() {
+        let path = PathBuf::from("E:\\notes\\b.md");
+        let mut changed = HashSet::new();
+        let mut removed = HashSet::new();
+
+        classify(&EventKind::Modify(ModifyKind::Any), path.clone(), &mut changed, &mut removed);
+        classify(&EventKind::Remove(RemoveKind::File), path.clone(), &mut changed, &mut removed);
+        assert!(removed.contains(&path), "a real removal stays a removal");
+        assert!(!changed.contains(&path), "and it must not also be reported as changed");
     }
 }

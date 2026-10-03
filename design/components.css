@@ -787,8 +787,6 @@ mark.current { background: var(--ac); color: #fff; }
 /* label on top, list underneath — the ignore list does not fit beside its label */
 .form-row.stack { flex-direction: column; align-items: stretch; gap: 2px; }
 .form-sub { margin-top: 2px; font-size: var(--fs-xs); color: var(--tx-2); }
-/* d2 is the one row that must look different: it is the only network action */
-.form-row.hot { background: var(--warn-bg); }
 .state-ok { font-size: 11.5px; color: var(--ok); flex: 0 0 auto; }
 .state-off { font-size: 11.5px; color: var(--tx-2); flex: 0 0 auto; }
 

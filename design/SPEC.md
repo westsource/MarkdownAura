@@ -10,7 +10,7 @@ vanilla JS so it ports without rework; the shipped app is vanilla TypeScript + V
 Scope convention: this document describes the **target** UX. Every section that differs
 from the shipped app carries a **v1 status** note naming three things: what is
 implemented, what is deferred *with its feature*, and what deliberately deviates. The
-notes were last revised on 2026-10-02 against the running build (30 Rust tests, `tsc`
+notes were last revised on 2026-10-03 against the running build (34 Rust tests, `tsc`
 clean, production asset-protocol render verified).
 
 Three terms are used precisely, because the difference between them is the whole point
@@ -282,8 +282,9 @@ zoom. The path is the only unbounded item in the row, so it ellipsises rather th
 controls off the edge.
 
 The engine dots are the honest answer to "is this thing offline?" — green when the WASM
-module loaded, amber while loading, red if it failed, and **grey when the engine is not
-installed at all** (`d2`, §4). `off` and `failed` are different states with different
+module loaded, amber while loading, red if it failed, and **grey until the engine has been
+loaded at all**. All three engines ship inside the app (§4), so grey is a "not yet", never
+a "you have to install this". `off` and `failed` are different states with different
 colours; do not merge them. Render time in milliseconds is shown because it is the
 product's whole claim.
 
@@ -350,7 +351,7 @@ Consequences, in order:
    deleted rather than deferred (`IMPL.md` §3, §7). What it cost, measured: `dist/` is 17 MB, of which
    the d2 chunk is **11.0 MB and is not part of the initial load** — Vite code-splits it and the
    browser fetches it on the first `d2` block, like mermaid's chunks — and the release binary grew
-   from 6.9 MB to **14.7 MB**. Installer figures: `IMPL.md` §9.
+   from 6.9 MB to **15.3 MB**. Installer figures: `IMPL.md` §9.
 2. **Never import the mermaid monolith.** 5.3 MB versus a 29 KB entry point. This is the single
    largest packaging decision in the app. Verified in production: the code-split chunks resolve
    over the `tauri://` asset protocol.
@@ -565,8 +566,8 @@ See `tokens.css` for the complete palette — it is the only place colours may b
 | `check-prose-css.mjs` | asserts the reading column stays centred (`IMPL.md` §5): no `margin` shorthand may reach a direct child of `.prose` |
 | `IMPL.md` | the build contract: repo layout, IPC surface, state shape, persistence, engine packaging |
 
-`prose.css` is kept separate because it is the one stylesheet that gets injected into
-rendered content; it must not be able to reach the chrome.
+`prose.css` is kept separate because it is the one stylesheet that styles rendered content, and
+it is scoped under `.prose` so it cannot reach the chrome.
 
 Raw HTML in a source document is **not** passed through. Only a short exact-match allow-list
 survives, and the tags on it — `<details>`, `<summary>`, `<kbd>`, `<sub>`, `<sup>`, `<br>`,
@@ -608,10 +609,10 @@ which carry colour because they carry identity.
 
 | block | content |
 |---|---|
-| brand line | logo · `MarkdownAura` · `v0.1.0` (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline |
+| brand line | logo · `MarkdownAura` · `v0.1.1` (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline |
 | update | its own area below the facts block, after a hairline: `check for updates` (ghost) → `v0.2.0 is available` + `download and install` (primary), the state beside the button and the opt-in note under it |
 | what it is | **one** paragraph: what the app is, then the six capabilities after a `capabilities:` lead-in — same size, same colour, no separate block |
-| facts | hanging labels (`author` / `engines` / `data`): 道荣（黄超） · the three engine badges with version and licence · the data path in mono with an `open` button |
+| facts | hanging labels (`author` / `engines` / `data`): 道荣（黄超） · the three engine badges with their licence (and a version where the UI shows one) · the data path in mono with an `open` button |
 | foot | `LICENSE · THIRD-PARTY.md` (both ship next to the executable) |
 
 Decisions inside that shape, each of which was made deliberately:
@@ -759,8 +760,7 @@ Deviates; if it returns, it belongs in `immersive.ts set()` next to the filename
 ### Help (`F1`)
 
 Two columns: the shortcut table on the left, grouped `file` / `view` / `find`; a diagram-syntax
-card per engine on the right. The d2 card carries its install note so the help panel is the second
-route to discovering d2, not only settings.
+card per engine on the right. d2 needs no install note any more: it is bundled like the other two.
 
 **The shortcut table is data, not markup.** `KEYMAP` in `src/ui/help.ts` is a
 `{ group, keys, label }[]` and the panel is generated from it. It is *not* the dispatcher —

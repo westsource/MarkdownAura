@@ -4,6 +4,8 @@
 
 A Markdown **reader** for Windows — built for reading well, not for editing.
 
+![MarkdownAura: a document open in the preview view, with the explorer, the outline and the status bar](assets/readme-preview.png)
+
 - Three views — preview / split / source — one click apart, with a draggable split
 - Diagrams render **locally**: mermaid, graphviz (dot) and d2 all ship inside the app, with no network at runtime and no telemetry
 - Close it and open it again: tabs, scroll positions, folder, window size and every setting come back
@@ -43,15 +45,15 @@ The installer carries the WebView2 loader. It only fetches the WebView2 Runtime 
 | Area | What it does |
 |---|---|
 | Explorer | open a folder; drag its width (180–640px); an **md only** switch (on by default); filter by file name, revealed from the foot row on demand; directories always listed; ignored directories are dot-prefixed names plus `node_modules`, `target`, `dist`; the foot shows `watching N files` |
-| Tabs | a single click in the tree opens a *preview tab* (italic), a double click pins it; `⋯` lists every tab; `ctrl W` closes one; `+` opens a new one |
-| Views | preview / split / source; the splitter drags; each pane keeps its own scroll position |
+| Tabs | a single click in the tree opens a *preview tab* (italic), a double click pins it; `⋯` lists every tab; `ctrl W` closes one |
+| Views | preview / split / source; the splitter drags; the split panes scroll in sync, and the position is kept per tab |
 | Diagrams | mermaid / dot / d2 cards with an engine badge, the first source line as a title and the source line number; `zoom` opens the viewer (wheel to zoom, drag to pan, copy SVG, copy source, `esc` to close) |
 | Find | `ctrl F`, match case, a hit counter, next / previous |
 | Outline | headings (levels 1–4) and diagrams, click to jump, draggable width |
 | Reading | body size 12–22px; three reading widths (narrow 60ch / comfortable 100ch / full); light / dark / follow the system; UI language follows the system (Chinese / English); reduce motion |
 | Immersive | `F11` hides every piece of chrome; `esc` or `F11` leaves |
-| Help | `F1` — the keyboard map and the licence summary |
-| About | version, author, licence, the engines with their sizes, the data folder (openable from there), a link to the project, and a **check for updates** row — the app's only network call, and it runs when you click it |
+| Help | `F1` — the keyboard map plus a diagram-syntax card for each engine |
+| About | version, author, licence, the three engines with their licences, the data folder (openable from there), a link to the project, and a **check for updates** row — the app's only network call, and it runs when you click it |
 | Settings (an overlay, not a second window) | theme / language / font size / reading width / reduce motion / engine sizes / watch debounce / render-cache size and clear |
 | Data | `%APPDATA%\MarkdownAura\session.json`, written atomically (a crash cannot lose the previous session); the render cache is measured in SVG bytes and clears in one click |
 
@@ -94,28 +96,45 @@ All three run inside the application, so no document needs a network connection.
 - **Portable, single file**: `MarkdownAura-<version>-portable.exe` is both of those in one file. It unpacks them into `%LOCALAPPDATA%\MarkdownAura\portable\<version>\` on first launch and runs the app from there, so it needs nothing beside it and can be handed to someone as one file. The unpacked app is byte-identical to the build, and if the app has since been updated the launcher runs that newer copy instead of its own frozen one.
 - **Installer**: `MarkdownAura_<version>_x64-setup.exe`. The wizard shows the licence page and puts `LICENSE` and `THIRD-PARTY.md` in the install directory. This is also the update path: the About sheet's **check for updates** downloads the next signed installer from the GitHub release and runs it. A portable copy that updates this way becomes a proper installation; staying portable means downloading the new zip by hand.
 - **Requirements**: Windows 10 / 11 (x64) with the WebView2 Runtime (already present on Windows 11 and on Windows 10 with Edge).
-- **Sizes**: portable zip ≈ 12.1 MB; portable single file ≈ 16.6 MB (uncompressed); installer 11.6 MB.
+- **Sizes**: portable zip ≈ 12.1 MB; portable single file ≈ 16.6 MB (uncompressed); installer 11.8 MB.
 
 ---
 
 ## Build from source
 
-Prerequisites: Node 22+, Rust (MSVC toolchain) and the WebView2 Runtime.
+Prerequisites: Node 22+, a Rust toolchain targeting `x86_64-pc-windows-gnu`, and the WebView2 Runtime. The GNU build leans on the binutils shim in `tools/unpack-binutils.mjs` and the `gcc` stand-in in `tools/rc-preprocessor.rs`; read `design/IMPL.md` §1 before touching the toolchain.
 
 ```bash
 npm install
-npm run dev          # frontend only, in a browser
-npm run tauri dev    # the real window
-npm run build:prod   # production build: frontend + release binary
-npm run typecheck    # TypeScript check
-npm run check:prose  # design-constraint check (centred column, relative sizes)
+npm run dev            # frontend only, in a browser
+npm run tauri dev      # the real window
+npm run build:prod     # production build: frontend + release binary
+npm run typecheck      # TypeScript check
+npm run check:prose    # design-constraint check (centred column, relative sizes)
+npm run check:rawhtml  # asserts the mockup honours the raw-HTML allow-list
+npm run notices        # regenerates THIRD-PARTY.md from the real dependency tree
 ```
+
+`build:prod` stops at `dist/` and the release binary. The installer, the portable zip and `latest.json` are a separate signed step — `design/IMPL.md` §12.
 
 ---
 
-## UI preview
+## Screenshots
 
-Open `design/mockup.html` in a browser: no build step, no network, and you can click through the whole interface. It doubles as the design reference.
+Captured from the real app at 1280 × 800, with the document in [`examples/showcase.md`](examples/showcase.md) open — one file that uses every block type the renderer handles, and all three diagram engines.
+
+|  |  |
+|---|---|
+| <img src="assets/readme-diagrams.png" width="440" alt="a document section showing mermaid, graphviz and d2 cards"> | <img src="assets/readme-split.png" width="440" alt="split view: highlighted source on the left, rendered document on the right"> |
+| All three engines in one document — each card carries its engine badge, the diagram's first source line and the line number. | Source and preview side by side — the splitter drags, and the two panes scroll in sync. |
+| <img src="assets/readme-viewer.png" width="440" alt="the d2 architecture diagram open in the viewer"> | <img src="assets/readme-dark.png" width="440" alt="the same document in dark theme"> |
+| The diagram viewer — wheel to zoom, drag to pan, copy the SVG or the source, `esc` to close. | Dark theme — light, dark, or follow the system; the whole interface moves together. |
+
+**About** — version, author, the engines with their shipped sizes, the data folder, and the one network call the app can make.
+
+<img src="assets/readme-about.png" width="620" alt="the About sheet">
+
+The design reference is [`design/mockup.html`](design/mockup.html): open it in a browser — no build step, no network — and click through the whole interface.
 
 ---
 

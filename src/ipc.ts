@@ -100,7 +100,8 @@ export interface Heading {
 
 export interface DiagramBlock {
   id: string;
-  lang: string;
+  /** Normalised by the Rust side: a `graphviz` fence arrives as `dot`. */
+  lang: "mermaid" | "dot" | "d2";
   source: string;
   line: number;
 }

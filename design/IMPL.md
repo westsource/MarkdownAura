@@ -48,7 +48,7 @@ Both flags on that line are load-bearing:
   `kernel32.dll_imports.*` temp files and fail with `Permission denied`; serialising fixes
   it. It is slow and it is a one-time cost.
 
-Measured: the release binary is 6.7 MB (debug is 173 MB). Chunk resolution over the
+Measured: the release binary is 15.28 MiB (debug is 173 MB). Chunk resolution over the
 `tauri://` asset protocol was verified in the release build, not only in dev.
 
 ### Repo layout
@@ -65,6 +65,9 @@ MarkdownAura/
 ├─ tools/
 │  ├─ make-icons.mjs           # regenerates src-tauri/icons from one geometry description
 │  ├─ make-notices.mjs         # regenerates THIRD-PARTY.md from cargo metadata + node_modules
+│  ├─ make-portable.mjs        # builds and stages the single-file portable exe (§12)
+│  ├─ make-latest-json.mjs     # writes var/release/latest.json and stages the release assets (§12)
+│  ├─ portable/                # the single-file launcher crate (no dependencies, include_bytes!)
 │  ├─ unpack-binutils.mjs      # Windows/GNU only; see the note below
 │  └─ rc-preprocessor.rs       # Windows/GNU only; a no-op `gcc` for windres, see below
 ├─ index.html                  # shell markup, mirrors design/mockup.html
@@ -108,11 +111,11 @@ MarkdownAura/
 `vendor/d2/` from the earlier draft **does not exist and is not needed**: d2 is a bundled npm
 dependency (`@d2lang/d2`), not something vendored into the tree (§7).
 
-The five overlay modules (find, viewer, settings, help, immersive) are implemented and wired in
-`main.ts`. One of them deliberately stops short of a full feature: `ctrl shift P` shows the recent
+The six overlay modules (find, viewer, settings, help, about, immersive) are implemented and wired
+in `main.ts`. One of them deliberately stops short of a full feature: `ctrl shift P` shows the recent
 list as a menu rather than a picker. The settings panel used to have a second one — a d2 install
 button that reported the unimplemented download — and that row is gone now that d2 is bundled. The
-`index.html` shell carries the markup for all five.
+`index.html` shell carries the markup for all six.
 
 Three things in `src-tauri/` are repairs for this machine and must not be "cleaned up":
 
@@ -145,9 +148,12 @@ throw and the settings panel silently refused to open.
 1. `design/*.css` is imported, never edited from the app side. If a style is wrong, fix it in
    `design/` so the mockup and the app stay in sync.
 2. The frontend never writes to disk directly. All I/O is a `#[tauri::command]`.
-3. Exactly one module (`src/ipc.ts`) may call `invoke`/`listen` **or a plugin API**. Everything else
-   calls a typed function. Verified: nothing outside `ipc.ts` names any of them — `openExternal` is
-   the opener plugin's `openUrl` behind the same boundary, not a second door.
+3. The backend boundary is `src/ipc.ts`: the only module that calls `invoke`/`listen` or the
+   opener/updater/process plugins. Everything else calls a typed function — `openExternal` is the
+   opener plugin's `openUrl` behind that boundary, not a second door. `main.ts` is the one
+   exception, and only for the shell's own UI: `@tauri-apps/api/window` and `dpi` for the window
+   rect and the titlebar buttons, and `plugin-dialog` for open file / open folder. A new *backend*
+   call still belongs in `ipc.ts`.
 4. Rust holds no UI state. Tab state, theme, zoom, panel widths live in the frontend (§5) and are
    only *persisted* through Rust. Rust state is limited to the startup hint, the watcher and
    the last-read session.
@@ -206,7 +212,7 @@ path).
 
 // --- engines ---
 #[tauri::command] async fn engine_status() -> Result<Vec<EngineInfo>>;
-// -> { id, version, installed, bytes, path, optIn }[]   feeds the status bar dots (SPEC §3)
+// -> { id, version, installed, bytes }[]   feeds the status bar dots (SPEC §3)
 
 // --- boot ---
 #[tauri::command] fn startup_target() -> StartupInfo;   // sync; a command, not an event, so a
@@ -238,10 +244,9 @@ type FrontmatterField = { key: string; value: string };
 type RenderedDoc = { html: string; headings: Heading[]; diagrams: DiagramBlock[];
                      frontmatter: FrontmatterField[]; words: number; lineCount: number;
                      encoding: string; truncated: boolean };
-type EngineInfo = { id: string; version: string; installed: boolean; bytes: number;
-                    path: string; optIn: boolean };
+type EngineInfo = { id: string; version: string; installed: boolean; bytes: number };
 type WatcherStatus = { watching: number };
-type StartupInfo = { path: string | null; last: boolean };
+type StartupInfo = { path: string | null };
 ```
 
 `encoding` is one of `utf-8`, `utf-8-bom`, `utf-16le`, `utf-16be`, `utf-8-lossy`.
@@ -393,7 +398,7 @@ either side**. This is the weakest seam in the whole architecture.
 - Rust unit tests in `markdown.rs` cover the allow-list, normalisation, hostile input, allowed
   tags inside paragraphs, stable heading ids/lines, diagram placeholders, the `graphviz` alias,
   ordinary fences, frontmatter, unterminated rules, footnote state and the line index.
-- `node design/check-raw-html.mjs` asserts the same allow-list holds in the mockup, so the
+- `npm run check:rawhtml` asserts the same allow-list holds in the mockup, so the
   two renderers cannot quietly disagree.
 - `src/render/pipeline.ts` copies mockup.js's card markup verbatim; review keeps it so.
 
@@ -567,7 +572,7 @@ Invariants worth stating because they are the bugs:
 
 ## 6. Session persistence
 
-`%APPDATA%/MarkdownAura/session.json` (fallback `~/.config/markdownaura`), written on a
+`%APPDATA%/MarkdownAura/session.json` (fallback `~/.config/MarkdownAura`), written on a
 500 ms debounce that every mutating action schedules, and read once at boot. There is **no
 save-on-exit hook**: a change followed by a close inside the debounce window is lost. If
 that matters, the fix is a `getCurrentWindow().onCloseRequested()` that flushes the timer
@@ -593,7 +598,7 @@ that matters, the fix is a `getCurrentWindow().onCloseRequested()` that flushes 
 - `version` is checked on load. Unknown version → ignore the file and start empty; never migrate
   destructively. Missing/unreadable/corrupt → `None`, which is not an error.
 - `fontSize`, `reduceMotion`, `lang`, `measure`, `outlineWidth` and `mdOnly` were each added after the
-  first session format; all six are `#[serde(default)]`, so an older file still loads. Keep that
+  first session format; all six carry a default, so an older file still loads. Keep that
   property on any new field — the version stays 1 and a missing field must never mean "start clean".
   `mdOnly` is the one whose default is `true`, so it uses a named function rather than a bare
   `#[serde(default)]` (which would mean `false` and silently list every file in the explorer); the
@@ -691,7 +696,7 @@ centred, `decorations: false`, `drag_and_drop(true)`. `transparent` is not set.
   "one file to double-click" case: `tools/portable/` is a zero-dependency launcher that embeds the app and
   the loader at compile time (`include_bytes!`, so the payload cannot drift from the build), unpacks them
   into `%LOCALAPPDATA%\MarkdownAura\portable\<version>\` and starts the app with the arguments it was given.
-  `node tools/make-portable.mjs --stage` builds it — measured 16.61 MB for 0.1.0, uncompressed, because a PE
+  `npm run build:portable -- --stage` builds it — measured 16.62 MiB for 0.1.1, uncompressed, because a PE
   does not compress usefully. A launch whose files are already unpacked only reads them to confirm they
   match, and the unpacked app is byte-identical to the build. It **prefers a newer installed copy**: an
   update taken from inside the app installs through the NSIS installer into `%LOCALAPPDATA%\MarkdownAura\`,
@@ -699,8 +704,11 @@ centred, `decorations: false`, `drag_and_drop(true)`. `transparent` is not set.
   what it did before 2026-10-03. The comparison reads the PE version resource of both files
   (`GetFileVersionInfoW`, resolved from `version.dll` at runtime because this toolchain has no
   `libversion.a`); equal or older means the launcher runs its own payload, as a portable build should.
-- `capabilities/default.json` is the app's whole permission surface: the window controls it needs,
-  `dialog:allow-open`, and **one scoped opener permission** —
+- `capabilities/default.json` is the app's whole permission surface: `core:default`, the ten window
+  permissions the custom titlebar and the session's window rect need, `core:event:allow-listen` /
+  `allow-unlisten` for the `fs://` and `app://` events, `dialog:allow-open`, the updater pair
+  (`updater:default`, `process:allow-restart`) that the About sheet's check-for-updates path uses,
+  and **one scoped opener permission** —
   `opener:allow-open-url` with `allow: [{ "url": "https://github.com/westsource/MarkdownAura" }]`.
   That single entry is what makes "the app can open exactly one URL" a fact rather than an
   intention; widening it is a security change, not a convenience one.
@@ -750,9 +758,9 @@ error): dev-mode first render ≈336 ms including both engines; the release buil
 cache-hit re-render of the same document reported 4 ms. The budgets above stay as the
 contract; these are one data point each, not a pass.
 
-**Bundle cost, measured 2026-10-03 (release).** `dist/` is 17 MB; the d2 chunk alone is 11.0 MB and is
-code-split, so it is fetched on the first `d2` block rather than at boot. The release binary is 14.7 MB
-(6.9 MB before d2 was bundled) and the NSIS installer is 11.58 MiB (3.36 MiB before). All of it is
+**Bundle cost, measured 2026-10-03 (release).** `dist/` is 16.8 MiB; the d2 chunk alone is 11.0 MB and is
+code-split, so it is fetched on the first `d2` block rather than at boot. The release binary is 15.28 MiB
+(6.9 MB before d2 was bundled) and the NSIS installer is 11.83 MiB (3.36 MiB before). All of it is
 install-time bytes — nothing is fetched at runtime (SPEC §4).
 
 **d2's first card is the slow one, measured 2026-10-03** on `var/typecheck/diagrams.md`: the first d2
@@ -763,14 +771,15 @@ status bar's `rendered in N ms` is where a reader sees it.
 
 ## 10. Testing
 
-- **Rust: 31 unit tests, in-module** (`cargo test --lib`) — `session` (round-trip, unknown
+- **Rust: 34 unit tests, in-module** (`cargo test --lib`) — `session` (round-trip, unknown
   version, corrupt file, missing file, no temp file left, recent cap/dedupe/order);
   `fs_ops` (ignore rules, BOM detection, UTF-16 byte orders, truncation at the 8 MiB cap);
   `markdown` (the allow-list, normalisation, hostile input, allowed tags in paragraphs,
   heading ids/lines, heading text with inline code, diagram placeholders, `graphviz` alias,
   ordinary fences, frontmatter, unterminated rule, footnote state, line index); `watcher`
-  (count skips ignored dirs, single file, missing root); `engines` (mermaid/dot always
-  available, d2 the only `optIn`); `lib` (arg parsing, unknown flags ignored). An
+  (count skips ignored dirs, single file, missing root, a removal followed by a recreate);
+  `engines` (all three bundled and always installed, no opt-in); `lib` (arg parsing, unknown
+  flags ignored). An
   integration-test target would need `build.rs`'s link-arg repair, which is why the tests
   live in `#[cfg(test)]` modules — do not "move them out" without reading that comment.
 - **`markdown` gets hostile fixtures that are not happy paths** (required by §4): raw
@@ -783,10 +792,10 @@ status bar's `rendered in N ms` is where a reader sees it.
   enforces i18n completeness: `zh` is `Record<Key, string>` typed against `en`, so a missing or
   stray translation fails the type check rather than falling back silently at runtime. The
   behavioural net is `design/mockup.html` plus a real render.
-- `node design/check-raw-html.mjs` asserts the allow-list holds in the mockup's stand-in
+- `npm run check:rawhtml` asserts the allow-list holds in the mockup's stand-in
   renderer. It passes today. The mockup is the behaviour spec, so it must not quietly
   disagree with §4.
-- `node design/check-prose-css.mjs` asserts the reading column is still centred: the centring rule
+- `npm run check:prose` asserts the reading column is still centred: the centring rule
   exists, and no rule that can match a direct child of `.prose` uses the `margin` shorthand — a
   shorthand zeroes `margin-inline` for that one block type with a specificity that beats the centring
   rule, which is invisible to every measurement that looks at widths. Verified against the real bug
@@ -855,7 +864,7 @@ them is gone. Regenerating the pair and shipping a new public key only helps ver
 the bundle step produces no `.sig`:
 
 ```bash
-TAURI_SIGNING_PRIVATE_KEY=var/updater/markdownaura.key npm run tauri build
+TAURI_SIGNING_PRIVATE_KEY="$(cygpath -w var/updater/markdownaura.key)" npm run tauri build
 ```
 
 `bundle.createUpdaterArtifacts: true` is what makes the bundle emit `MarkdownAura_<v>_x64-setup.exe.sig`

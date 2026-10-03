@@ -436,7 +436,7 @@ function showTabsMenu(): void {
 }
 
 /** The status-bar chip, the toolbar button and the immersive bar's chip all land here: the same
- *  five presets, next to the text they change. */
+ *  three presets, next to the text they change. */
 function showMeasureMenu(anchor: HTMLElement = $("#stMeasure")): void {
   openMenuAt(anchor, [
     i18n.t("settings.measure"),

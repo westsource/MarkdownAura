@@ -11,7 +11,7 @@
 //!    matching has no bug surface at all.
 //!
 //! The HTML *shape* is a contract shared with `design/prose.css` and `design/components.css`,
-//! and no compiler checks it. `tests/shape.rs` is the guard.
+//! and no compiler checks it. The tests at the bottom of this module are the guard.
 
 use std::ops::Range;
 

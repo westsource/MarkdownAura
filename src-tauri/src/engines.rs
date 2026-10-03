@@ -42,7 +42,7 @@ pub fn status() -> Vec<EngineInfo> {
         },
         EngineInfo {
             id: DOT_ID.into(),
-            version: "1.29".into(),
+            version: "1.29.2".into(),
             installed: true,
             bytes: DOT_BYTES,
         },
