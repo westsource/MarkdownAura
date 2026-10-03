@@ -130,10 +130,6 @@ npm run notices        # 依据真实依赖树重新生成 THIRD-PARTY.md
 | <img src="assets/readme-viewer.png" width="440" alt="在查看器里打开的 d2 架构图"> | <img src="assets/readme-dark.png" width="440" alt="同一篇文档的深色主题"> |
 | 图表查看器——滚轮缩放、拖拽平移、复制 SVG 或源码、`esc` 关闭。 | 深色主题——浅色 / 深色 / 跟随系统，整个界面一起变。 |
 
-**关于**——版本、作者、引擎清单与体积、数据目录，以及应用唯一会联网的动作。
-
-<img src="assets/readme-about.png" width="620" alt="关于面板">
-
 设计参考稿是 [`design/mockup.html`](design/mockup.html)：用浏览器直接打开即可——不需要构建、不需要联网，能点一遍全部界面。
 
 ---

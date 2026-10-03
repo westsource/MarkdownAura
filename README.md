@@ -130,10 +130,6 @@ Captured from the real app at 1280 × 800, with the document in [`examples/showc
 | <img src="assets/readme-viewer.png" width="440" alt="the d2 architecture diagram open in the viewer"> | <img src="assets/readme-dark.png" width="440" alt="the same document in dark theme"> |
 | The diagram viewer — wheel to zoom, drag to pan, copy the SVG or the source, `esc` to close. | Dark theme — light, dark, or follow the system; the whole interface moves together. |
 
-**About** — version, author, the engines with their shipped sizes, the data folder, and the one network call the app can make.
-
-<img src="assets/readme-about.png" width="620" alt="the About sheet">
-
 The design reference is [`design/mockup.html`](design/mockup.html): open it in a browser — no build step, no network — and click through the whole interface.
 
 ---
