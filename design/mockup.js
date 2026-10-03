@@ -1246,6 +1246,25 @@ Errors render inline with the line number instead of blanking the page.`
   $("#aboutReveal").addEventListener("click", () => toast("shell: explorer /select,%APPDATA%\\MarkdownAura"));
   /* The app opens this through the opener plugin; the mockup must not navigate itself away. */
   $("#aboutGithub").addEventListener("click", (e) => { e.preventDefault(); toast("opens github.com/westsource/MarkdownAura in your browser"); });
+
+  // The update row is a stub in the mockup: the real app asks the GitHub release for one manifest and
+  // verifies the installer against the project's signing key (SPEC §10). Here it only shows the states.
+  $("#aboutUpdateCheck").addEventListener("click", () => {
+    const state = $("#aboutUpdateState");
+    const install = $("#aboutUpdateInstall");
+    $("#aboutUpdateCheck").textContent = "checking…";
+    state.textContent = "";
+    setTimeout(() => {
+      $("#aboutUpdateCheck").textContent = "check for updates";
+      state.textContent = "v0.2.0 is available";
+      install.hidden = false;
+      toast("the mockup has no updater — the real app would fetch latest.json from the release");
+    }, 600);
+  });
+  $("#aboutUpdateInstall").addEventListener("click", () => {
+    $("#aboutUpdateState").textContent = "downloading…";
+    toast("the real app downloads the signed installer, then runs it and restarts");
+  });
   $("#settingsOverlay").addEventListener("click", (e) => { if (e.target.id === "settingsOverlay") closeSettings(); });
   $("#helpOverlay").addEventListener("click", (e) => { if (e.target.id === "helpOverlay") closeHelp(); });
 

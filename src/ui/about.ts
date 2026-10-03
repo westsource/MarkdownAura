@@ -12,8 +12,19 @@
  *  - The GitHub line is an `<a>` for semantics and cursor, but its click is intercepted: an `<a>`
  *    inside the webview would try to navigate the webview itself. The URL goes through the opener
  *    plugin, which the capability scopes to that single URL.
+ *  - The update row is the **only** network call the app makes, and only when it is clicked: the check
+ *    asks for one release asset, and the installer it points at is verified against the public key in
+ *    `tauri.conf.json` before anything is written to disk (SPEC §10). Nothing here runs at startup.
  */
-import { dataDirectory, openExternal, revealInExplorer } from "../ipc";
+import {
+  dataDirectory,
+  openExternal,
+  relaunchApp,
+  revealInExplorer,
+  updateCheck,
+  updateDownload,
+  updateInstall,
+} from "../ipc";
 import { t } from "../i18n";
 import { $, toast } from "./dom";
 
@@ -21,6 +32,60 @@ import { $, toast } from "./dom";
 const GITHUB_URL = "https://github.com/westsource/MarkdownAura";
 
 let path = "";
+
+type UpdateState = "idle" | "checking" | "current" | "available" | "downloading" | "installing" | "failed";
+
+let updateState: UpdateState = "idle";
+let updateText = "";
+
+const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
+/** The row is a small state machine, and this is the only writer of its three elements — so a progress
+ *  event and a language change cannot disagree about what it says. */
+function renderUpdate(): void {
+  const check = $<HTMLButtonElement>("#aboutUpdateCheck");
+  const install = $<HTMLButtonElement>("#aboutUpdateInstall");
+  $("#aboutUpdateState").textContent = updateText;
+  check.disabled = updateState === "checking" || updateState === "downloading" || updateState === "installing";
+  check.textContent = updateState === "checking" ? t("about.checking") : t("about.checkUpdate");
+  install.hidden = updateState !== "available";
+}
+
+async function runUpdateCheck(): Promise<void> {
+  updateState = "checking";
+  updateText = "";
+  renderUpdate();
+  try {
+    const found = await updateCheck();
+    updateState = found ? "available" : "current";
+    updateText = found ? t("about.available", { v: found.version }) : t("about.upToDate", { v: __APP_VERSION__ });
+  } catch (err) {
+    updateState = "failed";
+    updateText = t("about.updateFailed", { msg: message(err) });
+  }
+  renderUpdate();
+}
+
+async function runUpdateInstall(): Promise<void> {
+  updateState = "downloading";
+  updateText = t("about.downloadingUnknown");
+  renderUpdate();
+  try {
+    await updateDownload((percent) => {
+      updateText = percent === null ? t("about.downloadingUnknown") : t("about.downloading", { n: percent });
+      renderUpdate();
+    });
+    updateState = "installing";
+    updateText = t("about.installing");
+    renderUpdate();
+    await updateInstall();
+    await relaunchApp();
+  } catch (err) {
+    updateState = "failed";
+    updateText = t("about.updateFailed", { msg: message(err) });
+    renderUpdate();
+  }
+}
 
 export function isOpen(): boolean {
   return $("#aboutOverlay").classList.contains("on");
@@ -39,6 +104,7 @@ function render(): void {
   $("#aboutVersionChip").textContent = `v${__APP_VERSION__}`;
   $("#aboutDataPath").textContent = path || "—";
   $("#aboutGithub").setAttribute("title", t("about.github"));
+  renderUpdate();
 }
 
 export function wire(): void {
@@ -57,6 +123,9 @@ export function wire(): void {
     if (!path) return;
     revealInExplorer(path).catch(() => toast(path, "warn"));
   });
+
+  $("#aboutUpdateCheck").addEventListener("click", () => void runUpdateCheck());
+  $("#aboutUpdateInstall").addEventListener("click", () => void runUpdateInstall());
 
   // Fetched once at boot: the path never changes while the app runs, and failing to get it must not
   // stop the sheet from opening — it shows "—" instead.

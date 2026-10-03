@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capabilities for the single MarkdownAura window: custom titlebar controls and the folder picker.",
+  "description": "Capabilities for the single MarkdownAura window: custom titlebar controls, the folder picker, and the two update actions the About sheet asks for by click.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -18,6 +18,8 @@
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "dialog:allow-open",
+    "updater:default",
+    "process:allow-restart",
     {
       "identifier": "opener:allow-open-url",
       "allow": [{ "url": "https://github.com/westsource/MarkdownAura" }]

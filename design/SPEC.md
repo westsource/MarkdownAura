@@ -364,9 +364,10 @@ Consequences, in order:
    SPDX identifier rather than with each crate's full licence text — if the app is ever published,
    generate the texts (e.g. `cargo about`) and ship those too.
 
-Nothing is fetched at runtime — every engine's wasm is inlined in the bundle, which is what makes
-"no network calls" literally true. The one network request the app can cause at all is the
-installer's WebView2 bootstrapper, and only on a machine with no WebView2 Runtime (`IMPL.md` §8).
+Nothing is fetched while you read — every engine's wasm is inlined in the bundle, which is what makes
+"no network calls" literally true. The two exceptions are both explicit and neither happens on its own:
+the installer's WebView2 bootstrapper, on a machine with no WebView2 Runtime (`IMPL.md` §8), and the
+update check in the About sheet, which runs when it is clicked (§10).
 
 **v1 status — d2 ships.** It was the one opt-in download, and the download was never built; it is a
 bundled engine now, so `engine_status` reports `installed: true` for all three and there is no install
@@ -608,6 +609,7 @@ which carry colour because they carry identity.
 | block | content |
 |---|---|
 | brand line | logo · `MarkdownAura` · `v0.1.0` (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline |
+| update | one row between the brand and the sentence: `check for updates` (ghost) → `v0.2.0 is available` + `download and install` (primary), the state text beside the button and the opt-in note under it |
 | what it is | **one** paragraph: what the app is, then the six capabilities after a `capabilities:` lead-in — same size, same colour, no separate block |
 | facts | hanging labels (`author` / `engines` / `data`): 道荣（黄超） · the three engine badges with version and licence · the data path in mono with an `open` button |
 | foot | `LICENSE · THIRD-PARTY.md` (both ship next to the executable) · `nothing leaves this machine · every render happens locally` |
@@ -640,7 +642,12 @@ Decisions inside that shape, each of which was made deliberately:
   sent anywhere. The installer's optional WebView2 bootstrapper is a request the installer makes,
   not the app, and the foot is about the app.
 
-**The GitHub line is the only external URL in the app**, and it is opened through
+- **The update check is the app's only network call, and it takes a click.** No startup check, no
+  background poll, no telemetry: the row says so out loud, and what it fetches is one GitHub release
+  asset — a version and the URL plus signature of an installer. The installer is verified against the
+  public key baked into `tauri.conf.json`, so an artifact that did not come from this project's signing
+  key is refused before it reaches the disk. `IMPL.md` §12 carries the key custody and the release steps.
+- **The GitHub line is the only external URL in the app**, and it is opened through
 `tauri-plugin-opener` rather than by shelling out to `cmd /C start`. The capability allows **that
 one URL** (`opener:allow-open-url` with a single-entry `allow` scope); anything else is refused by
 the capability layer, not by our code. The element is an `<a>` for semantics and cursor, but its

@@ -51,7 +51,7 @@ The installer carries the WebView2 loader. It only fetches the WebView2 Runtime 
 | Reading | body size 12–22px; three reading widths (narrow 60ch / comfortable 100ch / full); light / dark / follow the system; UI language follows the system (Chinese / English); reduce motion |
 | Immersive | `F11` hides every piece of chrome; `esc` or `F11` leaves |
 | Help | `F1` — the keyboard map and the licence summary |
-| About | version, author, licence, the engines with their sizes, the data folder (openable from there) and a link to the project |
+| About | version, author, licence, the engines with their sizes, the data folder (openable from there), a link to the project, and a **check for updates** row — the app's only network call, and it runs when you click it |
 | Settings (an overlay, not a second window) | theme / language / font size / reading width / reduce motion / engine sizes / watch debounce / render-cache size and clear |
 | Data | `%APPDATA%\MarkdownAura\session.json`, written atomically (a crash cannot lose the previous session); the render cache is measured in SVG bytes and clears in one click |
 
@@ -91,7 +91,7 @@ All three run inside the application, so no document needs a network connection.
 ## Install and run
 
 - **Portable**: keep `MarkdownAura.exe` and `WebView2Loader.dll` side by side and double-click the exe. Copying the exe on its own will not start — it needs that DLL.
-- **Installer**: `MarkdownAura_0.1.0_x64-setup.exe`. The wizard shows the licence page and puts `LICENSE` and `THIRD-PARTY.md` in the install directory.
+- **Installer**: `MarkdownAura_0.1.0_x64-setup.exe`. The wizard shows the licence page and puts `LICENSE` and `THIRD-PARTY.md` in the install directory. This is also the update path: the About sheet's **check for updates** downloads the next signed installer from the GitHub release and runs it. A portable copy that updates this way becomes a proper installation; staying portable means downloading the new exe and DLL by hand.
 - **Requirements**: Windows 10 / 11 (x64) with the WebView2 Runtime (already present on Windows 11 and on Windows 10 with Edge).
 - **Sizes**: portable exe ≈ 14.7 MB (plus the 161 KB `WebView2Loader.dll` beside it); installer 11.6 MB.
 

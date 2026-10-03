@@ -36,6 +36,18 @@ tauri-plugin-dialog = "2.8.1"
 # plugin rather than by shelling out to `cmd /C start`: one capability, scoped to that one URL.
 tauri-plugin-opener = "2"
 
+# The updater is the app's one deliberate network call, and it only runs when the reader clicks
+# "check for updates" in the About sheet (SPEC §10). `tauri-plugin-process` is what relaunches the app
+# after the installer has replaced it.
+#
+# `native-tls`, not the default `rustls-tls`: rustls pulls `ring`, whose C sources cannot be built with
+# this machine's windows-gnu toolchain (`ar` cannot find the objects `cc` just wrote), and the committed
+# lock had no `ring` at all before this plugin arrived. `native-tls` uses schannel — the system TLS
+# stack — so the update path adds no C build. `system-proxy` and `zip` are the plugin's other defaults
+# and are kept deliberately.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls", "system-proxy", "zip"] }
+tauri-plugin-process = "2"
+
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.21"

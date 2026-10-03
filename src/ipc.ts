@@ -7,6 +7,8 @@
  *    be made once, here, instead of at twenty call sites.
  */
 import { invoke } from "@tauri-apps/api/core";
+import { check, type Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { t } from "./i18n";
@@ -195,6 +197,55 @@ export const dataDirectory = () => invoke<string>("data_directory");
  *  module is the app's whole Tauri boundary (`IMPL.md` §2 rule 3), plugin APIs included. The plugin
  *  is scoped by capability to the one URL the app links to. */
 export const openExternal = (url: string) => openUrl(url);
+
+// ---------------------------------------------------------------- updates
+
+/* The app's one network call (SPEC §10). It is driven entirely by a click in the About sheet — nothing
+ * here runs at startup — and the endpoint is a single GitHub release asset (`latest.json`), configured
+ * in `tauri.conf.json`. The installer that asset points at is verified against the public key baked
+ * into the same file, so an artifact that did not come from this project's signing key is refused
+ * before it is written to disk. */
+
+/** What a check found, flattened for the UI. `null` means "already current". */
+export interface UpdateOffer {
+  version: string;
+  date: string | null;
+  notes: string;
+}
+
+let offer: Update | null = null;
+
+export async function updateCheck(): Promise<UpdateOffer | null> {
+  await offer?.close().catch(() => {});
+  offer = await check();
+  if (!offer) return null;
+  return { version: offer.version, date: offer.date ?? null, notes: offer.body ?? "" };
+}
+
+/** Downloads the verified installer. `percent` is null when the server sent no content length. */
+export async function updateDownload(onProgress: (percent: number | null) => void): Promise<void> {
+  if (!offer) throw new Error("no update to download");
+  let total = 0;
+  let done = 0;
+  await offer.download((event) => {
+    if (event.event === "Started") {
+      total = event.data.contentLength ?? 0;
+    } else if (event.event === "Progress") {
+      done += event.data.chunkLength;
+      onProgress(total > 0 ? Math.min(99, Math.round((done / total) * 100)) : null);
+    } else {
+      onProgress(100);
+    }
+  });
+}
+
+export async function updateInstall(): Promise<void> {
+  if (!offer) throw new Error("no update to install");
+  await offer.install();
+}
+
+/** The installer replaces the files on disk; the running process has to step aside. */
+export const relaunchApp = (): Promise<void> => relaunch();
 
 // ---------------------------------------------------------------- events
 

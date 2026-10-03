@@ -30,11 +30,13 @@ licence text is `node_modules/@d2lang/d2/LICENSE.txt` in the source tree.
 | `@tauri-apps/api` | 2.12.1 | Apache-2.0 OR MIT | — |
 | `@tauri-apps/plugin-dialog` | 2.8.1 | MIT OR Apache-2.0 | — |
 | `@tauri-apps/plugin-opener` | 2.7.0 | MIT OR Apache-2.0 | — |
+| `@tauri-apps/plugin-process` | 2.4.0 | MIT OR Apache-2.0 | — |
+| `@tauri-apps/plugin-updater` | 2.13.1 | MIT OR Apache-2.0 | — |
 | `mermaid` | 12.0.0 | MIT | Copyright (c) 2014 - 2022 Knut Sveidqvist |
 
 ## Rust crates
 
-The 248 crates that ship in the release build (normal dependencies for this target, as
+The 263 crates that ship in the release build (normal dependencies for this target, as
 resolved by Cargo — dev-dependencies and other platforms' crates are excluded because they are not
 in the binary). Where a crate offers a choice of licence (`MIT OR Apache-2.0` and the like),
 MarkdownAura takes it under the MIT terms.
@@ -99,8 +101,15 @@ MarkdownAura takes it under the MIT terms.
 | `fnv` | 1.0.7 | Apache-2.0 / MIT |
 | `foldhash` | 0.2.0 | Zlib |
 | `form_urlencoded` | 1.2.2 | MIT OR Apache-2.0 |
+| `futures-core` | 0.3.34 | MIT OR Apache-2.0 |
+| `futures-io` | 0.3.34 | MIT OR Apache-2.0 |
+| `futures-macro` | 0.3.34 | MIT OR Apache-2.0 |
+| `futures-sink` | 0.3.34 | MIT OR Apache-2.0 |
+| `futures-task` | 0.3.34 | MIT OR Apache-2.0 |
+| `futures-util` | 0.3.34 | MIT OR Apache-2.0 |
 | `generic-array` | 0.14.7 | MIT |
 | `getrandom` | 0.3.4 | MIT OR Apache-2.0 |
+| `getrandom` | 0.4.3 | MIT OR Apache-2.0 |
 | `glob` | 0.3.4 | MIT OR Apache-2.0 |
 | `hashbrown` | 0.12.3 | MIT OR Apache-2.0 |
 | `hashbrown` | 0.17.1 | MIT OR Apache-2.0 |
@@ -138,6 +147,7 @@ MarkdownAura takes it under the MIT terms.
 | `markup5ever` | 0.39.0 | MIT OR Apache-2.0 |
 | `memchr` | 2.8.3 | Unlicense OR MIT |
 | `mime` | 0.3.17 | MIT OR Apache-2.0 |
+| `minisign-verify` | 0.2.5 | MIT |
 | `miniz_oxide` | 0.8.9 | MIT OR Zlib OR Apache-2.0 |
 | `miniz_oxide` | 0.9.1 | MIT OR Zlib OR Apache-2.0 |
 | `mio` | 1.2.3 | MIT |
@@ -175,6 +185,7 @@ MarkdownAura takes it under the MIT terms.
 | `regex` | 1.13.1 | MIT OR Apache-2.0 |
 | `regex-automata` | 0.4.18 | MIT OR Apache-2.0 |
 | `regex-syntax` | 0.8.11 | MIT OR Apache-2.0 |
+| `reqwest` | 0.13.5 | MIT OR Apache-2.0 |
 | `rfd` | 0.16.0 | MIT |
 | `rustc-hash` | 2.1.3 | Apache-2.0 OR MIT |
 | `same-file` | 1.0.6 | Unlicense/MIT |
@@ -201,6 +212,7 @@ MarkdownAura takes it under the MIT terms.
 | `sha2` | 0.10.9 | MIT OR Apache-2.0 |
 | `simd-adler32` | 0.3.10 | MIT |
 | `siphasher` | 1.0.4 | MIT OR Apache-2.0 |
+| `slab` | 0.4.12 | MIT |
 | `smallvec` | 1.16.2 | MIT OR Apache-2.0 |
 | `softbuffer` | 0.4.8 | MIT OR Apache-2.0 |
 | `stable_deref_trait` | 1.2.1 | MIT OR Apache-2.0 |
@@ -208,6 +220,7 @@ MarkdownAura takes it under the MIT terms.
 | `strsim` | 0.11.1 | MIT |
 | `syn` | 2.0.119 | MIT OR Apache-2.0 |
 | `syn` | 3.0.6 | MIT OR Apache-2.0 |
+| `sync_wrapper` | 1.0.2 | Apache-2.0 |
 | `synstructure` | 0.14.0 | MIT |
 | `tao` | 0.37.1 | Apache-2.0 |
 | `tauri` | 2.12.1 | Apache-2.0 OR MIT |
@@ -216,10 +229,13 @@ MarkdownAura takes it under the MIT terms.
 | `tauri-plugin-dialog` | 2.8.1 | Apache-2.0 OR MIT |
 | `tauri-plugin-fs` | 2.6.0 | Apache-2.0 OR MIT |
 | `tauri-plugin-opener` | 2.7.0 | Apache-2.0 OR MIT |
+| `tauri-plugin-process` | 2.4.0 | Apache-2.0 OR MIT |
 | `tauri-plugin-single-instance` | 2.5.2 | Apache-2.0 OR MIT |
+| `tauri-plugin-updater` | 2.13.1 | Apache-2.0 OR MIT |
 | `tauri-runtime` | 2.12.1 | Apache-2.0 OR MIT |
 | `tauri-runtime-wry` | 2.12.1 | Apache-2.0 OR MIT |
 | `tauri-utils` | 2.10.1 | Apache-2.0 OR MIT |
+| `tempfile` | 3.27.0 | MIT OR Apache-2.0 |
 | `tendril` | 0.5.1 | MIT OR Apache-2.0 |
 | `thiserror` | 2.0.21 | MIT OR Apache-2.0 |
 | `thiserror-impl` | 2.0.21 | MIT OR Apache-2.0 |
@@ -287,6 +303,7 @@ MarkdownAura takes it under the MIT terms.
 | `zerotrie` | 0.2.5 | Unicode-3.0 |
 | `zerovec` | 0.11.8 | Unicode-3.0 |
 | `zerovec-derive` | 0.11.6 | Unicode-3.0 |
+| `zip` | 4.6.1 | MIT |
 | `zlib-rs` | 0.6.8 | Zlib |
 | `zmij` | 1.0.23 | MIT |
 
