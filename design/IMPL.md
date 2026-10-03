@@ -877,6 +877,16 @@ in `tauri.conf.json` is `…/releases/latest/download/latest.json`, which GitHub
 release — so the manifest has to be uploaded to the release tagged `v<version>`; leaving it on an older
 release points the updater at an older installer, which the version check then refuses.
 
+**Pushing needs the credential helper named explicitly here.** `$HOME` is empty in this shell and
+`credential.helper` is `manager`, which wants a prompt it cannot have, so `git push` dies with
+`unable to read askpass response from 'false'` — even in a session where an earlier push went through,
+because that one was answered from the manager's cache. The store file lives under the Windows profile, and
+naming it makes the push non-interactive (this is also why both publish scripts glob for it themselves):
+
+```bash
+git -c credential.helper= -c credential.helper="store --file=C:/Users/rong/.git-credentials" push origin main
+```
+
 **Gitee gets the same artifacts, as a mirror.** `node var/publish-gitee-release.mjs` publishes `var/release/`
 as a Gitee release for the same tag: it creates the release when the tag has none (`MarkdownAura v<version>`,
 with the same notes read from `latest.json`) and uploads every staged file, skipping any already attached —
