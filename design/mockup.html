@@ -89,13 +89,13 @@
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-head">
         <span class="panel-label">explorer</span>
-        <div class="sidebar-actions">
-          <button class="mini-btn toggle on" id="mdOnlyBtn" title="list markdown files only">md only</button>
-          <button class="mini-btn" id="openFolderBtn" title="open folder (ctrl shift O)">open folder</button>
-        </div>
+        <button class="mini-btn" id="openFolderBtn" title="open folder (ctrl shift O)">open folder</button>
       </div>
       <div class="sidebar-search">
-        <input type="search" id="fileFilter" placeholder="filter files" aria-label="filter files">
+        <div class="search-wrap">
+          <input type="search" id="fileFilter" placeholder="filter files" aria-label="filter files">
+          <button class="iconbtn on" id="mdOnlyBtn" title="list markdown files only" aria-label="list markdown files only" aria-pressed="true">md</button>
+        </div>
       </div>
       <div class="tree" id="tree"></div>
       <div class="sidebar-foot">

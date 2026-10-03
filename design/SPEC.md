@@ -86,8 +86,9 @@ tokens (`--h-title`, `--h-toolbar`, `--h-status`) and must never grow.
   narrower than the paths the tree has to show on a wide display.
   `ctrl B` collapses it entirely.
 - Skips the ignored directory names (`node_modules`, `.git`, build output).
-- **Lists markdown only, by default.** An `md only` toggle sits in the sidebar head and shows files
-  whose extension is `md` / `markdown` / `mdx` / `mdown` / `mkd`; switching it off lists every file.
+- **Lists markdown only, by default.** A `md` chip sits inside the filter box — accent tinted when on,
+  grey when off — and shows files whose extension is `md` / `markdown` / `mdx` / `mdown` / `mkd`;
+  switching it off lists every file.
   Directories always show — the tree is read a level at a time, so whether a folder holds markdown is
   not knowable without opening it. The rule is one list in `src/ipc.ts`, shared with the open dialog's
   filter and the drop/argument check.
@@ -105,7 +106,7 @@ UX, not shipped.
 
 **The explorer's markdown-only toggle ships, on by default.** It is a *view* filter in
 `src/ui/tree.ts`, not a change to `fs_ops::list_dir`: `TreeEntry.ext` (lowercase, dotless) decides,
-the `md only` button in the sidebar head is the control, and the choice persists in the session
+the `md` chip inside the filter box is the control, and the choice persists in the session
 (`IMPL.md` §6). Applying it in Rust was the other candidate and was rejected: the watcher's
 `watching N files` counts what is *watched*, not what is *shown* — a `.txt` beside a document still
 reloads it — and a listing that hides files would have to be re-fetched on every toggle. An empty
@@ -332,7 +333,7 @@ packaging plan.
 | mermaid | `mermaid@12` (MIT) | **29 KB entry**, chunks on demand | The ESM build is code-split: 104 chunks, 5.18 MB on disk, but only the entry plus the chunks for the diagram types actually used get loaded. `dist/mermaid.min.js` — the monolith — is 5.3 MB and must **not** be used. |
 | dot | `@hpcc-js/wasm-graphviz@1.29.2` (Apache-2.0) | **~0.9 MB** | 13 files, zero dependencies. The wasm is inlined into the JS, so there is no separate `.wasm` to ship or fetch. |
 | dot (alternative) | `@viz-js/viz@3.31.0` (MIT) | ~1.2 MB | One self-contained file, MIT rather than Apache-2.0. Take this one only if the Apache licence or the `@hpcc-js` API is a problem. |
-| d2 | `@d2lang/d2@0.1.34` (MPL-2.0) | **11.5 MB** | `dist/browser/index.js` (11,514,165 bytes) is the one file the frontend imports: wasm inlined, and the package runs it in its own worker. Bundled, like the other two. The document's text paints before any card does, so the first `d2` block is the only thing that waits — measured 3.8 s for that parse on this machine, and 19 ms for a re-render once the module is resident. |
+| d2 | `@d2lang/d2@0.1.34` (MPL-2.0) | **11.5 MB** | `dist/browser/index.js` (11,514,165 bytes) is the one file the frontend imports: wasm inlined, and the package runs it in its own worker. Bundled, like the other two. The document's text paints before any card does, so the first `d2` block is the only thing that waits — measured 3.8 s for that parse on this machine, and 19 ms for a re-render once the module is resident. The module is started early on purpose: `paint()` preloads it the moment a document is known to contain an **uncached** d2 block, and `warmHeaviestEngineOnIdle()` preloads it once per session, on idle, after any document that has diagrams has rendered. So the parse normally happens while the reader is still reading, and what remains for the first d2 card is the render, not the parse. |
 
 Consequences, in order:
 

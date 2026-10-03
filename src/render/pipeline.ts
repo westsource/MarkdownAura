@@ -9,7 +9,7 @@
  */
 import type { DiagramBlock, RenderedDoc } from "../ipc";
 import { cacheKey, get as cacheGet, put as cachePut } from "./cache";
-import { renderDiagram } from "./engines";
+import { preloadD2, renderDiagram, warmHeaviestEngineOnIdle } from "./engines";
 import { isEngineId, type EngineId } from "./types";
 
 export interface PaintResult {
@@ -81,6 +81,13 @@ export async function paint(container: HTMLElement, doc: RenderedDoc): Promise<P
   const started = performance.now();
   container.innerHTML = doc.html;
 
+  // The loop below renders cards in document order, so a d2 block behind a mermaid one waits for it and
+  // *then* parses 11 MB. Start that parse now, and only when a d2 block actually needs rendering — a
+  // cached one does not, and warming for it would cost the whole parse for nothing.
+  if (doc.diagrams.some((b) => b.lang === "d2" && cacheGet(cacheKey("d2", b.source)) === undefined)) {
+    preloadD2();
+  }
+
   const slots = Array.from(container.querySelectorAll<HTMLElement>("[data-diagram]"));
   const blocks = new Map(doc.diagrams.map((block) => [block.id, block]));
 
@@ -124,6 +131,9 @@ export async function paint(container: HTMLElement, doc: RenderedDoc): Promise<P
       failed++;
     }
   }
+
+  // A document with diagrams is the signal that this reader may need d2 next; warm it while they read.
+  if (rendered + cached > 0) warmHeaviestEngineOnIdle();
 
   return { rendered, failed, cached, ms: performance.now() - started };
 }

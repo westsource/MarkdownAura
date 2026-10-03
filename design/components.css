@@ -296,9 +296,6 @@ kbd {
   justify-content: space-between;
   padding: 10px 10px 6px var(--sp-3);
 }
-/* The head's controls travel together, so `space-between` keeps the label on the left and the pair on
-   the right — a third child in the row itself would land in the middle. */
-.sidebar-actions { display: flex; align-items: center; gap: var(--sp-1); }
 .panel-label {
   font-size: var(--fs-xs);
   font-weight: 500;
@@ -317,16 +314,23 @@ kbd {
 }
 [data-theme="dark"] .mini-btn { color: var(--ac-tx); }
 .mini-btn:hover { filter: brightness(.97); }
-/* The markdown-only toggle is the quieter of the two controls in the sidebar head, so it inverts
-   `.mini-btn`'s default: hairline outline when off, the accent tint when on. The outline is an inset
-   shadow rather than a border because `.mini-btn` is borderless — a border would shift the row 1px. */
-.mini-btn.toggle {
-  background: transparent;
-  color: var(--tx-2);
-  box-shadow: inset 0 0 0 0.5px var(--line-2);
+/* The filter box carries the markdown-only facet inside it — a small `md` chip on its right edge, accent
+   tinted when on like every other engaged control. It belongs to the list it filters, not to the header,
+   which is why it is not beside `open folder` (SPEC §3). The chip is 24px inside a 28px input, and the
+   longhand padding leaves the search glyph where `input[type="search"]` puts it. */
+.search-wrap { position: relative; }
+.search-wrap input[type="search"] { padding-right: 34px; }
+.search-wrap .iconbtn {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  font-size: 10.5px;
+  letter-spacing: .02em;
 }
-.mini-btn.toggle:hover { filter: none; color: var(--tx); }
-.mini-btn.toggle.on { background: var(--ac-bg); color: var(--ac-tx); box-shadow: none; }
 
 .sidebar-search { padding: 0 10px var(--sp-2); }
 input[type="search"], input[type="text"] {

@@ -126,6 +126,35 @@ const D2_THEME_DARK = 200;
 
 let d2Seq = 0;
 
+/** Starts the d2 import and does not wait for it. The parse is the 11 MB cost in SPEC §4, so both
+ *  callers exist to move it off the critical path: the pipeline calls it the moment a document is known
+ *  to contain an uncached d2 block, and a document that has diagrams warms it on idle (see
+ *  `warmHeaviestEngineOnIdle`). A failure is dropped here — the render that needs it reports it. */
+export function preloadD2(): void {
+  loadD2().catch(() => {
+    // A failed import must not poison the engine for the rest of the session: drop the rejected promise
+    // so the next document tries again.
+    d2Promise = null;
+  });
+}
+
+let warmScheduled = false;
+
+/** Warms **the heaviest engine** (d2, by an order of magnitude — SPEC §4) once per session, on idle,
+ *  after a document that actually has diagrams has rendered. Paying the parse between the reader's
+ *  actions is what makes the first d2 card feel immediate instead of taking seconds; the price is a
+ *  burst of main-thread work for a reader who may never render d2, which is why it is gated on "a
+ *  diagram was rendered" and cannot repeat. A text-only reader never triggers it. */
+export function warmHeaviestEngineOnIdle(): void {
+  if (warmScheduled) return;
+  warmScheduled = true;
+  if (window.requestIdleCallback) {
+    window.requestIdleCallback(() => preloadD2(), { timeout: 8000 });
+  } else {
+    window.setTimeout(() => preloadD2(), 1200);
+  }
+}
+
 async function renderD2(source: string): Promise<string> {
   const d2 = await loadD2();
   const compiled = await d2.compile(source);
