@@ -679,6 +679,16 @@ centred, `decorations: false`, `drag_and_drop(true)`. `transparent` is not set.
 - **`tauri.conf.json` does not accept comments.** Adding one fails the build script with
   `unable to parse JSON … key must be a string`, which reads like a schema error and is not one —
   the rationale for a setting lives here, never in that file.
+- **`WebView2Loader.dll` is dynamic on this toolchain, and it cannot be made static here.** The exe
+  imports it (that is why the DLL sits beside the portable exe and inside the installer), and
+  `webview2-com-sys` chooses the *static* loader only under `cfg(target_env = "msvc")` — this machine
+  builds `x86_64-pc-windows-gnu`, so the dynamic branch is taken. There is no feature flag for it.
+  Renaming the shipped `WebView2LoaderStatic.lib` to `libWebView2LoaderStatic.a` so the GNU linker would
+  find it was tried and fails: its objects are MSVC-compiled, so `ld` reports undefined
+  `__security_cookie` / `__security_check_cookie` and MSVC-mangled names. Static linking therefore needs
+  the MSVC toolchain, which would also mean re-checking the GNU-specific repairs in this file. Leaving it
+  dynamic costs one 161 KB file that both deliverables already ship; a self-extracting single-file wrapper
+  is the cheap way to give someone "one file to double-click".
 - `capabilities/default.json` is the app's whole permission surface: the window controls it needs,
   `dialog:allow-open`, and **one scoped opener permission** —
   `opener:allow-open-url` with `allow: [{ "url": "https://github.com/westsource/MarkdownAura" }]`.
