@@ -128,15 +128,26 @@
       <div class="view preview on" id="view-preview"><div class="prose-wrap"><div class="prose" id="out-preview"></div></div></div>
 
       <div class="view split" id="view-split">
-        <div class="pane-src"><pre class="src" id="out-split-src"></pre></div>
+        <div class="pane-src">
+          <button class="readonly-pill" id="readonlyPillSplit" type="button" title="edit (ctrl E)">read-only</button>
+          <pre class="src" id="out-split-src"></pre>
+          <div class="editor" id="editor-split" hidden>
+            <pre class="src editor-back" id="out-split-back" aria-hidden="true"></pre>
+            <textarea class="editor-input" id="out-split-edit" spellcheck="false" wrap="soft" aria-label="edit source"></textarea>
+          </div>
+        </div>
         <div class="splitter" id="splitter" role="separator" aria-orientation="vertical"></div>
         <div class="pane-out"><div class="prose compact" id="out-split"></div></div>
       </div>
 
       <div class="view source" id="view-source">
         <div class="source-view">
-          <span class="readonly-pill">read-only</span>
+          <button class="readonly-pill" id="readonlyPill" type="button" title="edit (ctrl E)">read-only</button>
           <pre class="src" id="out-source"></pre>
+          <div class="editor" id="editor-source" hidden>
+            <pre class="src editor-back" id="out-source-back" aria-hidden="true"></pre>
+            <textarea class="editor-input" id="out-source-edit" spellcheck="false" wrap="soft" aria-label="edit source"></textarea>
+          </div>
         </div>
       </div>
 
@@ -265,6 +276,27 @@
         </div>
       </div>
 
+      <!-- leaving the editable pane with unsaved changes asks first (SPEC §12) -->
+      <div class="overlay" id="unsavedOverlay">
+        <div class="sheet tight">
+          <div class="sheet-head">
+            <span class="sheet-title">unsaved changes</span>
+            <div class="spacer"></div>
+            <kbd>esc</kbd>
+            <button class="iconbtn" id="unsavedClose" title="cancel (esc)" aria-label="cancel">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+            </button>
+          </div>
+          <div class="sheet-body"><p class="unsaved-text" id="unsavedText"></p></div>
+          <div class="sheet-foot">
+            <button class="primary-btn" id="unsavedSave">save</button>
+            <button class="ghost-btn" id="unsavedDiscard">discard</button>
+            <div class="spacer"></div>
+            <button class="ghost-btn" id="unsavedCancel">cancel</button>
+          </div>
+        </div>
+      </div>
+
       <div class="menu" id="menu"></div>
       <div class="toasts" id="toasts"></div>
     </section>
@@ -286,6 +318,7 @@
     <span id="stPath">—</span>
     <span id="stWords">0 words</span>
     <span id="stEnc">utf-8</span>
+    <span class="status-chip dirty-chip" id="stDirty" hidden>unsaved</span>
     <div class="spacer"></div>
     <span class="cluster" id="eng-mermaid" title="mermaid engine"><span class="dot off"></span>mermaid</span>
     <span class="cluster" id="eng-dot" title="graphviz engine"><span class="dot off"></span>dot</span>

@@ -485,7 +485,8 @@ Errors render inline with the line number instead of blanking the page.`
   /* ===================== app state ===================== */
 
   const state = {
-    tabs: [],          // {id, file, name, view, scroll, findQ, preview, missing, reloading, pinned}
+    tabs: [],          // {id, file, name, view, scroll, findQ, preview, missing, reloading, pinned,
+                       //  editing, dirty, buffer, blocked}  — the last four are SPEC §12
     active: -1,
     theme: "light",
     zoom: 100,
@@ -535,11 +536,18 @@ Errors render inline with the line number instead of blanking the page.`
       id: "t" + Math.random().toString(36).slice(2, 8),
       file, name: file.split("/").pop(),
       view: "preview", scroll: 0, findQ: "", findCase: false,
-      preview, missing: false, reloading: false, pinned: false
+      preview, missing: false, reloading: false, pinned: false,
+      /* SPEC §12: the mode, whether the buffer differs from the file, the buffer itself (null = the
+         fixture, i.e. "not touched"), and a refusal reason when the file cannot be edited. */
+      editing: false, dirty: false, buffer: null, blocked: null
     };
   }
 
-  function closeTab(i) {
+  function closeTab(i, force = false) {
+    const t = state.tabs[i];
+    if (!t) return;
+    /* Closing a dirty tab asks first (SPEC §12): the buffer is not in the file yet. */
+    if (!force && t.dirty) return askUnsaved("Close " + t.name, () => closeTab(i, true));
     state.tabs.splice(i, 1);
     if (!state.tabs.length) { state.active = -1; renderAll(); return; }
     state.active = Math.min(i, state.tabs.length - 1);
@@ -554,10 +562,11 @@ Errors render inline with the line number instead of blanking the page.`
     state.tabs.forEach((t, i) => {
       const on = i === state.active;
       const el = document.createElement("div");
-      el.className = "tab" + (on ? " active" : "") + (t.preview ? " preview" : "") + (t.pinned ? " pinned" : "") + (t.missing ? " missing" : "") + (t.reloading ? " reloading" : "");
-      el.title = t.file;
+      el.className = "tab" + (on ? " active" : "") + (t.preview ? " preview" : "") + (t.pinned ? " pinned" : "") + (t.missing ? " missing" : "") + (t.reloading ? " reloading" : "") + (t.dirty ? " dirty" : "");
+      el.title = t.file + (t.dirty ? " — unsaved changes" : "");
       el.innerHTML = FILE_ICON +
         `<span class="tab-name">${esc(middleEllipsis(t.name, 22))}</span>` +
+        (t.dirty ? '<span class="tab-dirty" aria-hidden="true"></span>' : "") +
         `<span class="tab-close" role="button" aria-label="close tab">×</span>`;
       el.addEventListener("click", () => { state.active = i; renderAll(); });
       el.addEventListener("auxclick", (e) => { if (e.button === 1) closeTab(i); });
@@ -576,31 +585,42 @@ Errors render inline with the line number instead of blanking the page.`
     return state.docs[file];
   }
 
+  /** The text a tab shows: its buffer once it has been touched, otherwise the fixture (SPEC §12). */
+  function textOf(t) {
+    return t.buffer !== null ? t.buffer : DOCS[t.file];
+  }
+
   function renderContent() {
     const t = tab();
     if (!t) {
       $("#stPath").textContent = "—";
       $("#stWords").textContent = "0 words";
       $("#stRender").textContent = "rendered in 0 ms";
+      $("#stDirty").hidden = true;
       $("#outlineList").innerHTML = "";
       $("#diagramList").innerHTML = "";
+      paintMode(null);
       return;
     }
     const t0 = performance.now();
-    const d = doc(t.file);
+    const text = textOf(t);
+    /* An edited buffer is not the fixture, so it renders fresh rather than from the cache. */
+    const d = t.buffer !== null ? renderMarkdown(text) : doc(t.file);
 
     $("#out-preview").innerHTML = d.html;
     $("#out-split").innerHTML = d.html;
-    const hl = highlightSource(DOCS[t.file]);
+    const hl = highlightSource(text);
     $("#out-source").innerHTML = hl;
     $("#out-split-src").innerHTML = hl;
+    paintMode(t, hl);
 
     const ms = Math.max(1, Math.round(performance.now() - t0 + 6));
-    const words = DOCS[t.file].split(/\s+/).filter(Boolean).length;
+    const words = text.split(/\s+/).filter(Boolean).length;
 
     $("#stPath").textContent = t.file;
     $("#stWords").textContent = words + " words";
     $("#stRender").textContent = "rendered in " + ms + " ms";
+    $("#stDirty").hidden = !t.dirty;
 
     setView(t.view);
     renderOutline(d);
@@ -1075,6 +1095,8 @@ Errors render inline with the line number instead of blanking the page.`
     { group: "find", keys: "enter",         label: "next match" },
     { group: "find", keys: "shift enter",   label: "previous match" },
     { group: "find", keys: "esc",           label: "close the topmost layer" },
+    { group: "edit", keys: "ctrl E",        label: "edit the source pane" },
+    { group: "edit", keys: "ctrl S",        label: "save" },
   ];
 
   const SYNTAX = [
@@ -1347,6 +1369,180 @@ Errors render inline with the line number instead of blanking the page.`
     setTimeout(() => el.remove(), 2100);
   }
 
+  /* ===================== editing (SPEC §12) =====================
+     Read-only is the default; this is a mode you enter. The mockup has no file writer, so saving is
+     simulated — but everything the design is about is real: the caret, the dirty marks, the promotion
+     of a preview tab, the refusals, and the live render beside the buffer. */
+
+  const PANES = [
+    { host: "#view-source .source-view", editor: "#editor-source", input: "#out-source-edit", back: "#out-source-back", ro: "#out-source" },
+    { host: "#view-split .pane-src",     editor: "#editor-split",  input: "#out-split-edit",  back: "#out-split-back",  ro: "#out-split-src" },
+  ];
+
+  const BLOCKED_REASON = {
+    truncated: "not editable — the file is past the 8 MiB cap, so the buffer holds only its start",
+    lossy: "not editable — the file is not valid UTF-8, and saving would make the replacement permanent",
+    missing: "not editable — the file is gone",
+    readonly: "not editable — the file is read-only for this user",
+  };
+
+  let saidMockupOnce = false;
+
+  /** Paints the mode across both panes and the pill. The only writer of `.editing`, so the two panes
+   *  and the pill cannot disagree about what state they are in. */
+  function paintMode(t, hl) {
+    const on = !!(t && t.editing);
+    for (const pane of PANES) {
+      $(pane.host).classList.toggle("editing", on);
+      $(pane.editor).hidden = !on;
+      /* The read-only pane is *emptied*, not merely hidden: find walks text nodes and does not skip
+         `display: none`, so leaving the same text in both layers would double every hit and scroll the
+         invisible copy instead of the one on screen. */
+      $(pane.ro).innerHTML = on ? "" : (hl ?? "");
+      if (!on) continue;
+      $(pane.back).innerHTML = hl ?? "";
+      const input = $(pane.input);
+      /* Never assign the value unless it differs: assigning collapses the caret to the end, which would
+         happen on every unrelated re-render — a save, a tab switch, the live-preview refresh. */
+      if (input.value !== textOf(t)) input.value = textOf(t);
+    }
+    paintPill(t);
+  }
+
+  function paintPill(t) {
+    const blocked = !!(t && t.blocked);
+    /* Both panes carry a pill. The mode's pointer path has to exist wherever the pane is visible, and
+       in split view the source pane is the left half — a control that only exists in another view is
+       not a path, it is a footnote. (Found by driving the prototype: clicking the pill in split view
+       was impossible.) */
+    for (const pill of $$(".readonly-pill")) {
+      pill.textContent = t && t.editing ? "editing" : "read-only";
+      pill.classList.toggle("editing", !!(t && t.editing));
+      pill.setAttribute("aria-disabled", blocked ? "true" : "false");
+      pill.title = !t ? "" : blocked ? BLOCKED_REASON[t.blocked] : t.editing ? "done (esc)" : "edit (ctrl E)";
+    }
+  }
+
+  function toggleEdit() {
+    const t = tab();
+    if (!t) return;
+    if (t.editing) return leaveEdit();
+    enterEdit(t);
+  }
+
+  function enterEdit(t) {
+    if (t.blocked || t.missing) {
+      toast(BLOCKED_REASON[t.blocked ?? "missing"], "err");
+      return;
+    }
+    if (t.preview) {
+      /* SPEC §12: a preview tab is reused in place by the next single click in the tree, so a buffer
+         with edits in it would be replaced without a word. Entering the mode pins it first. */
+      t.preview = false;
+      toast("pinned — a preview tab is reused in place, so edits would be replaced by the next click", "ok");
+    }
+    t.editing = true;
+    if (!saidMockupOnce) {
+      saidMockupOnce = true;
+      toast("the mockup's editor is a textarea over the highlighter — the app uses CodeMirror 6");
+    }
+    renderAll();
+    /* Focus the caret in the pane that is actually on screen. Both editors exist, but the one in the
+       inactive view has no layout, and focusing an unrendered element silently does nothing — which
+       is how the first run of this prototype ended up with the caret on `body` and every keystroke
+       going nowhere. */
+    const pane = PANES.find((p) => $(p.editor).offsetParent !== null);
+    if (pane) $(pane.input).focus();
+  }
+
+  function leaveEdit() {
+    const t = tab();
+    if (!t) return;
+    if (t.dirty) {
+      return askUnsaved("Leave the editable pane", () => { t.editing = false; renderAll(); });
+    }
+    t.editing = false;
+    renderAll();
+  }
+
+  function saveTab(t) {
+    if (!t) return;
+    const wasDirty = t.dirty;
+    t.dirty = false;
+    renderAll();
+    if (wasDirty) toast("saved — the mockup has no file writer; the app writes atomically, keeping the encoding and the line endings", "ok");
+  }
+
+  function markDirty(t) {
+    if (t.dirty) return;
+    t.dirty = true;
+    /* No full re-render here: this runs on every keystroke, and a re-render would fight the caret. */
+    renderTabs();
+    $("#stDirty").hidden = false;
+  }
+
+  /* The live render is the point of editing in split view (SPEC §12). Debounced, and deliberately
+     narrow: it refreshes the rendered panes, the outline and the counters, and touches nothing else. */
+  let previewTimer = 0;
+  function schedulePreview() {
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(() => {
+      const t = tab();
+      if (!t || !t.editing) return;
+      const t0 = performance.now();
+      const d = renderMarkdown(textOf(t));
+      $("#out-preview").innerHTML = d.html;
+      $("#out-split").innerHTML = d.html;
+      wireDiagrams($("#out-preview"), d);
+      wireDiagrams($("#out-split"), d);
+      renderOutline(d);
+      $("#stWords").textContent = textOf(t).split(/\s+/).filter(Boolean).length + " words";
+      $("#stRender").textContent = "rendered in " + Math.max(1, Math.round(performance.now() - t0 + 6)) + " ms";
+    }, 160);
+  }
+
+  function wireEditor(pane) {
+    const input = $(pane.input);
+    const back = $(pane.back);
+    let syncing = false;
+    /* Whichever layer scrolls, the other follows. One direction is not enough: find's `scrollIntoView`
+       scrolls the backdrop, and the backdrop is the layer that shows the glyphs. */
+    const follow = (from, to) => {
+      if (syncing) return;
+      syncing = true;
+      to.scrollTop = from.scrollTop;
+      to.scrollLeft = from.scrollLeft;
+      syncing = false;
+    };
+    input.addEventListener("scroll", () => follow(input, back));
+    back.addEventListener("scroll", () => follow(back, input));
+    input.addEventListener("input", () => {
+      const t = tab();
+      if (!t || !t.editing) return;
+      t.buffer = input.value;
+      back.innerHTML = highlightSource(input.value);
+      markDirty(t);
+      schedulePreview();
+      /* The marks lived in the layer that was just rebuilt; the count would be a lie. */
+      if (isOn("findbar")) $("#findCount").textContent = "0/0";
+    });
+  }
+
+  /* ===================== the unsaved-changes sheet ===================== */
+
+  let pendingAction = null;
+
+  function askUnsaved(what, action) {
+    pendingAction = action;
+    $("#unsavedText").textContent = what + "? This buffer has changes that are not in the file.";
+    $("#unsavedOverlay").classList.add("on");
+  }
+
+  function closeUnsaved() {
+    pendingAction = null;
+    $("#unsavedOverlay").classList.remove("on");
+  }
+
   /* ===================== keyboard ===================== */
 
   document.addEventListener("keydown", (e) => {
@@ -1359,10 +1555,14 @@ Errors render inline with the line number instead of blanking the page.`
       if (isOn("helpOverlay")) return closeHelp();
       if (isOn("aboutOverlay")) return closeAbout();
       if (isOn("settingsOverlay")) return closeSettings();
+      if (isOn("unsavedOverlay")) return closeUnsaved();
       if (state.immersive) return setImmersive(false);
       if (isOn("findbar")) return showFind(false);
+      if (tab() && tab().editing) return leaveEdit();
       return $("#menu").classList.remove("on");
     }
+    if (mod && key === "e") { e.preventDefault(); return toggleEdit(); }
+    if (mod && key === "s") { e.preventDefault(); const t = tab(); if (t && t.editing) return saveTab(t); return; }
     if (mod && key === "f") { e.preventDefault(); return showFind(true); }
     if (mod && key === "w") { e.preventDefault(); if (state.active >= 0) return closeTab(state.active); }
     if (mod && key === "t") { e.preventDefault(); return openFile(pickNextFile(), { preview: false }); }
@@ -1372,7 +1572,13 @@ Errors render inline with the line number instead of blanking the page.`
     if (mod && e.altKey && key === "o") { e.preventDefault(); return $("#toggleOutline").click(); }
     if (mod && e.shiftKey && key === "o") { e.preventDefault(); return $("#openFolderBtn").click(); }
     if (mod && e.shiftKey && key === "a") { e.preventDefault(); return $("#listTabsBtn").click(); }
-    if (mod && e.shiftKey && key === "w") { e.preventDefault(); state.tabs = []; state.active = -1; return renderAll(); }
+    if (mod && e.shiftKey && key === "w") {
+      e.preventDefault();
+      const closeAll = () => { state.tabs = []; state.active = -1; renderAll(); };
+      const dirty = state.tabs.filter((t) => t.dirty).length;
+      if (dirty) return askUnsaved("Close " + dirty + " unsaved tab" + (dirty === 1 ? "" : "s"), closeAll);
+      return closeAll();
+    }
     if (mod && e.shiftKey && key === "c") {
       e.preventDefault();
       const t = tab();
@@ -1443,6 +1649,39 @@ Errors render inline with the line number instead of blanking the page.`
     renderContent();
   }
 
+  /* ===================== wire the editable panes ===================== */
+
+  PANES.forEach(wireEditor);
+  /* The pill is not `disabled`, it is `aria-disabled`: a refusal has to be clickable, or the reason
+     would be unreachable — a control that does nothing and says nothing is worse than no control. */
+  $$(".readonly-pill").forEach((pill) => {
+    /* A toolbar-style control must not take focus on click: the browser focuses the clicked button
+       after the handler runs, so entering the mode left the caret unfocused and the next keystrokes
+       went nowhere. (Found by driving the prototype.) */
+    pill.addEventListener("mousedown", (e) => e.preventDefault());
+    pill.addEventListener("click", () => {
+      const t = tab();
+      if (t && t.blocked) { toast(BLOCKED_REASON[t.blocked], "err"); return; }
+      toggleEdit();
+    });
+  });
+  $("#unsavedSave").addEventListener("click", () => {
+    const t = tab();
+    closeUnsaved();
+    saveTab(t);
+  });
+  $("#unsavedDiscard").addEventListener("click", () => {
+    const action = pendingAction;
+    const t = tab();
+    if (t) { t.buffer = null; t.dirty = false; }
+    closeUnsaved();
+    if (t) renderAll();
+    if (action) action();
+  });
+  $("#unsavedCancel").addEventListener("click", closeUnsaved);
+  $("#unsavedClose").addEventListener("click", closeUnsaved);
+  $("#unsavedOverlay").addEventListener("click", (e) => { if (e.target.id === "unsavedOverlay") closeUnsaved(); });
+
   /* ?view= & ?theme= & ?tab= & ?preview= & ?panel= & ?immersive= let screenshots target a state */
   const q = new URLSearchParams(location.search);
 
@@ -1475,5 +1714,21 @@ Errors render inline with the line number instead of blanking the page.`
     const d = doc(tab().file);
     const rec = d.diagrams[+q.get("overlay") || 0];
     if (rec) openViewer(rec);
+  }
+  /* ?edit=on boots straight into the mode. That is a **screenshot device, not a product state** — SPEC
+     §12 says the app never opens in it. `?edit=truncated|lossy|missing|readonly` reaches the refusals,
+     and `?edit=preview` makes the active tab the one a single tree click would reuse, so the promotion
+     is visible rather than described. */
+  const edit = q.get("edit");
+  if (edit) {
+    const t = state.tabs[state.active];
+    if (t) {
+      if (edit === "preview") t.preview = true;
+      else if (edit === "lossy") { t.blocked = "lossy"; $("#stEnc").textContent = "utf-8-lossy"; }
+      else if (edit === "missing") { t.blocked = "missing"; t.missing = true; }
+      else if (edit !== "on") t.blocked = edit;
+      renderAll();
+      if (edit === "on") enterEdit(t);
+    }
   }
 })();

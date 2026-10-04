@@ -136,6 +136,16 @@ html, body {
 .tab.missing .tab-name { text-decoration: line-through; text-decoration-color: var(--line-3); }
 .tab-icon { flex: 0 0 auto; width: 12px; height: 12px; color: var(--tx-3); }
 .tab.active .tab-icon { color: var(--ac); }
+/* A seventh tab state: unsaved changes (SPEC §12). A dot *after the name*, deliberately not the icon
+   slot — `.tab.reloading` already owns "icon replaced by a dot", and two states that differ only in
+   colour is the exact mistake the engine dots were separated to avoid. */
+.tab-dirty {
+  flex: 0 0 auto;
+  width: 6px; height: 6px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: var(--ac);
+}
 .tab.reloading .tab-icon { display: none; }
 .tab.reloading::before {
   content: "";
@@ -522,6 +532,69 @@ input:focus { border-color: var(--ac); }
   border-radius: 99px;
   padding: 2px 9px;
 }
+/* The pill is the control that enters the editing mode (SPEC §12) — a button that still reads as the
+   state it names. UA chrome stripped the way `.tab-close` does it, or the shared stylesheet would
+   render a native button in the app and a bare span in the mockup. */
+button.readonly-pill { font: inherit; cursor: pointer; }
+button.readonly-pill:hover { color: var(--tx); border-color: var(--line-3); }
+button.readonly-pill.editing { color: var(--ac); border-color: var(--ac); background: var(--ac-bg); }
+button.readonly-pill[aria-disabled="true"] { cursor: default; color: var(--tx-3); }
+button.readonly-pill[aria-disabled="true"]:hover { color: var(--tx-3); border-color: var(--line-2); }
+
+/* ---------- the editable pane (SPEC §12) ----------
+   The mockup fakes the engine the way it fakes the diagrams: a real <textarea> whose text is
+   transparent, sitting exactly on top of the same 5-role highlight layer, so the caret, the selection,
+   undo and the platform IME are real and the colours still come from this stylesheet. The app uses
+   CodeMirror 6 (`IMPL.md` §11); this exists to confirm the interface, not the engine.
+
+   Both layers must be metrically identical or the caret drifts off the glyphs: same font, same size
+   from `--doc-size` × `--zoom`, same line-height, same padding, same wrapping. The backdrop is a
+   `.src` `<pre>`, so the two existing pane rules already size it; the textarea mirrors them below.
+   Known limit of this technique: a textarea wraps at word boundaries and will not break a long
+   unbreakable token the way `overflow-wrap: anywhere` does, so a pathological line can drift. The
+   real control renders its own text and has no such seam. */
+.editor {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+}
+.editor[hidden] { display: none; }
+/* In the editing state the pane stops scrolling and the textarea owns the scroll, or the two would
+   fight over the same wheel. */
+.source-view.editing, .view.split .pane-src.editing { overflow: hidden; }
+.editor-back {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;          /* the textarea is the scroller; this layer is dragged along by hand */
+  pointer-events: none;
+}
+.editor-input {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  overflow: auto;
+  background: transparent;
+  color: transparent;        /* the glyphs you see belong to the layer behind */
+  caret-color: var(--tx);
+  font-family: var(--font-mono);
+  font-size: calc(var(--doc-size, 15px) * var(--zoom, 1));
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;         /* `body` turns selection off for the chrome; this opts back in */
+}
+.view.split .pane-src .editor-input { font-size: calc(var(--doc-size, 15px) * .867 * var(--zoom, 1)); }
+.editor-input::selection { background: var(--ac-bg); }
+/* the unsaved-changes sheet (SPEC §12): one sentence, three actions */
+.unsaved-text { margin: 0; color: var(--tx-2); }
 
 /* ---------- diagram cards ---------- */
 
@@ -715,6 +788,9 @@ mark.current { background: var(--ac); color: #fff; }
    else in this row (`warn` there means "still loading", which would be a lie here). */
 .statusbar .status-chip.update { color: var(--ac); }
 .statusbar .status-chip.update .dot { background: var(--ac); }
+/* The buffer's state, next to the file's (SPEC §12): accent, because it is the one thing in this row
+   that is asking for an action. */
+.statusbar .status-chip.dirty-chip { color: var(--ac); }
 /* The path is the only unbounded item in the row: without this it pushes the width/zoom controls
    off the right edge on a deep path. Everything else here has a fixed, small size. */
 #stPath { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -780,7 +780,7 @@ not the present.
 
 ### Screenshot parameters
 
-The mockup takes `?view= &theme= &tab= &preview= &find= &overlay=`, plus `?panel=settings`,
+The mockup takes `?view= &theme= &tab= &preview= &find= &overlay= &edit=`, plus `?panel=settings`,
 `?panel=help`, `?immersive=1`, and `?peek=1` to force the immersive hover bar open — a
 headless browser cannot hover, so the bar is otherwise uncapturable.
 
@@ -820,8 +820,10 @@ facts that were measured rather than assumed.
   and every reading affordance keeps working while it is on.
 - **The rendered view is never edited.** WYSIWYG is a different product: the document is the source
   and the preview is a rendering of it. That relationship is what the split view exists for (§3).
-- **The pill becomes the control.** The `read-only` pill already says what the pane is; it is the one
-  thing in the pane that can say the other thing, so it is the pointer path into the mode.
+- **The pill becomes the control, in every pane that shows source.** The `read-only` pill already says
+  what the pane is; it is the one thing in the pane that can say the other thing, so it is the pointer
+  path into the mode — and it therefore has to be present in the split view's left pane as well, not only
+  in the source view. `ctrl E` is the same action from the keyboard.
 - **Editing is per tab**, like every other per-tab value (§5). Switching tabs or views does not lose
   a buffer, and it does not silently commit one either. The mode itself is **not persisted**: a restored
   session comes back read-only, because "never opens in it" has to hold across a restart too, not only
@@ -924,9 +926,16 @@ This is where the work is; the control itself is the easy part.
   multi-file editing, completion and language services, Git, collaborative editing, formatters,
   project-wide search and replace, visual table editing, image drag-and-drop, and WYSIWYG editing of
   the rendered view. Syntax highlighting inside *rendered* code fences stays where it is (§11).
-- **The mockup does not carry this mode yet.** It is the behaviour reference for everything that
-  exists, so an unbuilt section is the one place it is allowed to run ahead; mocking up the editable
-  pane is the artifact this section owes next, not an oversight to be discovered later.
+- **The mockup carries this mode** (`design/mockup.html`, `?edit=` for the states below), and it fakes
+  exactly two things, both loudly: the editor is a `<textarea>` over the same 5-role highlight layer
+  instead of CodeMirror 6, and *save* has no file writer behind it. Everything the design is about is
+  real — the caret, the dirty marks, the promotion of a preview tab, the refusals, and the live render
+  beside the buffer.
+- **Driving that prototype changed two decisions**, which is what it was for. The pill has to exist in
+  **both** panes: it lived only in the source view, so in split view — the shape this mode exists for —
+  there was no pointer path into it at all. And a toolbar-style control must not take focus on click
+  (`mousedown` → `preventDefault`): the browser focuses the clicked button after the handler runs, which
+  left the caret unfocused and the next keystrokes going nowhere.
 - **Open, and the owner's call**: what ships first. The recommendation is the smallest coherent slice
   — edit, save, the five refusals, byte fidelity, and the coexistence items above — with split
   live-preview and rendered code-fence highlighting after it.
