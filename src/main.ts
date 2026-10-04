@@ -64,8 +64,8 @@ function applyTheme(): void {
   // Mermaid bakes its palette into the SVG at render time, so a theme change invalidates it and
   // the next render has to re-read the tokens.
   invalidateEngineThemes();
-  // The editor reads the same tokens, so it has the same obligation: a theme change rebuilds it.
-  editor.resetTheme();
+  // The editor needs no reset here: its colours are CSS classes on tokens, so a theme switch reaches
+  // it the way it reaches the rest of the chrome.
   renderThemeButton(resolved);
 }
 

@@ -559,9 +559,11 @@ button.readonly-pill[aria-disabled="true"]:hover { color: var(--tx-3); border-co
   min-height: 0;
 }
 .editor[hidden] { display: none; }
-/* In the editing state the pane stops scrolling and the textarea owns the scroll, or the two would
-   fight over the same wheel. */
-.source-view.editing, .view.split .pane-src.editing { overflow: hidden; }
+/* In the editing state the pane stops scrolling and the editor owns the scroll, and it also stops
+   being a tinted sheet and becomes the page: read-only is `--code`, editable is `--bg`. That is the
+   repo's own vocabulary for state (SPEC §8 — elevation comes from hairlines and background shifts),
+   and it is the only chrome the mode adds. */
+.source-view.editing, .view.split .pane-src.editing { overflow: hidden; background: var(--bg); }
 .editor-back {
   position: absolute;
   inset: 0;
@@ -602,12 +604,21 @@ button.readonly-pill[aria-disabled="true"]:hover { color: var(--tx-3); border-co
    truth for how text looks (IMPL.md §1). `design/check-prose-css.mjs` asserts both rules below, so a
    future pane cannot quietly forget that it has to opt into selection and read the size tokens. */
 .cm-host { height: 100%; min-height: 0; }
+/* `width: 100%` on all three, because the editor otherwise sizes to its content and the reading
+   measure then narrowed the *editor* — the scrollbar and the clickable area sat inside the column
+   instead of at the pane's edge. The measure belongs on `.cm-content`, where it is. */
+.cm-host, .cm-editor, .cm-editor .cm-scroller { width: 100%; }
 .cm-editor {
   height: 100%;
   font-family: var(--font-mono);
   font-size: calc(var(--doc-size, 15px) * var(--zoom, 1));
   line-height: 1.8;
+  color: var(--tx);
+  background: transparent;
 }
+/* CodeMirror draws a dotted focus box by default. The caret and the pill already say the pane is live,
+   and the box made the editor look like a widget that had failed to fill its area. */
+.cm-editor.cm-focused { outline: none; }
 .cm-editor .cm-scroller { font-family: inherit; line-height: inherit; }
 /* The reading column is imposed from outside the control, exactly as it is for the rendered pane in
    `prose.css` — nothing in the TypeScript sets a width. Note that `measure.ts` resolves `ch` against
@@ -615,6 +626,37 @@ button.readonly-pill[aria-disabled="true"]:hover { color: var(--tx-3); border-co
    different number of columns, which is why the column is a token and not a pixel value. */
 .cm-editor .cm-content { max-width: var(--measure); margin-inline: auto; user-select: text; }
 .view.split .pane-src .cm-editor { font-size: calc(var(--doc-size, 15px) * .867 * var(--zoom, 1)); }
+/* The selectors are deliberately deeper than CodeMirror's own: its base rules are injected after this
+   file, so at equal specificity they would win. */
+.cm-editor .cm-cursor, .cm-editor .cm-dropCursor { border-left-color: var(--ac); }
+.cm-editor .cm-selectionBackground,
+.cm-editor.cm-focused .cm-selectionBackground,
+.cm-editor .cm-content ::selection { background-color: var(--ac-bg); }
+/* Line numbers, in the editable pane only, and quiet: they are a reference, not the content. */
+.cm-editor .cm-gutters {
+  background: transparent;
+  border-right: 0.5px solid var(--line);
+  color: var(--tx-3);
+  font-family: inherit;
+}
+.cm-editor .cm-lineNumbers .cm-gutterElement { padding: 0 8px 0 4px; }
+.cm-editor .cm-activeLineGutter { background: transparent; color: var(--tx-2); }
+
+/* ---------- markdown, in the editable pane ----------
+   The same roles the read-only source view uses (`prose.css`: `h`, `em`, `code`, `meta`, `quote`),
+   plus the two a live document shows and a static one does not: links and list markers. Same tokens,
+   so the two panes agree about what a heading looks like — and because these are class names rather
+   than a palette, a theme switch needs no JavaScript. */
+.md-h { color: var(--ac); font-weight: var(--fw-emphasis); }
+.md-strong { font-weight: var(--fw-emphasis); }
+.md-em { font-style: italic; }
+.md-code { color: var(--ok); }
+.md-quote { color: var(--tx-2); font-style: italic; }
+.md-link { color: var(--ac); text-decoration: underline; text-underline-offset: 2px; }
+.md-url { color: var(--tx-3); }
+.md-list { color: var(--tx-2); }
+.md-meta { color: var(--tx-2); }
+.md-strike { text-decoration: line-through; }
 
 /* ---------- diagram cards ---------- */
 

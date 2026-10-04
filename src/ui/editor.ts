@@ -21,6 +21,7 @@
  */
 import type { Compartment, EditorState as EditorStateType, Extension } from "@codemirror/state";
 import type { EditorView as EditorViewType } from "@codemirror/view";
+import type { HighlightStyle } from "@codemirror/language";
 
 export type EditorStateName = "off" | "loading" | "ready" | "failed";
 /** The two panes that show source: the source view, and the left half of the split. */
@@ -38,6 +39,8 @@ interface Runtime {
   commands: CommandsNs;
   language: LanguageNs;
   markdown: MarkdownNs;
+  /** The syntax tag set. From `@lezer/highlight`, which `@codemirror/language` does not re-export. */
+  tags: typeof import("@lezer/highlight").tags;
 }
 
 interface Pane {
@@ -48,7 +51,6 @@ interface Pane {
   /** Which tab the view is currently showing, so a state can be written back on every update. */
   current: string | null;
   readOnly: Compartment | null;
-  theme: Compartment | null;
 }
 
 const panes = new Map<PaneKey, Pane>();
@@ -61,23 +63,21 @@ let loading: Promise<Runtime | null> | null = null;
 
 export const editorState = (): EditorStateName => stateName;
 
-const cssVar = (name: string, fallback: string): string =>
-  getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
-
 async function load(): Promise<Runtime | null> {
   if (runtime) return runtime;
   if (!loading) {
     stateName = "loading";
     loading = (async () => {
       try {
-        const [state, view, commands, language, markdown] = await Promise.all([
+        const [state, view, commands, language, markdown, highlight] = await Promise.all([
           import("@codemirror/state"),
           import("@codemirror/view"),
           import("@codemirror/commands"),
           import("@codemirror/language"),
           import("@codemirror/lang-markdown"),
+          import("@lezer/highlight"),
         ]);
-        runtime = { state, view, commands, language, markdown };
+        runtime = { state, view, commands, language, markdown, tags: highlight.tags };
         stateName = "ready";
         return runtime;
       } catch {
@@ -92,22 +92,36 @@ async function load(): Promise<Runtime | null> {
   return loading;
 }
 
-function themeOf(rt: Runtime): Extension {
-  return rt.view.EditorView.theme({
-    "&": { backgroundColor: "transparent", color: cssVar("--tx", "#2a2a2e") },
-    ".cm-cursor, .cm-dropCursor": { borderLeftColor: cssVar("--ac", "#534ab7") },
-    ".cm-selectionBackground, &.cm-focused .cm-selectionBackground, .cm-content ::selection": {
-      backgroundColor: cssVar("--ac-bg", "#eeedfe"),
-    },
-    ".cm-activeLine": { backgroundColor: "transparent" },
-  });
+/** Syntax *classes*, built once.
+ *
+ *  Every colour lives in `design/components.css` (`.md-h`, `.md-code`, …), so a theme change needs no
+ *  JavaScript at all and the editable pane cannot drift from the read-only one — both read the same
+ *  tokens. This replaced `defaultHighlightStyle`, whose palette is fixed for a light background: on the
+ *  dark theme it painted dark text on a dark pane, which is what "the code is still black" turned out
+ *  to be. */
+let highlight: HighlightStyle | null = null;
+
+function highlightOf(rt: Runtime): HighlightStyle {
+  highlight ??= rt.language.HighlightStyle.define([
+    { tag: rt.tags.heading, class: "md-h" },
+    { tag: rt.tags.strong, class: "md-strong" },
+    { tag: rt.tags.emphasis, class: "md-em" },
+    { tag: rt.tags.monospace, class: "md-code" },
+    { tag: rt.tags.quote, class: "md-quote" },
+    { tag: rt.tags.link, class: "md-link" },
+    { tag: rt.tags.url, class: "md-url" },
+    { tag: rt.tags.list, class: "md-list" },
+    { tag: rt.tags.meta, class: "md-meta" },
+    { tag: rt.tags.strikethrough, class: "md-strike" },
+  ]);
+  return highlight;
 }
 
 function extensionsFor(pane: Pane, rt: Runtime, readOnly: boolean): Extension[] {
   const { EditorState } = rt.state;
-  const { EditorView, keymap, drawSelection } = rt.view;
+  const { EditorView, keymap, drawSelection, lineNumbers } = rt.view;
   const { defaultKeymap, history, historyKeymap } = rt.commands;
-  const { syntaxHighlighting, defaultHighlightStyle, bracketMatching, indentOnInput } = rt.language;
+  const { syntaxHighlighting, bracketMatching, indentOnInput } = rt.language;
   const { markdown, markdownKeymap } = rt.markdown;
 
   return [
@@ -118,13 +132,16 @@ function extensionsFor(pane: Pane, rt: Runtime, readOnly: boolean): Extension[] 
     EditorView.lineWrapping,
     indentOnInput(),
     bracketMatching(),
-    syntaxHighlighting(defaultHighlightStyle),
+    syntaxHighlighting(highlightOf(rt)),
+    /* Line numbers, in the editable pane only: the app already speaks in line numbers — a diagram
+       error and an outline jump both name one — so the pane that lets you act on that should show
+       them. The read-only view stays a clean column (SPEC §1). */
+    lineNumbers(),
     markdown(),
     /* Markdown's own keys come first: Enter continues a list item or a quote, and its markup-aware
        deletions only fire where they make sense. Then CodeMirror's defaults, then history — the window
        owns everything else (ctrl E / ctrl S / ctrl F / esc), which is why nothing here claims those. */
     keymap.of([...markdownKeymap, ...defaultKeymap, ...historyKeymap]),
-    pane.theme!.of(themeOf(rt)),
     pane.readOnly!.of(EditorState.readOnly.of(readOnly)),
     EditorView.updateListener.of((update) => {
       if (!update.docChanged) return;
@@ -146,10 +163,8 @@ export async function mount(key: PaneKey, host: HTMLElement): Promise<boolean> {
     states: new Map<string, EditorStateType>(),
     current: null,
     readOnly: null,
-    theme: null,
   };
   pane.readOnly ??= new rt.state.Compartment();
-  pane.theme ??= new rt.state.Compartment();
   if (!pane.view) pane.view = new rt.view.EditorView({ state: rt.state.EditorState.create({ doc: "" }), parent: host });
   panes.set(key, pane);
   return true;
@@ -201,14 +216,6 @@ export function focus(key: PaneKey): void {
 export function onChange(key: PaneKey, handler: (() => void) | null): void {
   if (handler) handlers.set(key, handler);
   else handlers.delete(key);
-}
-
-/** Rebuilds the theme from the tokens; called when the theme changes, like the engines' reset. */
-export function resetTheme(): void {
-  if (!runtime) return;
-  for (const pane of panes.values()) {
-    if (pane.view && pane.theme) pane.view.dispatch({ effects: pane.theme.reconfigure(themeOf(runtime)) });
-  }
 }
 
 /** Selects a range and centres it. This is how the app's find bar reaches into the pane: the bar
