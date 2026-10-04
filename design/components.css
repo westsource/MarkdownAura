@@ -596,6 +596,26 @@ button.readonly-pill[aria-disabled="true"]:hover { color: var(--tx-3); border-co
 /* the unsaved-changes sheet (SPEC §12): one sentence, three actions */
 .unsaved-text { margin: 0; color: var(--tx-2); }
 
+/* ---------- the editable pane, real control (SPEC §12) ----------
+   CodeMirror renders its own DOM, so the pane's typography has to be stated for its elements — and it
+   is stated *here* rather than in the TypeScript theme, because this file is the single source of
+   truth for how text looks (IMPL.md §1). `design/check-prose-css.mjs` asserts both rules below, so a
+   future pane cannot quietly forget that it has to opt into selection and read the size tokens. */
+.cm-host { height: 100%; min-height: 0; }
+.cm-editor {
+  height: 100%;
+  font-family: var(--font-mono);
+  font-size: calc(var(--doc-size, 15px) * var(--zoom, 1));
+  line-height: 1.8;
+}
+.cm-editor .cm-scroller { font-family: inherit; line-height: inherit; }
+/* The reading column is imposed from outside the control, exactly as it is for the rendered pane in
+   `prose.css` — nothing in the TypeScript sets a width. Note that `measure.ts` resolves `ch` against
+   `#out-preview`, which is sans, while this pane is mono: the same preset is the same *token* but a
+   different number of columns, which is why the column is a token and not a pixel value. */
+.cm-editor .cm-content { max-width: var(--measure); margin-inline: auto; user-select: text; }
+.view.split .pane-src .cm-editor { font-size: calc(var(--doc-size, 15px) * .867 * var(--zoom, 1)); }
+
 /* ---------- diagram cards ---------- */
 
 .diagram {

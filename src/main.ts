@@ -30,6 +30,7 @@ import {
   type WindowRect,
 } from "./state";
 import * as doc from "./ui/document";
+import * as editor from "./ui/editor";
 import * as about from "./ui/about";
 import { $, $$, copyText, hideMenu, menuIsOpen, showMenu, toast, type MenuItem } from "./ui/dom";
 import * as find from "./ui/find";
@@ -63,6 +64,8 @@ function applyTheme(): void {
   // Mermaid bakes its palette into the SVG at render time, so a theme change invalidates it and
   // the next render has to re-read the tokens.
   invalidateEngineThemes();
+  // The editor reads the same tokens, so it has the same obligation: a theme change rebuilds it.
+  editor.resetTheme();
   renderThemeButton(resolved);
 }
 
@@ -117,6 +120,8 @@ function applyLang(): void {
   i18n.setLang(state.lang);
   i18n.applyStatic();
   applyTheme(); // the theme button's tooltip is language-dependent
+  // The pill's text is a state label, so it cannot ride on `data-i18n`; it is repainted instead.
+  paintEditorChrome(activeTab());
   applyLayout(); // the width chip and its tooltip carry language too
   renderChrome();
   status.setWatchLabel(state.watching);
@@ -150,6 +155,7 @@ function renderChrome(): void {
   outline.renderOutline(tab?.doc ?? null);
   status.setStatus(tab);
   status.setRenderTime(tab?.renderMs ?? 0);
+  paintEditorChrome(tab);
   tree.setActiveFile(tab?.file ?? null);
   $("#empty").hidden = state.tabs.length > 0;
 }
@@ -166,6 +172,9 @@ async function paintActive(): Promise<void> {
   tab.renderMs = performance.now() - started;
   status.setRenderTime(tab.renderMs);
   status.refreshEngineDots();
+  // The editable pane is the other half of the same paint: whichever pane shows source gets the
+  // document, and the read-only `<pre>` keeps the text for the panes that are not editable.
+  await syncEditor(tab);
   // Re-rendering replaced the DOM, so any find marks are gone; put them back.
   find.refresh(tab);
 }
@@ -180,6 +189,10 @@ async function ensureSource(tab: Tab): Promise<void> {
     tab.eol = payload.eol;
     tab.bytes = payload.bytes;
     tab.truncated = payload.truncated;
+    // The mtime is the baseline the save is checked against, and the two flags below are what the
+    // reader only *badges* — a badge is safe only while nothing can write (SPEC §12).
+    tab.loadedMtimeMs = payload.mtimeMs;
+    tab.blocked = blockedReason(payload);
   } catch (err) {
     const { message, silent } = ipc.describeError(err);
     if (!silent) toast(message, "err");
@@ -222,6 +235,202 @@ function reloadActive(): void {
   if (!tab) return;
   tab.source = null;
   void loadTab(tab);
+}
+
+// ---------------------------------------------------------------- editing (SPEC §12)
+
+/** Why a file cannot be edited, if it cannot. The reader only *badges* these states, and a badge is
+ *  safe only while nothing can write — which is exactly what the mode changes. */
+function blockedReason(payload: ipc.FilePayload): Tab["blocked"] {
+  if (payload.truncated) return "truncated";
+  if (payload.encoding === "utf-8-lossy") return "lossy";
+  if (payload.eol === "mixed") return "mixed";
+  return null;
+}
+
+const BLOCKED_KEY: Record<NonNullable<Tab["blocked"]>, Parameters<typeof i18n.t>[0]> = {
+  truncated: "view.blocked.truncated",
+  lossy: "view.blocked.lossy",
+  mixed: "view.blocked.mixed",
+  missing: "view.blocked.missing",
+  readonly: "view.blocked.readonly",
+};
+
+/** The two pills and the status bar's save mark. Their only writer, so a language change and a state
+ *  change cannot disagree about what they say — the rule the About sheet's update row follows. */
+function paintEditorChrome(tab: Tab | null): void {
+  const blocked = tab?.blocked ?? null;
+  for (const pill of $$(".readonly-pill")) {
+    pill.textContent = tab?.editing ? i18n.t("view.editing") : i18n.t("view.readonly");
+    pill.classList.toggle("editing", Boolean(tab?.editing));
+    pill.setAttribute("aria-disabled", blocked ? "true" : "false");
+    pill.title = blocked
+      ? i18n.t(BLOCKED_KEY[blocked])
+      : tab?.editing
+        ? i18n.t("view.doneTitle")
+        : i18n.t("view.editTitle");
+  }
+  const chip = $("#stDirty") as HTMLButtonElement;
+  chip.hidden = !tab?.dirty;
+  chip.textContent = i18n.t("edit.unsaved");
+  chip.title = i18n.t("edit.saveTitle");
+}
+
+/**
+ * Puts the mode, the text and the read-only state into whichever pane shows source.
+ *
+ * The read-only `<pre>` is *emptied*, not merely hidden, while the editor owns the pane: find walks
+ * DOM text nodes and does not skip `display: none`, so leaving the same text in both layers would
+ * double every hit and scroll the invisible copy.
+ */
+async function syncEditor(tab: Tab, retried = false): Promise<void> {
+  const panes: Array<{ key: editor.PaneKey; host: string; pre: string; container: string }> = [
+    { key: "source", host: "#editor-source", pre: "#out-source", container: "#view-source .source-view" },
+    { key: "split", host: "#editor-split", pre: "#out-split-src", container: "#view-split .pane-src" },
+  ];
+  for (const pane of panes) {
+    const on = tab.editing && tab.source !== null;
+    $(pane.container).classList.toggle("editing", on);
+    $(pane.host).hidden = !on;
+    $(pane.pre).hidden = on;
+    if (on) $(pane.pre).innerHTML = "";
+    if (!on) continue;
+    if (!(await editor.mount(pane.key, $(pane.host)))) {
+      // The chunk would not load. The pane stays read-only and says why, instead of showing an empty box.
+      tab.editing = false;
+      toast(i18n.t("edit.failed"), "err");
+      if (!retried) await syncEditor(tab, true);
+      return;
+    }
+    editor.show(pane.key, tab.id, tab.buffer ?? tab.source ?? "", tab.blocked !== null);
+  }
+}
+
+function toggleEdit(): void {
+  const tab = activeTab();
+  if (!tab) return;
+  if (tab.editing) leaveEdit();
+  else void enterEdit();
+}
+
+async function enterEdit(): Promise<void> {
+  const tab = activeTab();
+  if (!tab) return;
+  /* The flags that decide whether a file may be edited come from *reading* it, and a tab that was
+     opened as a preview has never been read — so the read has to happen before the check. Getting this
+     order wrong let a mixed-ending file open in the mode: the refusal was evaluated against `null`
+     and only became visible afterwards. */
+  if (tab.source === null) await ensureSource(tab);
+  if (tab.blocked || tab.missing) {
+    toast(i18n.t(BLOCKED_KEY[tab.blocked ?? "missing"]), "err");
+    renderChrome();
+    return;
+  }
+  if (tab.preview) {
+    // A preview tab is reused *in place* by the next single click in the tree, so a buffer with edits
+    // in it would be replaced without a word. Entering the mode pins it first (SPEC §12).
+    tab.preview = false;
+    toast(i18n.t("edit.pinned"), "ok");
+  }
+  // Preview view has no source pane, so the mode would be invisible there. The useful shape is the
+  // one where the render sits beside the buffer, which is the split.
+  if (tab.view === "preview") await setView("split");
+  tab.editing = true;
+  // The pills, the tab strip (a promoted preview tab stops being italic) and the status bar all change
+  // with the mode, and `paintActive` paints the panes, not the chrome — so the chrome is repainted
+  // here. Without this the pill kept saying "read-only" while the pane was editable.
+  renderChrome();
+  await paintActive();
+  editor.focus(tab.view === "split" ? "split" : "source");
+  scheduleSave();
+}
+
+function leaveEdit(force = false): void {
+  const tab = activeTab();
+  if (!tab) return;
+  if (tab.dirty && !force) {
+    askUnsaved(i18n.t("unsaved.leave"), () => leaveEdit(true));
+    return;
+  }
+  tab.editing = false;
+  renderChrome();
+  void paintActive();
+  scheduleSave();
+}
+
+/**
+ * Saves, then re-reads through the normal path.
+ *
+ * Re-reading is not ceremony: afterwards the file on disk is the truth, and going back through
+ * `read_file` + `render_doc` is what proves the round-trip — the preview that comes back is built from
+ * the bytes that were just written, not from the buffer that wrote them.
+ */
+async function saveActiveTab(): Promise<void> {
+  const tab = activeTab();
+  if (!tab || !tab.editing || !tab.dirty) return;
+  try {
+    tab.loadedMtimeMs = await ipc.saveDoc(
+      tab.file,
+      tab.buffer ?? tab.source ?? "",
+      tab.encoding,
+      tab.eol,
+      tab.loadedMtimeMs,
+    );
+    tab.dirty = false;
+    tab.source = null;
+    tab.buffer = null;
+    await loadTab(tab);
+    toast(i18n.t("edit.saved"), "ok");
+  } catch (err) {
+    // A refusal is the point of the guard, not a crash: the buffer keeps its state and the toast says why.
+    const { message, silent } = ipc.describeError(err);
+    if (!silent) toast(message, "err");
+  }
+}
+
+let previewTimer = 0;
+
+/**
+ * The live render beside the buffer (SPEC §12).
+ *
+ * Debounced, and narrow: it re-parses through the same Rust renderer as everything else — a buffer has
+ * no file, which is what `render_text` exists for — and repaints only the rendered panes, never the
+ * scroll.
+ */
+function schedulePreview(tab: Tab): void {
+  window.clearTimeout(previewTimer);
+  previewTimer = window.setTimeout(() => {
+    void (async () => {
+      if (!tab.editing || tab.buffer === null) return;
+      try {
+        const rendered = await ipc.renderText(tab.buffer);
+        rendered.encoding = tab.encoding;
+        rendered.truncated = false;
+        tab.doc = rendered;
+        tab.words = rendered.words;
+        await doc.paintRendered(tab);
+        outline.renderOutline(rendered);
+        status.setStatus(tab);
+      } catch {
+        // A failed live render leaves the last one on screen; the next keystroke tries again.
+      }
+    })();
+  }, 160);
+}
+
+let pendingAction: (() => void) | null = null;
+
+/** Leaving a dirty buffer — or closing its tab — asks first (SPEC §12). The sheet reuses the existing
+ *  overlay shell, so the mode adds no new surface type. */
+function askUnsaved(what: string, action: () => void): void {
+  pendingAction = action;
+  $("#unsavedText").textContent = i18n.t("unsaved.body", { what });
+  $("#unsavedOverlay").classList.add("on");
+}
+
+function closeUnsaved(): void {
+  pendingAction = null;
+  $("#unsavedOverlay").classList.remove("on");
 }
 
 // ---------------------------------------------------------------- tabs
@@ -291,8 +500,15 @@ async function activate(index: number): Promise<void> {
   scheduleSave();
 }
 
-function closeTab(index: number): void {
+function closeTab(index: number, force = false): void {
   if (index < 0 || index >= state.tabs.length) return;
+  const target = state.tabs[index];
+  // Closing a dirty tab asks first (SPEC §12): the buffer is not in the file yet.
+  if (!force && target?.dirty) {
+    askUnsaved(i18n.t("unsaved.close", { name: target.name }), () => closeTab(index, true));
+    return;
+  }
+  if (target) editor.forgetTab(target.id);
   state.tabs.splice(index, 1);
   state.activeTab = Math.min(state.activeTab, Math.max(0, state.tabs.length - 1));
 
@@ -552,6 +768,9 @@ function wireKeyboard(): void {
         if (tab) find.close(tab);
         return;
       }
+      // Edit mode sits inside the chain rather than beside it, because leaving a dirty buffer asks
+      // first — the same reason the chain exists (SPEC §7).
+      if (activeTab()?.editing) return leaveEdit();
       if (immersive.isActive()) return immersive.set(false);
       return;
     }
@@ -646,6 +865,14 @@ function wireKeyboard(): void {
         if (tab) find.open(tab);
         break;
       }
+      case "e":
+        event.preventDefault();
+        toggleEdit();
+        break;
+      case "s":
+        event.preventDefault();
+        void saveActiveTab();
+        break;
       case ",":
         event.preventDefault();
         settings.isOpen() ? settings.close() : settings.open();
@@ -697,6 +924,62 @@ async function boot(): Promise<void> {
   });
 
   tabs.setTabHandlers((index) => void activate(index), closeTab);
+
+  // The editable pane (SPEC §12). Both pills are the pointer path into the mode and the status bar's
+  // mark is the pointer path out of a dirty buffer; neither takes focus on click, or the caret would
+  // leave the very pane they report on.
+  for (const pill of $$(".readonly-pill")) {
+    pill.addEventListener("mousedown", (event) => event.preventDefault());
+    pill.addEventListener("click", () => {
+      const tab = activeTab();
+      if (tab?.blocked) {
+        toast(i18n.t(BLOCKED_KEY[tab.blocked]), "err");
+        return;
+      }
+      toggleEdit();
+    });
+  }
+  for (const key of ["source", "split"] as editor.PaneKey[]) {
+    editor.onChange(key, () => {
+      const tab = activeTab();
+      if (!tab?.editing) return;
+      tab.buffer = editor.doc(key, tab.id);
+      find.invalidate();
+      /* Dirty means "this differs from the file", not "a key was pressed": undoing back to the original
+         text has to clear it, or the mark would outlive the difference it reports. `tab.source` is the
+         file as read (CRLF and all), so the comparison normalises it the way the editor's document is. */
+      const sameAsFile = tab.buffer === (tab.source ?? "").replace(/\r\n/g, "\n");
+      if (tab.dirty === sameAsFile) {
+        tab.dirty = !sameAsFile;
+        tabs.renderTabs();
+        paintEditorChrome(tab);
+      }
+      schedulePreview(tab);
+    });
+  }
+  const dirtyChip = $("#stDirty") as HTMLButtonElement;
+  dirtyChip.addEventListener("mousedown", (event) => event.preventDefault());
+  dirtyChip.addEventListener("click", () => void saveActiveTab());
+  $("#unsavedSave").addEventListener("click", () => {
+    closeUnsaved();
+    void saveActiveTab();
+  });
+  $("#unsavedDiscard").addEventListener("click", () => {
+    const action = pendingAction;
+    const tab = activeTab();
+    if (tab) {
+      tab.buffer = null;
+      tab.dirty = false;
+    }
+    closeUnsaved();
+    if (tab) void paintActive();
+    action?.();
+  });
+  $("#unsavedCancel").addEventListener("click", closeUnsaved);
+  $("#unsavedClose").addEventListener("click", closeUnsaved);
+  $("#unsavedOverlay").addEventListener("click", (event) => {
+    if (event.target === event.currentTarget) closeUnsaved();
+  });
   tree.setPickHandler((path, preview) => void openFile(path, preview));
   outline.setJumpHandler((target) => {
     // Headings (`hN`) and diagrams (`dN`) both carry their line in the render result, so the jump

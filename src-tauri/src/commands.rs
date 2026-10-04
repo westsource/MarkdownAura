@@ -68,6 +68,30 @@ pub async fn read_file(path: PathBuf) -> Result<fs_ops::FilePayload> {
     blocking(move || fs_ops::read_file(&path)).await
 }
 
+/// Writes an edited buffer back (SPEC §12). The mtime check is the safety net under the reader's
+/// reload policy: an external change wins, so a save that would overwrite content the buffer never
+/// saw is refused instead of applied.
+#[tauri::command]
+pub async fn save_doc(
+    path: PathBuf,
+    text: String,
+    encoding: String,
+    eol: String,
+    expected_mtime_ms: i64,
+) -> Result<i64> {
+    blocking(move || fs_ops::write_file(&path, &text, &encoding, &eol, expected_mtime_ms)).await
+}
+
+/// Renders markdown that has no file behind it — the live preview of an edited buffer (SPEC §12).
+///
+/// Same shape as `render_doc` so the frontend's diagram pipeline cannot tell the two apart. A buffer
+/// is neither decoded nor cut, so `encoding` and `truncated` come back empty/false; the caller
+/// already holds both facts on the tab, and the frontend overrides them from there.
+#[tauri::command]
+pub async fn render_text(text: String) -> Result<markdown::RenderedDoc> {
+    blocking(move || Ok(markdown::render(&text))).await
+}
+
 /// Renders for the preview/split views. The frontend never sees raw markdown for these — the
 /// source view is the one place that asks for the text.
 ///

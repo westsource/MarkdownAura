@@ -13,7 +13,7 @@ import { t } from "../i18n";
 import { $, esc } from "./dom";
 
 export interface KeyEntry {
-  group: "file" | "view" | "find";
+  group: "file" | "view" | "find" | "edit";
   keys: string;
   label: Key;
 }
@@ -40,12 +40,17 @@ export const KEYMAP: KeyEntry[] = [
   { group: "find", keys: "enter", label: "help.key.nextMatch" },
   { group: "find", keys: "shift enter", label: "help.key.prevMatch" },
   { group: "find", keys: "esc", label: "help.key.closeFind" },
+  { group: "edit", keys: "ctrl E", label: "help.key.edit" },
+  { group: "edit", keys: "ctrl S", label: "help.key.save" },
+  { group: "edit", keys: "ctrl Z", label: "help.key.undo" },
+  { group: "edit", keys: "ctrl Y", label: "help.key.redo" },
 ];
 
 const GROUPS: Array<[KeyEntry["group"], Key]> = [
   ["file", "help.group.file"],
   ["view", "help.group.view"],
   ["find", "help.group.find"],
+  ["edit", "help.group.edit"],
 ];
 
 const SYNTAX: Array<{ lang: string; code: string; note: Key }> = [

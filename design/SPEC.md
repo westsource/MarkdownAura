@@ -922,15 +922,25 @@ This is where the work is; the control itself is the easy part.
   what keeps undo history per tab and the DOM count at one.
 - **The keyboard map gains two bindings** (§7), and this mode makes the existing "the help table and
   the dispatcher are two lists" problem worse before it gets better: an editable surface swallows keys
-  the reader never noticed. Settle the two-lists question as part of this work, not after it.
+  the reader never noticed. Settling it turned out to be a refactor of its own — generating the dispatch
+  from the table, or a test that compares the two — and folding that into this feature would have made
+  both harder to review. So it stays an open item (IMPL.md §11), with the cost now stated: more rows in
+  `help.ts` that a hand-written switch has to keep up with.
 
-### v1 status — nothing is implemented
+### v1 status — implemented
 
-- **implemented**: nothing in this section. The source view is read-only, there is no save path in the
-  frontend or in Rust (the file layer only reads), no dirty state exists on a tab, and neither `ctrl E`
-  nor `ctrl S` has a handler.
-- **deferred**: all of the above, with the structure it depends on: the per-tab state gains its dirty
-  field, the session gains its version decision, and the keyboard map gains its two rows.
+- **implemented**: the mode, end to end. `ctrl E` and both pills enter it, `ctrl S` and the status bar's
+  mark save, `esc` leaves it through the unsaved sheet, the five refusals hold, and the file goes back with
+  its own encoding and its own line endings. The write path is `save_doc` in Rust (`fs_ops::write_file`:
+  mtime check, atomic replace, the document's permissions carried over), and the live preview is
+  `render_text`, because a buffer has no file for `render_doc` to read.
+  Verified on a real build, not by reading the code: a UTF-8-BOM + CRLF file edited in the pane and saved
+  kept its BOM, its three CRLF endings and no stray LF; a mixed-ending file was refused with its reason
+  instead of opening; find inside the pane searched the buffer (one hit for a word that appears once, with
+  no `<mark>` elements in the DOM — the current hit is the selection); and `dirty` means "differs from the
+  file", so undoing back to the saved text clears the mark instead of outliving the difference.
+- **deferred**: the rendered code-fence highlighting §11 still lists, and the `KEYMAP`/dispatcher
+  two-lists refactor this section deliberately did not absorb.
 - **deviates**: §1's former prohibition ("if a proposed feature turns MarkdownAura into an editor, it
   is out of scope") is kept in the record but no longer governs. This section supersedes it for
   **source** editing only.
@@ -948,6 +958,3 @@ This is where the work is; the control itself is the easy part.
   there was no pointer path into it at all. And a toolbar-style control must not take focus on click
   (`mousedown` → `preventDefault`): the browser focuses the clicked button after the handler runs, which
   left the caret unfocused and the next keystrokes going nowhere.
-- **Open, and the owner's call**: what ships first. The recommendation is the smallest coherent slice
-  — edit, save, the five refusals, byte fidelity, and the coexistence items above — with split
-  live-preview and rendered code-fence highlighting after it.

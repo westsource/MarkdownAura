@@ -23,6 +23,16 @@ pub enum ApiError {
 
     #[error("not a text file: {path}")]
     NotText { path: String },
+
+    /// The file changed on disk since the caller loaded it, so the write was refused rather than
+    /// allowed to overwrite content it never saw (SPEC §12: an external change wins).
+    #[error("the file changed on disk: {path}")]
+    Conflict { path: String },
+
+    /// A write that would corrupt the file: a mixed-ending document, a lossy decode, an encoding
+    /// this build cannot produce. Refusing is the whole point — the reader only *badges* these.
+    #[error("refused to write {path}: {reason}")]
+    Refused { path: String, reason: String },
 }
 
 impl ApiError {

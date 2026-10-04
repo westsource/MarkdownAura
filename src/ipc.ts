@@ -26,7 +26,9 @@ export type ApiError =
   | { kind: "notFound"; path: string }
   | { kind: "denied"; path: string }
   | { kind: "io"; path: string; message: string }
-  | { kind: "notText"; path: string };
+  | { kind: "notText"; path: string }
+  | { kind: "conflict"; path: string }
+  | { kind: "refused"; path: string; reason: string };
 
 export function isApiError(value: unknown): value is ApiError {
   return typeof value === "object" && value !== null && "kind" in value;
@@ -44,6 +46,15 @@ export function describeError(err: unknown): { message: string; silent: boolean 
       return { message: t("err.denied", { path: err.path }), silent: false };
     case "notText":
       return { message: t("err.notText", { path: err.path }), silent: false };
+    case "conflict":
+      // Something else wrote the file after this buffer was loaded. The reader's policy is that an
+      // external change wins (SPEC §12), so this is a refusal rather than an overwrite.
+      return { message: t("err.conflict", { path: err.path }), silent: false };
+    case "refused":
+      // A backstop, not a path the UI should reach: the pane already refuses to edit a file that
+      // is truncated or lossily decoded. The localised half is the prefix; the specific reason
+      // comes from Rust, which is where the byte-level rule lives.
+      return { message: `${t("err.refused", { path: err.path })} — ${err.reason}`, silent: false };
     case "io":
       return { message: err.message, silent: false };
   }
@@ -85,7 +96,9 @@ export interface FolderView {
 export interface FilePayload {
   text: string;
   encoding: string;
-  eol: "lf" | "crlf";
+  /** `lf`, `crlf`, or `mixed` — a file with both endings. A writer cannot use the reader's
+   *  "CRLF wins" heuristic, so the save path refuses `mixed` instead of guessing (SPEC §12). */
+  eol: "lf" | "crlf" | "mixed";
   bytes: number;
   mtimeMs: number;
   truncated: boolean;
@@ -178,6 +191,22 @@ export const resolveTarget = (path: string) => invoke<FolderView>("resolve_targe
 
 export const readFile = (path: string) => invoke<FilePayload>("read_file", { path });
 export const renderDoc = (path: string) => invoke<RenderedDoc>("render_doc", { path });
+
+/** Renders a buffer that has no file behind it yet, so the split view can show what is being typed
+ *  (SPEC §12). `encoding` and `truncated` come back empty/false — the caller overrides them from the
+ *  tab, which is where those two facts live. */
+export const renderText = (text: string) => invoke<RenderedDoc>("render_text", { text });
+
+/** Writes an edited buffer back (SPEC §12), and returns the file's new mtime — that becomes the
+ *  next save's baseline. The Rust side refuses a mixed-ending file, a lossy decode, and any write
+ *  whose expected mtime no longer matches what is on disk. */
+export const saveDoc = (
+  path: string,
+  text: string,
+  encoding: string,
+  eol: FilePayload["eol"],
+  expectedMtimeMs: number,
+) => invoke<number>("save_doc", { path, text, encoding, eol, expectedMtimeMs });
 
 /** What the system opens `.md` with, and what this platform will let the app do about it (SPEC §10).
  *  On Linux that is `xdg-mime`; on Windows the choice is the user's and the app can only hand it over. */

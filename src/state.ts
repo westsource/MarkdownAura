@@ -30,7 +30,18 @@ export interface Tab {
   doc: RenderedDoc | null;
   source: string | null;
   encoding: string;
-  eol: "lf" | "crlf";
+  /** `lf`, `crlf`, or `mixed`. A mixed file can be read and shown, but not edited: a buffer is
+   *  line-normalised, so saving one would rewrite half its endings (SPEC §12). */
+  eol: "lf" | "crlf" | "mixed";
+
+  /** SPEC §12 — the editable pane. `editing` is the mode, `buffer` is the text once it differs from
+   *  the file (`null` = untouched), `dirty` says the two differ, `loadedMtimeMs` is the baseline the
+   *  save is checked against, and `blocked` is why this file cannot be edited at all. */
+  editing: boolean;
+  dirty: boolean;
+  buffer: string | null;
+  loadedMtimeMs: number;
+  blocked: null | "truncated" | "lossy" | "mixed" | "missing" | "readonly";
   words: number;
   bytes: number;
   renderMs: number;
@@ -87,6 +98,11 @@ export function makeTab(file: string, name: string, preview: boolean): Tab {
     source: null,
     encoding: "utf-8",
     eol: "lf",
+    editing: false,
+    dirty: false,
+    buffer: null,
+    loadedMtimeMs: 0,
+    blocked: null,
     words: 0,
     bytes: 0,
     renderMs: 0,

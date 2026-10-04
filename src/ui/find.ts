@@ -9,10 +9,16 @@
  */
 import type { Tab } from "../state";
 import { $, $$ } from "./dom";
+import * as doc from "./document";
+import * as editor from "./editor";
 
 export function isOpen(): boolean {
   return $("#findbar").classList.contains("on");
 }
+
+/** The editable pane's matches, as offsets into its document. Module-local because they are derived
+ *  from the buffer on every search — the tab keeps only the index (`tab.find.hit`). */
+let editorHits: Array<{ from: number; to: number }> = [];
 
 export function open(tab: Tab): void {
   const bar = $("#findbar");
@@ -53,6 +59,43 @@ export function refresh(tab: Tab): void {
   run(tab);
 }
 
+/** The pane the editable buffer is on screen in, if it is. */
+function editablePane(tab: Tab): editor.PaneKey | null {
+  if (!tab.editing) return null;
+  const view = doc.currentView();
+  if (view === "preview") return null;
+  return view === "split" ? "split" : "source";
+}
+
+/** Every match in the buffer, as offsets into the editor's own document. */
+function hitsIn(text: string, tab: Tab): Array<{ from: number; to: number }> {
+  const query = tab.find.q;
+  if (!query) return [];
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(escaped, tab.find.case ? "g" : "gi");
+  const hits: Array<{ from: number; to: number }> = [];
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text))) {
+    hits.push({ from: match.index, to: match.index + match[0].length });
+    if (match[0].length === 0) pattern.lastIndex++;
+  }
+  return hits;
+}
+
+function revealHit(tab: Tab, pane: editor.PaneKey): void {
+  if (editorHits.length === 0) return;
+  const hit = editorHits[tab.find.hit % editorHits.length];
+  editor.revealRange(pane, hit.from, hit.to);
+}
+
+/** Drops the editor's matches and blanks the count. Called when the buffer changes: re-running the
+ *  search on every keystroke would move the selection out from under the caret, so the count is
+ *  retired instead and the next search rebuilds it. */
+export function invalidate(): void {
+  editorHits = [];
+  if (isOpen()) $("#findCount").textContent = "0/0";
+}
+
 function clearMarks(): void {
   $$("mark[data-hit]").forEach((mark) => {
     const parent = mark.parentNode;
@@ -74,6 +117,19 @@ function run(tab: Tab): void {
     updateCount(tab, 0);
     return;
   }
+
+  const pane = editablePane(tab);
+  if (pane) {
+    /* The editable pane searches itself (SPEC §12). The current hit is the *selection*, because a
+       control that renders its own text has no `<mark>` element to insert. Everything the reader
+       sees — the query, the count, enter and shift-enter — behaves as it does over rendered panes. */
+    editorHits = hitsIn(editor.doc(pane, tab.id), tab);
+    if (tab.find.hit >= editorHits.length) tab.find.hit = 0;
+    updateCount(tab, editorHits.length);
+    revealHit(tab, pane);
+    return;
+  }
+  editorHits = [];
 
   // Search whatever the reader is actually looking at: the preview prose, both split panes, or
   // the source view. The source view's lines are spans of plain text, so the same text-node walk
@@ -131,6 +187,14 @@ function run(tab: Tab): void {
 }
 
 function step(tab: Tab, direction: 1 | -1): void {
+  const pane = editablePane(tab);
+  if (pane) {
+    if (editorHits.length === 0) return;
+    tab.find.hit = (tab.find.hit + direction + editorHits.length) % editorHits.length;
+    updateCount(tab, editorHits.length);
+    revealHit(tab, pane);
+    return;
+  }
   const marks = $$("mark[data-hit]");
   if (marks.length === 0) return;
   tab.find.hit = (tab.find.hit + direction + marks.length) % marks.length;

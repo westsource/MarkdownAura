@@ -192,6 +192,16 @@ path).
 //    view. `encoding` is carried on the render result so the status bar can badge a lossy
 //    read without a second round trip for the same file.
 #[tauri::command] async fn reveal_in_explorer(path: PathBuf) -> Result<()>;
+// -> the write half (SPEC §12). `save_doc` takes the buffer, the encoding and the EOL the file was
+//    read in, and the mtime that load reported; it returns the *new* mtime, which becomes the next
+//    save's baseline. It refuses a mixed-ending file, a lossy decode, an unwritable encoding, and any
+//    write whose expected mtime no longer matches the disk. A refusal is the feature, not a failure.
+#[tauri::command] async fn save_doc(path: PathBuf, text: String, encoding: String, eol: String,
+                                   expected_mtime_ms: i64) -> Result<i64>;
+// -> a buffer has no file behind it, so the live preview cannot go through `render_doc`. Same
+//    `RenderedDoc` shape; `encoding` and `truncated` come back empty because a buffer is neither
+//    decoded nor cut, and the caller already holds both facts on the tab.
+#[tauri::command] async fn render_text(text: String) -> Result<RenderedDoc>;
 // -> implemented for Windows (`explorer /select,<path>`) and other platforms (`xdg-open`), but
 //    nothing in the UI calls it: the tab menu that would is deferred (SPEC §5).
 
@@ -276,9 +286,18 @@ Two caveats worth stating because both were wrong in the first draft:
   error: it decodes lossily and surfaces as `encoding: "utf-8-lossy"` with a status-bar
   badge. The cases the enum separates are "gone", "refused" and "not a text file at all".
 
-The frontend consumes `truncated` (status bar) but still ignores `eol` and `mtimeMs` — they
-cross the boundary and are dropped. `eol` is harmless; `mtimeMs` is where a "file changed on
-disk while you were not looking" check would come from if one is ever wanted.
+The frontend consumes `truncated` (status bar), and since SPEC §12 it also consumes `eol` and
+`mtimeMs`, which used to be dropped: `eol` decides how a save joins its lines, and `mtimeMs` is the
+baseline the save is checked against. `eol` gained a third value for the same reason — a file carrying
+both endings is `mixed`, because the reader's "CRLF wins" heuristic is fine for showing a document and
+useless for writing one.
+
+`write_file` is the other half of `read_file`, and its contract is byte fidelity: the file keeps the
+encoding it was read in (a UTF-8 BOM is stripped on read and restored on write, UTF-16 is re-encoded
+with the same byte order), line endings are joined rather than normalised, and the document's
+permissions survive the atomic replace. Three refusals guard that contract — `mixed` endings, a
+`utf-8-lossy` decode, an encoding this build cannot produce — and a file that changed under the buffer
+is a `Conflict`. Both are tagged variants, so the UI decides what to say rather than parsing a string.
 
 ### Events (Rust → frontend)
 
@@ -470,6 +489,13 @@ type Tab = {
   bytes: number;
   renderMs: number;
   truncated: boolean;      // file past the 8 MiB cap; the status bar shows a mark
+  // SPEC §12 — the editable pane. `blocked` is why the file cannot be edited at all, derived from the
+  // same flags the reader only *badges*: a badge is safe only while nothing can write.
+  editing: boolean;
+  dirty: boolean;
+  buffer: string | null;   // null = untouched; the buffer is line-normalised, the file is not
+  loadedMtimeMs: number;   // the baseline `save_doc` checks the disk against
+  blocked: null | "truncated" | "lossy" | "mixed" | "missing" | "readonly";
 };
 
 type WindowState = {
@@ -629,6 +655,10 @@ that matters, the fix is a `getCurrentWindow().onCloseRequested()` that flushes 
   `session::push_recent` de-duplicates case-insensitively and is most-recent-first.
 - Writing is atomic: temp file + rename in the same directory. A crash mid-write must not lose
   the previous session, and must not leave `session.json.tmp` behind.
+- **The editing mode and the buffer are deliberately absent from the session.** A restored session comes
+  back read-only, because "the app never opens in it" has to hold across a restart, not only on a cold
+  start (SPEC §12). An unsaved buffer is not restored either, which is the cost the mode pays for being
+  per-tab and asking before it is left.
 - **Session restore is unconditional**, and there is no flag for it: `--last` was parsed, never
   read by the frontend, and has been removed rather than kept as a control that does nothing.
   `boot()` always calls `restoreSession()` and the folder to reopen comes from `recent[0]`. A
@@ -879,11 +909,12 @@ status bar's `rendered in N ms` is where a reader sees it.
   (SVG/PNG/PDF) is out of scope for v1 (SPEC §11); raw HTML — the allow-list is deliberately
   short, revisit only if real documents need a tag that is missing, and add it as an
   exact-match entry, never as a parsing rule.
-- **An editable source pane needs its control chosen *and* SPEC §1 rewritten first.** SPEC §1 is a rule
-  ("a reader, not an editor"), and several shipped decisions are justified by it: the `read-only` pill, a
-  `<pre>` rather than a `<textarea>`, no caret/undo/save, and the `ctrl B` / `ctrl alt O` / `F11` map. An
-  editor is a product decision before it is a technical one, so nothing below ships until §1 says which
-  editing is in scope. Measured 2026-10-04 with this repo's own toolchain (Vite 6.4.3 + Rollup, `target:
+- **The editable source pane ships; this is what its control was chosen on.** SPEC §1 was rewritten for it
+  on 2026-10-04 (product owner's call) — it had been a rule ("a reader, not an editor") that several
+  shipped decisions were justified by: the `read-only` pill, a `<pre>` rather than a `<textarea>`, no
+  caret/undo/save, and the `ctrl B` / `ctrl alt O` / `F11` map. An editor was a product decision before it
+  was a technical one, and §12 now says which editing is in scope. Measured 2026-10-04 with this repo's own
+  toolchain (Vite 6.4.3 + Rollup, `target:
   chrome110`, esbuild minify) and each candidate built as its own entry — that is, as the lazy chunk it
   would actually be, not as something in the first paint (`var/editor-probe/measure.mjs`):
 
@@ -902,6 +933,11 @@ status bar's `rendered in N ms` is where a reader sees it.
   `EditorState.readOnly` as a first-class facet, and theming from `design/tokens.css` exactly the way
   `engines.ts` themes mermaid. Size alone does not decide it — the app's initial chunk is already 11.2 MB
   with d2's wasm inlined — and Ace's smaller gzip does not buy back its loading and theming model.
+  **Shipped, the editor is a lazy chunk and not a line in the first paint.** Entering the mode in a real
+  build loads five chunks plus one stylesheet — 483.5 KB minified / 167.2 KB gzip in total, the largest
+  single chunk being 214.9 KB — and nothing before that, which is the whole point of the four-state
+  discipline. The single-entry probe above is the worst case (no sharing and no tree-shaking across the
+  entry boundary), which is why it reads slightly higher at 498.8 KB.
 - **Four things an editable pane must get right, measured rather than assumed** (`var/editor-probe/`,
   driven over CDP on 2026-10-04):
   - The reading column can be imposed on the editor from *outside*: `#host .cm-content { max-width:

@@ -76,6 +76,22 @@ export async function renderDocument(tab: Tab): Promise<number> {
   return performance.now() - started;
 }
 
+/**
+ * Repaints only the *rendered* panes from the tab's current document — no view switch, no scroll
+ * restore.
+ *
+ * This is the live preview of an edited buffer (SPEC §12): in split view the right half has to follow
+ * the typing. It deliberately does not go through `renderDocument`, because that restores the tab's
+ * stored scroll position, and doing that on every keystroke would yank the pane the reader is
+ * reading back to wherever the tab was last switched away from.
+ */
+export async function paintRendered(tab: Tab): Promise<void> {
+  const doc: RenderedDoc | null = tab.doc;
+  if (!doc) return;
+  if (current === "preview") await paintInto($("#out-preview"), doc);
+  else if (current === "split") await paintInto($("#out-split"), doc);
+}
+
 async function paintInto(container: HTMLElement, doc: RenderedDoc): Promise<void> {
   await paint(container, doc);
   // Frontmatter sits above the document rather than inside it, so it is inserted after paint
