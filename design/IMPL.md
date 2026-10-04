@@ -879,6 +879,54 @@ status bar's `rendered in N ms` is where a reader sees it.
   (SVG/PNG/PDF) is out of scope for v1 (SPEC §11); raw HTML — the allow-list is deliberately
   short, revisit only if real documents need a tag that is missing, and add it as an
   exact-match entry, never as a parsing rule.
+- **An editable source pane needs its control chosen *and* SPEC §1 rewritten first.** SPEC §1 is a rule
+  ("a reader, not an editor"), and several shipped decisions are justified by it: the `read-only` pill, a
+  `<pre>` rather than a `<textarea>`, no caret/undo/save, and the `ctrl B` / `ctrl alt O` / `F11` map. An
+  editor is a product decision before it is a technical one, so nothing below ships until §1 says which
+  editing is in scope. Measured 2026-10-04 with this repo's own toolchain (Vite 6.4.3 + Rollup, `target:
+  chrome110`, esbuild minify) and each candidate built as its own entry — that is, as the lazy chunk it
+  would actually be, not as something in the first paint (`var/editor-probe/measure.mjs`):
+
+  | candidate | minified | gzip | brotli |
+  |---|---|---|---|
+  | Monaco, editor core + markdown | 2769.4 KB | 703.2 KB | 560.4 KB |
+  | CodeMirror 6, `basicSetup` | 596.0 KB | 204.0 KB | 172.0 KB |
+  | Ace, markdown mode | 531.1 KB | 148.9 KB | 124.7 KB |
+  | CodeMirror 6, explicit extensions | 498.8 KB | 173.4 KB | 146.8 KB |
+  | plain `<textarea>` | 0.2 KB | 0.2 KB | 0.1 KB |
+
+  Monaco also emits a separate 96.9 KB stylesheet and needs a worker story. Ace is the smallest on the wire,
+  but it is built for *runtime* mode loading — its markdown mode only measured as bundled because the probe
+  imported it explicitly — and it themes through its own classes instead of CSS custom properties. The
+  recommendation is **CodeMirror 6 with an explicit extension list**: modular ESM with no runtime fetches,
+  `EditorState.readOnly` as a first-class facet, and theming from `design/tokens.css` exactly the way
+  `engines.ts` themes mermaid. Size alone does not decide it — the app's initial chunk is already 11.2 MB
+  with d2's wasm inlined — and Ace's smaller gzip does not buy back its loading and theming model.
+- **Four things an editable pane must get right, measured rather than assumed** (`var/editor-probe/`,
+  driven over CDP on 2026-10-04):
+  - The reading column can be imposed on the editor from *outside*: `#host .cm-content { max-width:
+    var(--measure) }` resolved `60ch` to 527 px against the mono font, with no JS. Today `--measure` reaches
+    only `.prose > *` (`prose.css:228`), so the source pane has no reading column at all. If the editable
+    pane gets one, note that `measure.ts`'s `chToPx` probes `#out-preview` (`measure.ts:48-51`) — a *sans*
+    element — so the same preset would mean a different number of columns in a *mono* pane.
+  - Geometry lags CSS by exactly one measure pass. Changing the font size 15 px → 22 px applied the CSS
+    synchronously (`font-size: 22px`) while `view.contentHeight` still read 155; only after
+    `requestMeasure({ read })` did it report 224 with a 30.8 px line. Anything that writes `--zoom` /
+    `--doc-size` and then reads geometry in the same tick — scroll sync, the scroll spy, the measure
+    readout — gets the previous numbers.
+  - The editor brings its own metrics: CM6 defaults to `line-height: 1.4`, while the pane it would replace is
+    set at `1.8` (`components.css:497-504`) and `.prose` uses `--lh-body`, which is `1.7`
+    (`tokens.css:61`). Without an explicit override, toggling read-only ↔ editable changes the leading.
+  - Read-only is a *runtime* state, so it has to be a `Compartment`: `EditorState.readOnly` is a facet and
+    cannot be reconfigured in place. Verified by typing real keys into a read-only editor (refused) and again
+    after the reconfigure (accepted). Composition events do not throw, but real IME behaviour still has to be
+    tried by hand on Windows with the actual input method.
+- **The unsaved-buffer conflict policy is decided: an external change reloads silently.** That is what the
+  watcher already does (`main.ts:814-831` drops `tab.source`/`tab.doc` and re-reads through Rust), so it needs
+  no new code — and its accepted cost is that an unsaved buffer is lost when something else writes the file.
+  Recorded as the product owner's call on 2026-10-04, so that it is not later mistaken for an oversight.
+  Whatever does the saving still has to refuse the two states the reader merely *badges*: a truncated file
+  (> 8 MiB) and a lossy decode would both round-trip into permanent data loss.
 
 ## 12. Releasing
 
