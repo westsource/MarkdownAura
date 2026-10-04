@@ -94,7 +94,7 @@ const en = {
   "about.title": "about",
   "about.closeTitle": "close (esc)",
   "about.close": "close about",
-  "about.intro": "A fast, minimal Markdown reader: typesetting and diagrams are produced on this machine, and nothing about you is sent anywhere. The only request it makes on its own is the update manifest — a version number and a download URL. Capabilities: preview · split · source　mermaid · dot · d2 rendered locally　width presets · font size · zoom　outline · find · immersive reading　session restore · live reload　bilingual · light and dark",
+  "about.intro": "A fast, minimal Markdown reader: typesetting and diagrams are produced on this machine, and nothing about you is sent anywhere. The only request it makes on its own is the update manifest — a version number and a download URL. Capabilities: preview · split · source　edit in place on request, saved with the file's own encoding and line endings　mermaid · dot · d2 rendered locally　width presets · font size · zoom　outline · find · immersive reading　session restore · live reload　bilingual · light and dark",
   "about.k.author": "author",
   // The author's name as he writes it — deliberately not transliterated.
   "about.author": "道荣（黄超）",
@@ -341,7 +341,7 @@ const zh: Record<Key, string> = {
   "about.title": "关于",
   "about.closeTitle": "关闭 (esc)",
   "about.close": "关闭关于",
-  "about.intro": "极速极简的 Markdown 阅读器：排版和图表都在本机完成，不向任何地方发送关于你的信息。它唯一会自行发起的请求是更新清单——一个版本号与一个下载地址。能力：预览 · 分栏 · 源码　mermaid · dot · d2 本地渲染　行宽档位 · 字号 · 缩放　大纲 · 查找 · 沉浸阅读　会话恢复 · 变更自动刷新　中英双语 · 深浅主题",
+  "about.intro": "极速极简的 Markdown 阅读器：排版和图表都在本机完成，不向任何地方发送关于你的信息。它唯一会自行发起的请求是更新清单——一个版本号与一个下载地址。能力：预览 · 分栏 · 源码　按需就地编辑 · 按原编码与行尾写回　mermaid · dot · d2 本地渲染　行宽档位 · 字号 · 缩放　大纲 · 查找 · 沉浸阅读　会话恢复 · 变更自动刷新　中英双语 · 深浅主题",
   "about.k.author": "作者",
   "about.author": "道荣（黄超）",
   "about.k.engines": "引擎",
