@@ -178,6 +178,26 @@ export const resolveTarget = (path: string) => invoke<FolderView>("resolve_targe
 
 export const readFile = (path: string) => invoke<FilePayload>("read_file", { path });
 export const renderDoc = (path: string) => invoke<RenderedDoc>("render_doc", { path });
+
+/** What the system opens `.md` with, and what this platform will let the app do about it (SPEC §10).
+ *  On Linux that is `xdg-mime`; on Windows the choice is the user's and the app can only hand it over. */
+export interface DefaultAppStatus {
+  platform: string;
+  /** Is MarkdownAura among the applications that can open a `.md`? */
+  registered: boolean;
+  isDefault: boolean;
+  /** A friendly name for whatever is the handler now, or the raw identifier. */
+  current: string;
+  /** What `setDefaultApp` will do: set it, or open a dialog / the settings page. */
+  action: "set" | "dialog" | "settings" | string;
+  /** Set once by the installer, consumed by the first launch that asks. */
+  offer: boolean;
+}
+
+export const defaultAppStatus = () => invoke<DefaultAppStatus>("default_app_status");
+
+/** `path` is the open document, which the Windows *Open with* dialog needs; Linux ignores it. */
+export const setDefaultApp = (path: string | null) => invoke<string>("set_default_app", { path });
 export const revealInExplorer = (path: string) => invoke<void>("reveal_in_explorer", { path });
 
 export const watchSet = (paths: string[]) => invoke<WatcherStatus>("watch_set", { paths });

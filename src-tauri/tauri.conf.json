@@ -22,6 +22,11 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "windows": {
+      "nsis": {
+        "installerHooks": "nsis/hooks.nsh"
+      }
+    },
     "createUpdaterArtifacts": true,
     "licenseFile": "../LICENSE",
     "linux": {

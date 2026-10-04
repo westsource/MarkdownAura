@@ -188,3 +188,18 @@ pub async fn note_recent(entry: String) -> Result<Vec<String>> {
 pub fn data_directory() -> String {
     session::data_dir().display().to_string()
 }
+
+// ---------------------------------------------------------------- default handler
+
+/// What the system currently opens `.md` with, and what this platform will let us do about it.
+#[tauri::command]
+pub fn default_app_status() -> crate::defaultapp::DefaultAppStatus {
+    crate::defaultapp::status()
+}
+
+/// Linux: sets it. Windows: hands the choice to the user through the *Open with* dialog on `path`, or
+/// the Default Apps page when there is no document open — because Windows will not let a process set it.
+#[tauri::command]
+pub async fn set_default_app(path: Option<PathBuf>) -> Result<String> {
+    blocking(move || crate::defaultapp::set_default(path)).await
+}

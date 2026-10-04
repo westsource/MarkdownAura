@@ -1,6 +1,7 @@
 //! App assembly: state, plugins, the command surface, and CLI handling.
 
 mod commands;
+mod defaultapp;
 mod engines;
 mod error;
 mod fs_ops;
@@ -148,6 +149,8 @@ pub fn run() {
             commands::startup_target,
             commands::note_recent,
             commands::data_directory,
+            commands::default_app_status,
+            commands::set_default_app,
         ])
         .run(tauri::generate_context!())
         .expect("MarkdownAura failed to start");

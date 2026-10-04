@@ -671,7 +671,7 @@ Content order — reading, engines, files, cache:
 |---|---|
 | reading | theme (`system` / `light` / `dark`, segmented), language (`system` / `English` / `简体中文`, segmented), document font size (stepper, 12–22px, the `--doc-size` token), reading width (3 presets — 60ch / 100ch / full, the `--measure` token), reduce motion |
 | engines | all three are static `bundled` rows with their measured costs; nothing here can touch the network (SPEC §4) |
-| files | watch debounce (read-out only; the value lives in `IMPL.md` §3) |
+| files | default app — a read-out of what opens `.md` now, plus the one action this platform allows: `xdg-mime` on Linux, and on Windows the *Open with* dialog (or the Default Apps page when no document is open), because the choice is the user's and no process may set it; watch debounce (read-out only; the value lives in `IMPL.md` §3) |
 | cache | rendered-SVG size + clear (the in-memory cap is 6 MB, `IMPL.md` §5) |
 
 The theme control and the toolbar's theme button are **the same field**: toggling the button sets

@@ -89,6 +89,11 @@ notify = "8.2.0"
 # Delete both entries once schemars asks indexmap for `std` itself.
 indexmap = { version = "1.9", features = ["std"] }
 
+[target.'cfg(windows)'.dependencies]
+# Reading the per-user file association: which ProgID owns `.md` and whether one of ours launches this
+# exe. Windows will not let a process *write* that choice, so this is read-only by design (defaultapp.rs).
+winreg = "0.52"
+
 [dev-dependencies]
 insta = "1.43"
 

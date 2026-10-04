@@ -225,6 +225,14 @@ path).
 //    which until then had been implemented and unused since the first pass.
 ```
 
+#[tauri::command] fn default_app_status() -> DefaultAppStatus;
+// -> { platform, registered, isDefault, current, action, offer }. `offer` is the installer's one-shot
+//    marker, read and cleared, so the first launch after an install can mention it exactly once (§12)
+#[tauri::command] async fn set_default_app(path: Option<PathBuf>) -> Result<String>;
+// -> Linux runs `xdg-mime default` and answers "set". Windows cannot set it — `UserChoice` is
+//    protected — so it opens the *Open with* dialog on `path`, or the Default Apps page when there is
+//    no document, and answers "dialog" / "settings". The frontend labels its button from `action`
+
 **Not implemented, and no longer wanted:** `engine_install(id)` and `engine_remove(id)` were
 specified in the first draft for the opt-in d2 download. d2 is bundled (SPEC §4), so there is nothing
 to install and the only engine command is `engine_status`.
@@ -708,6 +716,12 @@ centred, `decorations: false`, `drag_and_drop(true)`. `transparent` is not set.
   `opener:allow-open-url` with `allow: [{ "url": "https://github.com/westsource/MarkdownAura" }]`.
   That single entry is what makes "the app can open exactly one URL" a fact rather than an
   intention; widening it is a security change, not a convenience one.
+- **The installer cannot set the default handler either, so it leaves a marker instead.**
+  `bundle.windows.nsis.installerHooks` points at `nsis/hooks.nsh`, whose `NSIS_HOOK_POSTINSTALL` writes
+  `HKCU\Software\MarkdownAura\OfferDefaultApp = 1` (HKCU because the installer is per-user by default, and
+  because the app reads the same hive). The app reads that value and clears it, so the first launch after an
+  install toasts once and the Settings row is where the action lives. Setting `UserChoice` from an installer
+  is not a thing Windows permits; pretending otherwise would produce an installer that silently does nothing.
 - **The `.desktop` file is written by three separate config keys, and getting only some of them costs
   behaviour.** `bundle.fileAssociations[].mimeType` becomes `MimeType=` — without it a file manager has no
   reason to offer the app; `bundle.category` becomes `Categories=` (Tauri maps `Productivity` to the

@@ -15,6 +15,7 @@ import type { Lang, ThemeChoice } from "../ipc";
 import { t, type Key } from "../i18n";
 import { MEASURE_ORDER, isMeasure, measureName } from "../measure";
 import { $, $$, esc, maybe$, toast } from "./dom";
+import { defaultAppStatus, setDefaultApp, type DefaultAppStatus } from "../ipc";
 
 export interface SettingsHooks {
   onThemeChange: () => void;
@@ -26,6 +27,18 @@ export interface SettingsHooks {
 }
 
 let hooks: SettingsHooks | null = null;
+
+/** Cached so `render` can stay synchronous. Refreshed when the sheet is wired and after a change.
+ *  Asking also consumes the installer's one-shot marker, which is why the offer is toasted here. */
+let defaultApp: DefaultAppStatus | null = null;
+
+function refreshDefaultApp(): void {
+  void defaultAppStatus().then((status) => {
+    defaultApp = status;
+    if (status.offer) toast(t("toast.defaultAppOffer"), "warn");
+    if (isOpen()) render();
+  });
+}
 
 export function isOpen(): boolean {
   return $("#settingsOverlay").classList.contains("on");
@@ -123,6 +136,16 @@ function render(): void {
     `<div class="grow form-sub" style="margin:0">${t("settings.d2Sub")}</div>` +
     `<span class="state-ok">${t("settings.bundled")}</span></div>` +
     `<div class="section-head">${t("settings.section.files")}</div>` +
+    formRow(
+      t("settings.defaultApp"),
+      defaultApp?.isDefault
+        ? t("settings.defaultAppIs", { name: defaultApp.current })
+        : t("settings.defaultAppSub"),
+      defaultApp?.isDefault
+        ? `<span class="state-ok">${esc(defaultApp.current)}</span>`
+        : `<span class="state-off">${esc(defaultApp?.current || t("settings.defaultAppNone"))}</span>` +
+          `<button class="ghost-btn" id="setDefaultApp">${t(defaultApp?.action === "dialog" ? "settings.defaultAppChoose" : "settings.defaultAppSet")}</button>`,
+    ) +
     formRow(t("settings.watchDebounce"), t("settings.watchDebounceSub"), `<span class="state-off">120 ms</span>`) +
     `<div class="section-head">${t("settings.section.cache")}</div>` +
     formRow(
@@ -204,10 +227,30 @@ function wireControls(): void {
     toast(t("toast.cacheCleared"), "ok");
     render();
   });
+
+  maybe$<HTMLButtonElement>("#setDefaultApp")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    // The open document is what the Windows *Open with* dialog acts on; Linux ignores it.
+    const path = state.tabs[state.activeTab]?.file ?? null;
+    void setDefaultApp(path)
+      .then((outcome) => {
+        toast(
+          outcome === "dialog"
+            ? t("toast.defaultAppDialog")
+            : outcome === "settings"
+              ? t("toast.defaultAppSettings")
+              : t("toast.defaultAppSet"),
+          "ok",
+        );
+        refreshDefaultApp();
+      })
+      .catch(() => toast(t("toast.defaultAppFailed"), "warn"));
+  });
 }
 
 export function wire(settingsHooks: SettingsHooks): void {
   hooks = settingsHooks;
+  refreshDefaultApp();
   $("#openSettings").addEventListener("click", open);
   $("#setClose").addEventListener("click", close);
   $("#settingsOverlay").addEventListener("click", (event) => {

@@ -55,7 +55,7 @@ The installer carries the WebView2 loader. It only fetches the WebView2 Runtime 
 | Immersive | `F11` hides every piece of chrome; `esc` or `F11` leaves |
 | Help | `F1` — the keyboard map plus a diagram-syntax card for each engine |
 | About | version, author, licence, the three engines with their licences, the data folder (openable from there), a link to the project, and a **check for updates** row — the app's only network call, and it runs when you click it |
-| Settings (an overlay, not a second window) | theme / language / font size / reading width / reduce motion / engine sizes / watch debounce / render-cache size and clear |
+| Settings (an overlay, not a second window) | theme / language / font size / reading width / reduce motion / default app / engine sizes / watch debounce / render-cache size and clear |
 | Data | `%APPDATA%\MarkdownAura\session.json` on Windows, `~/.config/MarkdownAura/session.json` on Linux, written atomically (a crash cannot lose the previous session); the render cache is measured in SVG bytes and clears in one click |
 
 Raw HTML: only a short fixed list of tags is allowed through (`details`, `summary`, `kbd`, `sub`, `sup`, `br`, `hr`) and everything else is dropped — what a document contains cannot touch the app's own interface.
