@@ -494,6 +494,7 @@ The window opens here when no folder is loaded. It is also the drop target.
 | `ctrl R` | re-render | implemented |
 | `ctrl E` | edit the source pane (toggle) | **not bound** (§12) |
 | `ctrl S` | save | **not bound** (§12) |
+| `ctrl Z` / `ctrl Y` | undo / redo, while the pane is editable | **not bound** (edit mode, §12) |
 | `ctrl ,` | settings | implemented |
 | `ctrl +` / `ctrl -` / `ctrl 0` | zoom in / out / reset | implemented |
 | `ctrl shift M` | cycle reading width | implemented |
@@ -840,7 +841,12 @@ facts that were measured rather than assumed.
 - Leaving the mode with unsaved changes asks first. Immersive (`F11`), view switches and tab switches
   never ask — they are not a commit and they do not drop the buffer.
 - The mode is visible without being loud: the pill changes state and the pane gains a caret. Nothing
-  else in the chrome moves.
+  else in the chrome moves — no toolbar row appears, and no new button is added except the three the
+  unsaved sheet needs while it is open.
+- **Undo and redo belong to the pane while it is editable.** `ctrl Z` / `ctrl Y` are not in the app's
+  map today, so the mode owns them for as long as it is on, together with the editing keys the platform
+  gives a text field. There is no undo button: the keyboard has this one, and a pair of buttons in the
+  chrome would be the first piece of an editor toolbar — which §1 and this section both rule out.
 
 ### What cannot be edited
 
@@ -876,6 +882,12 @@ status bar), and a badge is safe only while nothing can write:
   a failure must never look like a success.
 - After a successful save the document is re-rendered through the normal path, so the preview, the
   outline, the word count and `rendered in N ms` all follow the new text.
+- **The dirty mark is also the save control.** `ctrl S` is the keyboard path, and the status bar's
+  `unsaved` mark is the pointer path: it already says the one thing that is wrong, it is already in the
+  accent colour, and it already exists — so the mouse route to saving costs no new chrome. Without it a
+  mouse-only reader could only save by *trying to leave* (the pill → the sheet → save), which is a
+  route nobody would guess. Like the pill, it must not take focus on click: a control that steals the
+  caret from the pane it reports on breaks the next keystroke.
 
 ### External changes
 

@@ -1097,6 +1097,8 @@ Errors render inline with the line number instead of blanking the page.`
     { group: "find", keys: "esc",           label: "close the topmost layer" },
     { group: "edit", keys: "ctrl E",        label: "edit the source pane" },
     { group: "edit", keys: "ctrl S",        label: "save" },
+    { group: "edit", keys: "ctrl Z",        label: "undo (in the editable pane)" },
+    { group: "edit", keys: "ctrl Y",        label: "redo (in the editable pane)" },
   ];
 
   const SYNTAX = [
@@ -1664,6 +1666,16 @@ Errors render inline with the line number instead of blanking the page.`
       if (t && t.blocked) { toast(BLOCKED_REASON[t.blocked], "err"); return; }
       toggleEdit();
     });
+  });
+  /* The dirty mark in the status bar *is* the save control. It already says the one thing that is
+     wrong ("this buffer is not in the file yet"), it is already in the accent colour, and it already
+     exists — so the mouse path to saving costs no new chrome. `mousedown` is prevented for the same
+     reason as on the pill: a control that steals the caret from the pane it is reporting on would
+     break the next keystroke. */
+  $("#stDirty").addEventListener("mousedown", (e) => e.preventDefault());
+  $("#stDirty").addEventListener("click", () => {
+    const t = tab();
+    if (t && t.dirty) saveTab(t);
   });
   $("#unsavedSave").addEventListener("click", () => {
     const t = tab();

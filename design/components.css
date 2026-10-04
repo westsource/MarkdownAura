@@ -791,6 +791,14 @@ mark.current { background: var(--ac); color: #fff; }
 /* The buffer's state, next to the file's (SPEC §12): accent, because it is the one thing in this row
    that is asking for an action. */
 .statusbar .status-chip.dirty-chip { color: var(--ac); }
+/* The generic `button:hover` in this row greys the text out, which would take the accent off the one
+   control that is asking for an action. */
+.statusbar .status-chip.dirty-chip:hover { color: var(--ac); }
+/* `hidden` has to beat a `display` declaration to mean anything. `.status-chip` sets
+   `display: inline-flex`, and an author rule wins over the UA's `[hidden] { display: none }` whatever
+   the specificity — so a hidden chip stayed on screen. That is how 0.3.0 shipped a permanent
+   `● v0.0.0` update chip next to the render time: the attribute was set, the CSS ignored it. */
+.statusbar .status-chip[hidden] { display: none; }
 /* The path is the only unbounded item in the row: without this it pushes the width/zoom controls
    off the right edge on a deep path. Everything else here has a fixed, small size. */
 #stPath { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
