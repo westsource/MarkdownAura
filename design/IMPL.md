@@ -918,7 +918,10 @@ the updater artifact there), the Linux run adds `linux-x86_64` (the AppImage is,
 updater replaces) plus the `.deb`, which is published for installation but is not an update path — the
 package manager owns that. `--clean` restores the old wipe-first behaviour; without it the staging directory
 accumulates, which is what lets two machines fill one release. A manifest from a *different* version is
-never merged into.
+never merged into. **When the staging directory still holds another version's assets, pass `--clean`** — the
+publisher uploads *every* file in `var/release/`, and `--prune-missing` cannot remove what is still staged
+there. Staging 0.3.0 on a machine that had staged 0.2.1 would otherwise have uploaded both versions' assets
+into the 0.3.0 release.
 
 **The app checks this at launch now, not only when asked.** `boot()` calls `about.checkQuietly()` once the
 window is up and does not await it: an offline launch has to look exactly like one that found nothing, so no
