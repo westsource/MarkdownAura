@@ -10,8 +10,8 @@ vanilla JS so it ports without rework; the shipped app is vanilla TypeScript + V
 Scope convention: this document describes the **target** UX. Every section that differs
 from the shipped app carries a **v1 status** note naming three things: what is
 implemented, what is deferred *with its feature*, and what deliberately deviates. The
-notes were last revised on 2026-10-03 against the running build (34 Rust tests, `tsc`
-clean, production asset-protocol render verified).
+notes were last revised on 2026-10-04 against the running build (34 Rust tests, `tsc`
+clean, production asset-protocol render verified, and the same build run on Linux).
 
 Three terms are used precisely, because the difference between them is the whole point
 of the status notes:
@@ -609,7 +609,7 @@ which carry colour because they carry identity.
 
 | block | content |
 |---|---|
-| brand line | logo · `MarkdownAura` · `v0.1.2` (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline |
+| brand line | logo · `MarkdownAura` · `v0.2.0` (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline |
 | update | its own area below the facts block, after a hairline: `check for updates` (ghost) → `v0.2.0 is available` + `download and install` (primary), the state beside the button and the opt-in note under it |
 | what it is | **one** paragraph: what the app is, then the six capabilities after a `capabilities:` lead-in — same size, same colour, no separate block |
 | facts | hanging labels (`author` / `engines` / `data`): 道荣（黄超） · the three engine badges with their licence (and a version where the UI shows one) · the data path in mono with an `open` button |
