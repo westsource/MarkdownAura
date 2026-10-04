@@ -53,7 +53,10 @@ const carry = previous && previous.version === version ? previous : null;
 if (clean) fs.rmSync(releaseDir, { recursive: true, force: true });
 fs.mkdirSync(releaseDir, { recursive: true });
 
-const platforms = { ...(carry ? carry.platforms : {}) };
+/* `--clean` means "this run defines the release", so it must drop the carried platform keys as well as
+ * the carried files. Keeping them meant a wiped run still advertised the other platform — with whatever
+ * URL the *previous* release had staged, which after a rename points at a file that no longer exists. */
+const platforms = { ...(carry && !clean ? carry.platforms : {}) };
 const staged = [];
 
 /** Copies a bundle artifact into the staging directory. `as` renames it on the way in: the bundler
