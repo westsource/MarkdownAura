@@ -48,6 +48,12 @@ tauri-plugin-opener = "2"
 tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls", "system-proxy", "zip"] }
 tauri-plugin-process = "2"
 
+# Single instance is a desktop-wide concern, not a Windows one: the plugin supports Linux and macOS
+# as well, and a second launch has to hand its path to the window that is already open instead of
+# opening a second one (lib.rs). It used to sit under a `cfg(windows)` target gate, which meant a
+# Linux build silently lost that behaviour.
+tauri-plugin-single-instance = "2.5.2"
+
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.21"
@@ -82,9 +88,6 @@ notify = "8.2.0"
 #
 # Delete both entries once schemars asks indexmap for `std` itself.
 indexmap = { version = "1.9", features = ["std"] }
-
-[target.'cfg(windows)'.dependencies]
-tauri-plugin-single-instance = "2.5.2"
 
 [dev-dependencies]
 insta = "1.43"

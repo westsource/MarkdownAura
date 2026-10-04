@@ -94,8 +94,9 @@ All three run inside the application, so no document needs a network connection.
 
 - **Portable (zip)**: `MarkdownAura-<version>-portable.zip` holds `markdownaura.exe` together with the `WebView2Loader.dll` it needs. Unzip it anywhere and double-click the exe; the exe on its own will not start. There is no single-file edition any more — it was dropped in 0.1.2, because the launcher it needed was a second updater of its own and earned nothing the zip does not.
 - **Installer**: `MarkdownAura_<version>_x64-setup.exe`. The wizard shows the licence page and puts `LICENSE` and `THIRD-PARTY.md` in the install directory. This is also the update path: the About sheet's **check for updates** downloads the next signed installer from the GitHub release and runs it. A portable copy that updates this way becomes a proper installation; staying portable means downloading the new zip by hand.
-- **Requirements**: Windows 10 / 11 (x64) with the WebView2 Runtime (already present on Windows 11 and on Windows 10 with Edge).
-- **Sizes**: portable zip ≈ 12.1 MB; installer 11.8 MB.
+- **Linux (x86-64)**: `MarkdownAura_<version>_amd64.deb` installs with `sudo apt install ./MarkdownAura_<version>_amd64.deb` and pulls WebKitGTK 4.1 in as a dependency; `MarkdownAura_<version>_amd64.AppImage` needs nothing installed, because it carries the toolkit inside itself — which is the whole of the size difference between them. Both register the app as a handler for Markdown files. The deb is the package manager's to update; the AppImage is what the in-app updater replaces.
+- **Requirements**: Windows 10 / 11 (x64) with the WebView2 Runtime (already present on Windows 11 and on Windows 10 with Edge); Linux (x86-64), where the deb needs WebKitGTK 4.1 and the AppImage needs nothing.
+- **Sizes**: portable zip ≈ 12.1 MB; installer 11.8 MB; deb ≈ 12.6 MB; AppImage ≈ 88 MB (it bundles WebKitGTK).
 
 ---
 

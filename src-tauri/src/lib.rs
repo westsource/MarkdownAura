@@ -65,9 +65,12 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build());
 
-    #[cfg(windows)]
+    #[cfg(desktop)]
     {
-        // Without this, "Open with MarkdownAura" on a .md starts a new window per file.
+        // Without this, "Open with MarkdownAura" on a .md starts a new window per file. The plugin
+        // covers Windows, Linux and macOS: on Linux it goes through the session D-Bus (a Flatpak or
+        // Snap package whose id differs from the app identifier has to set `DBUS_ID` — see the
+        // plugin's README), so nothing extra is needed here.
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             let forwarded = parse_args(argv.into_iter().skip(1));
             if let Some(path) = forwarded.target {
@@ -101,8 +104,15 @@ pub fn run() {
                 .min_inner_size(720.0, 480.0)
                 .center()
                 .resizable(true)
-                .decorations(false)
-                .drag_and_drop(true);
+                .decorations(false);
+            // `drag_and_drop` is a Windows-only builder method — tauri gates it `#[cfg(windows)]`,
+            // and it is a different switch from `disable_drag_drop_handler`. Elsewhere the handler
+            // is what decides whether the WebView sees HTML5 drop events, and it is on by default,
+            // so the frontend listens to Tauri's drag events on every platform (main.ts).
+            #[cfg(windows)]
+            {
+                window = window.drag_and_drop(true);
+            }
 
             if let Ok(args) = std::env::var("MARKDOWNAURA_BROWSER_ARGS") {
                 eprintln!("MarkdownAura: applying MARKDOWNAURA_BROWSER_ARGS: {args}");

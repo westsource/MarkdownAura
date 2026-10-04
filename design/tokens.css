@@ -42,13 +42,17 @@
      everything in `em` off `--doc-size` x `--zoom`, so that one control moves the whole document and
      no heading can silently fall behind the body text (which is what fixed px headings did).
 
-     Two weights: 400 for text, `--fw-emphasis` for emphasis. 500 would be the obvious middle, but it
-     is the one weight this app's fonts do not have — "Microsoft YaHei UI" ships Regular and Bold
-     only, so a request for 500 renders as Regular and every heading and every `**bold**` run in a
+     Two weights: 400 for text, `--fw-emphasis` for emphasis. 500 would be the obvious middle, but on
+     Windows it is the one weight the CJK font does not have — "Microsoft YaHei UI" ships Regular and
+     Bold only, so a request for 500 renders as Regular and every heading and every `**bold**` run in a
      Chinese document came out indistinguishable from body text. 600 asks Segoe UI Variable for its
-     Semibold and makes YaHei reach for Bold, so emphasis is visible in both scripts. */
-  --font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
-  --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+     Semibold and makes YaHei reach for Bold, so emphasis is visible in both scripts. The Linux
+     families follow the Windows ones in the same stack rather than behind a media query: Noto Sans CJK
+     ships real weights, so 600 is honoured there as written, and DejaVu is the floor every
+     distribution has. */
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Noto Sans CJK SC",
+    "Source Han Sans SC", "Noto Sans", "DejaVu Sans", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, "Noto Sans Mono", "DejaVu Sans Mono", monospace;
   --fw-emphasis: 600;   /* headings, `strong`, table headers, summary, source-view roles */
   --fs-lg: 15px;    /* section titles in panels */
   --fs-md: 13px;    /* default UI text (the root font size) */

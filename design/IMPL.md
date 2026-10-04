@@ -708,6 +708,14 @@ centred, `decorations: false`, `drag_and_drop(true)`. `transparent` is not set.
   `opener:allow-open-url` with `allow: [{ "url": "https://github.com/westsource/MarkdownAura" }]`.
   That single entry is what makes "the app can open exactly one URL" a fact rather than an
   intention; widening it is a security change, not a convenience one.
+- **The `.desktop` file is written by three separate config keys, and getting only some of them costs
+  behaviour.** `bundle.fileAssociations[].mimeType` becomes `MimeType=` — without it a file manager has no
+  reason to offer the app; `bundle.category` becomes `Categories=` (Tauri maps `Productivity` to the
+  registered `Office;` rather than copying the word); and `Exec=` only carries `%U` if
+  `bundle.linux.deb.desktopTemplate` supplies it, because Tauri's default template has a bare
+  `Exec=<binary>` — so the association exists but the path never arrives. `src-tauri/desktop/MarkdownAura.desktop`
+  is that template. All three were found by reading the generated file back out of a built deb, which is the
+  only place the truth is.
 - native drag-drop is **a trap**: with `dragDropEnabled` the WebView never fires HTML5
   `dragover`/`drop`, so the empty state's tint cannot come from a CSS `:drop` state. It is
   driven from Tauri's drag events, which toggle the mockup's `.empty.dragover` class
@@ -715,6 +723,12 @@ centred, `decorations: false`, `drag_and_drop(true)`. `transparent` is not set.
   wrong in the mechanism and right in the requirement: the class is the mechanism.
   `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` is ineffective on this stack — wry passes explicit
   args that override it, which is why the app has its own variable.
+- **`drag_and_drop(true)` is a Windows-only builder method** — tauri gates it `#[cfg(windows)]`, and
+  it is a different switch from `disable_drag_drop_handler`. A Linux build fails on it with
+  `E0599: no method named drag_and_drop`, which is how the port found it. Off Windows the drag-drop
+  *handler* is what decides whether the WebView receives HTML5 drop events, and it is on by default —
+  the same suppression the bullet above describes — so `main.ts`'s Tauri-event path is the one that
+  works everywhere and no HTML5 fallback is needed.
 
 CLI and single-instance:
 
@@ -722,9 +736,12 @@ CLI and single-instance:
   ignored (a stray argument from a shell integration must not stop the window from opening).
   There is no `--last`; session restore is unconditional (§6), and the flag was removed rather
   than kept as a no-op.
-- `tauri-plugin-single-instance` (Windows only): a second launch forwards its path to the
-  running window via `app://open` and focuses it, rather than opening a second window.
-  Without this, "Open with MarkdownAura" on a `.md` file gives you a new window per file.
+- `tauri-plugin-single-instance` (every desktop platform, registered under `cfg(desktop)`): a
+  second launch forwards its path to the running window via `app://open` and focuses it, rather than
+  opening a second window. Without this, "Open with MarkdownAura" on a `.md` file gives you a new
+  window per file. It used to be gated to Windows, which silently cost the Linux build that
+  behaviour; on Linux the plugin goes through the session D-Bus, so a Flatpak or Snap whose id
+  differs from the app identifier has to set `DBUS_ID`.
 - `open_folder` widens the asset-protocol scope to the opened folder, or every relative
   image in every document is a broken icon.
 - Windows shell integration (context-menu entry) is a separate installer concern, out of scope here.
@@ -757,7 +774,11 @@ contract; these are one data point each, not a pass.
 **Bundle cost, measured 2026-10-03 (release).** `dist/` is 16.8 MiB; the d2 chunk alone is 11.0 MB and is
 code-split, so it is fetched on the first `d2` block rather than at boot. The release binary is 15.28 MiB
 (6.9 MB before d2 was bundled) and the NSIS installer is 11.83 MiB (3.36 MiB before). All of it is
-install-time bytes — nothing is fetched at runtime (SPEC §4).
+install-time bytes — nothing is fetched at runtime (SPEC §4). On Linux the same build gives a 12.55 MiB
+`.deb` and an 87.89 MiB AppImage, and the difference is not the app: the AppImage carries WebKitGTK itself —
+`libwebkit2gtk-4.1.so.0` alone is 90.79 MiB of the 263 MiB that unpacks, against a 15.96 MiB binary. That is
+the trade AppImage exists for (it runs on a distribution with no WebKitGTK installed); the deb depends on
+the system's copy instead.
 
 **d2's first card is the slow one, measured 2026-10-03** on `var/typecheck/diagrams.md`: the first d2
 block reported 3837 ms (parsing the 11 MB module) and a re-render of the same document reported 19 ms.
@@ -876,6 +897,14 @@ deleting assets that are no longer staged — that is how the loose pair was ret
 in `tauri.conf.json` is `…/releases/latest/download/latest.json`, which GitHub resolves to the *newest*
 release — so the manifest has to be uploaded to the release tagged `v<version>`; leaving it on an older
 release points the updater at an older installer, which the version check then refuses.
+
+**Staging is multi-platform, assembled one machine at a time.** Each run stages what *that* machine can
+build and merges into the same `latest.json`: the Windows run adds `windows-x86_64` (the NSIS installer is
+the updater artifact there), the Linux run adds `linux-x86_64` (the AppImage is, because that is what the
+updater replaces) plus the `.deb`, which is published for installation but is not an update path — the
+package manager owns that. `--clean` restores the old wipe-first behaviour; without it the staging directory
+accumulates, which is what lets two machines fill one release. A manifest from a *different* version is
+never merged into.
 
 **Pushing needs the credential helper named explicitly here.** `$HOME` is empty in this shell and
 `credential.helper` is `manager`, which wants a prompt it cannot have, so `git push` dies with

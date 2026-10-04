@@ -126,8 +126,21 @@ export function samePath(a: string, b: string): boolean {
   return normalizePath(a) === normalizePath(b);
 }
 
+/** Windows and macOS compare paths case-insensitively by default; Linux does not — and on Linux a
+ *  backslash is an ordinary character in a filename rather than a separator. So the two need
+ *  different normalisation, not a shared lowercasing: doing it the Windows way on Linux conflates
+ *  `Notes.md` with `notes.md` and turns a legal name into a path. */
+const CASE_INSENSITIVE_PATHS = /^(win|mac)/i.test(navigator.platform);
+const WINDOWS_SEPARATORS = /^win/i.test(navigator.platform);
+
 export function normalizePath(p: string): string {
-  return p.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
+  if (!WINDOWS_SEPARATORS) {
+    const trimmed = p.length > 1 ? p.replace(/\/+$/, "") : p;
+    return CASE_INSENSITIVE_PATHS ? trimmed.toLowerCase() : trimmed;
+  }
+  const slashed = p.replace(/\\/g, "/");
+  const trimmed = slashed.length > 1 ? slashed.replace(/\/+$/, "") : slashed;
+  return trimmed.toLowerCase();
 }
 
 /** The one preview tab, if there is one. A single tree click reuses it rather than opening a

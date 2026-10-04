@@ -24,10 +24,25 @@
     "targets": ["nsis"],
     "createUpdaterArtifacts": true,
     "licenseFile": "../LICENSE",
+    "linux": {
+      "deb": {
+        "desktopTemplate": "desktop/MarkdownAura.desktop"
+      }
+    },
     "resources": {
       "../LICENSE": "LICENSE",
       "../THIRD-PARTY.md": "THIRD-PARTY.md"
     },
+    "category": "Productivity",
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown", "mdx", "mdown", "mkd"],
+        "name": "Markdown document",
+        "description": "Markdown document",
+        "mimeType": "text/markdown",
+        "role": "Viewer"
+      }
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
