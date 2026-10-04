@@ -2,7 +2,7 @@
 
 # MarkdownAura
 
-A Markdown **reader** for Windows — built for reading well, not for editing.
+A Markdown **reader** for Windows and Linux — built for reading well, not for editing.
 
 ![MarkdownAura: a document open in the preview view, with the explorer, the outline and the status bar](assets/readme-preview.png)
 
@@ -45,6 +45,7 @@ The installer carries the WebView2 loader. It only fetches the WebView2 Runtime 
 | Area | What it does |
 |---|---|
 | Explorer | open a folder; drag its width (180–640px); an **md only** switch (on by default); filter by file name, revealed from the foot row on demand; directories always listed; ignored directories are dot-prefixed names plus `node_modules`, `target`, `dist`; the foot shows `watching N files` |
+| Open with | the app registers itself as the handler for Markdown files — the Windows installer and both Linux packages — so a file manager's *open with* passes the path in; a second launch hands it to the window that is already open instead of opening another |
 | Tabs | a single click in the tree opens a *preview tab* (italic), a double click pins it; `⋯` lists every tab; `ctrl W` closes one |
 | Views | preview / split / source; the splitter drags; the split panes scroll in sync, and the position is kept per tab |
 | Diagrams | mermaid / dot / d2 cards with an engine badge, the first source line as a title and the source line number; `zoom` opens the viewer (wheel to zoom, drag to pan, copy SVG, copy source, `esc` to close) |
@@ -55,7 +56,7 @@ The installer carries the WebView2 loader. It only fetches the WebView2 Runtime 
 | Help | `F1` — the keyboard map plus a diagram-syntax card for each engine |
 | About | version, author, licence, the three engines with their licences, the data folder (openable from there), a link to the project, and a **check for updates** row — the app's only network call, and it runs when you click it |
 | Settings (an overlay, not a second window) | theme / language / font size / reading width / reduce motion / engine sizes / watch debounce / render-cache size and clear |
-| Data | `%APPDATA%\MarkdownAura\session.json`, written atomically (a crash cannot lose the previous session); the render cache is measured in SVG bytes and clears in one click |
+| Data | `%APPDATA%\MarkdownAura\session.json` on Windows, `~/.config/MarkdownAura/session.json` on Linux, written atomically (a crash cannot lose the previous session); the render cache is measured in SVG bytes and clears in one click |
 
 Raw HTML: only a short fixed list of tags is allowed through (`details`, `summary`, `kbd`, `sub`, `sup`, `br`, `hr`) and everything else is dropped — what a document contains cannot touch the app's own interface.
 
@@ -102,7 +103,7 @@ All three run inside the application, so no document needs a network connection.
 
 ## Build from source
 
-Prerequisites: Node 22+, a Rust toolchain targeting `x86_64-pc-windows-gnu`, and the WebView2 Runtime. The GNU build leans on the binutils shim in `tools/unpack-binutils.mjs` and the `gcc` stand-in in `tools/rc-preprocessor.rs`; read `design/IMPL.md` §1 before touching the toolchain.
+Prerequisites: Node 22+, a Rust toolchain targeting `x86_64-pc-windows-gnu`, and the WebView2 Runtime. The GNU build leans on the binutils shim in `tools/unpack-binutils.mjs` and the `gcc` stand-in in `tools/rc-preprocessor.rs`; read `design/IMPL.md` §1 before touching the toolchain. On Linux: Node 22+, a Rust toolchain, and the WebKitGTK 4.1 / GTK 3 development packages (`libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `librsvg2-dev`, `libssl-dev`); `npx tauri build --bundles deb,appimage` produces both artifacts.
 
 ```bash
 npm install

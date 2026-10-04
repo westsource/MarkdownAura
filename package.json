@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.2.0",
   "type": "module",
-  "description": "A small, fast markdown viewer for Windows — mermaid, dot and d2 render locally",
+  "description": "A small, fast markdown viewer for Windows and Linux — mermaid, dot and d2 render locally",
   "license": "MIT",
   "author": "道荣（黄超）",
   "scripts": {

@@ -2,7 +2,7 @@
 
 # MarkdownAura
 
-给 Windows 的一个 Markdown **阅读器**——为"读得舒服"而做，不为编辑。
+给 Windows 与 Linux 的一个 Markdown **阅读器**——为"读得舒服"而做，不为编辑。
 
 ![MarkdownAura：预览视图里的一篇文档，左侧资源管理器、右侧大纲、底部状态栏](assets/readme-preview.png)
 
@@ -45,6 +45,7 @@
 | 区域 | 能力 |
 |---|---|
 | 资源管理器 | 打开文件夹；宽度可拖（180–640px）；**只列 md** 开关（默认开）；文件名筛选（脚部漏斗按需展开）；目录始终显示；忽略的目录：`.` 开头、`node_modules`、`target`、`dist`；底部显示 `正在监视 N 个文件` |
+| 打开方式 | 应用会把自身注册为 Markdown 文件的打开方式（Windows 安装包与两个 Linux 包都是），文件管理器的"用……打开"会把路径传进来；第二次启动转交给已打开的窗口，而不是再开一个 |
 | 标签页 | 单击树中文件开"预览标签"（斜体），双击固定；`⋯` 列出全部标签；`ctrl W` 关闭 |
 | 视图 | 预览 / 分屏 / 源码；分屏可拖分隔条；分屏两窗格同步滚动，位置按标签页保存 |
 | 图表 | mermaid / dot / d2 卡片：引擎徽章、首行标题、源码行号；`放大` 打开查看器（滚轮缩放、拖拽平移、复制 SVG、复制源码、`esc` 关闭） |
@@ -55,7 +56,7 @@
 | 帮助 | `F1` 快捷键表，以及每个引擎一张图语法卡片 |
 | 关于 | 版本、作者、许可证、三个引擎及其许可证、数据目录（可直接打开）、项目主页链接，以及 **检查更新** 一行——应用唯一会联网的动作，且只在你点击时发生 |
 | 设置（覆盖层，非第二个窗口） | 主题 / 语言 / 字号 / 阅读宽度 / 减少动效 / 引擎体积 / 监视去抖 / 渲染缓存大小与清空 |
-| 数据 | `%APPDATA%\MarkdownAura\session.json`，原子写入（崩溃不丢上一次会话）；渲染缓存按 SVG 字节计，可一键清空 |
+| 数据 | Windows 下是 `%APPDATA%\MarkdownAura\session.json`，Linux 下是 `~/.config/MarkdownAura/session.json`，原子写入（崩溃不丢上一次会话）；渲染缓存按 SVG 字节计，可一键清空 |
 
 原始 HTML 只放行一小段固定标签（`details`、`summary`、`kbd`、`sub`、`sup`、`br`、`hr`），其余一律丢弃——文档里写什么都不会影响应用界面。
 
@@ -102,7 +103,7 @@
 
 ## 从源码构建
 
-前置：Node 22+、目标为 `x86_64-pc-windows-gnu` 的 Rust 工具链、WebView2 Runtime。GNU 构建依赖 `tools/unpack-binutils.mjs` 的 binutils 垫片与 `tools/rc-preprocessor.rs` 的 `gcc` 替身——动工具链前先读 `design/IMPL.md` §1。
+前置：Node 22+、目标为 `x86_64-pc-windows-gnu` 的 Rust 工具链、WebView2 Runtime。GNU 构建依赖 `tools/unpack-binutils.mjs` 的 binutils 垫片与 `tools/rc-preprocessor.rs` 的 `gcc` 替身——动工具链前先读 `design/IMPL.md` §1。Linux 侧：Node 22+、Rust 工具链，以及 WebKitGTK 4.1 / GTK 3 开发包（`libwebkit2gtk-4.1-dev`、`libgtk-3-dev`、`librsvg2-dev`、`libssl-dev`）；`npx tauri build --bundles deb,appimage` 一次产出两个产物。
 
 ```bash
 npm install
