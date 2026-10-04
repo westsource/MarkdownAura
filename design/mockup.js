@@ -563,7 +563,7 @@ Errors render inline with the line number instead of blanking the page.`
       const on = i === state.active;
       const el = document.createElement("div");
       el.className = "tab" + (on ? " active" : "") + (t.preview ? " preview" : "") + (t.pinned ? " pinned" : "") + (t.missing ? " missing" : "") + (t.reloading ? " reloading" : "") + (t.dirty ? " dirty" : "");
-      el.title = t.file + (t.dirty ? " — unsaved changes" : "");
+      el.title = (t.reloading ? t.file + " — changed on disk" : t.file) + (t.dirty ? " — unsaved changes" : "");
       el.innerHTML = FILE_ICON +
         `<span class="tab-name">${esc(middleEllipsis(t.name, 22))}</span>` +
         (t.dirty ? '<span class="tab-dirty" aria-hidden="true"></span>' : "") +

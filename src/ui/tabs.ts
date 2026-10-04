@@ -31,7 +31,9 @@ export function renderTabs(): void {
       const classes = ["tab"];
       if (index === state.activeTab) classes.push("active");
       if (tab.preview) classes.push("preview");
-      // v2 states — emitted so the CSS is exercised, never set by v1 code.
+      // `missing` and `reloading` both ship (SPEC §5): a failed read strikes the tab through, and a
+      // watcher batch marks it — for the tab re-rendering right now, and for a background one whose
+      // reload is deferred until it is activated. `pinned` is the one still reserved.
       if (tab.missing) classes.push("missing");
       if (tab.reloading) classes.push("reloading");
       if (tab.pinned) classes.push("pinned");
@@ -41,7 +43,7 @@ export function renderTabs(): void {
         : '<svg class="tab-icon" width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M3.6 1.8h5.6l3.2 3.2v9.2H3.6z"/><path d="M9.2 1.8v3.2h3.2"/></svg>';
 
       return (
-        `<div class="${classes.join(" ")}" data-i="${index}" title="${escapeAttr(tab.file)}">` +
+        `<div class="${classes.join(" ")}" data-i="${index}" title="${escapeAttr(tab.reloading ? `${tab.file} — ${t("tab.changed")}` : tab.file)}">` +
         marker +
         `<span class="tab-name">${escapeHtml(middleEllipsis(tab.name, 22))}</span>` +
         `<button class="tab-close" data-close="${index}" aria-label="${t("tab.close")}">${CLOSE_ICON}</button>` +

@@ -225,6 +225,9 @@ async function loadTab(tab: Tab): Promise<void> {
       truncated: false,
     };
   }
+  // The tab is on screen again, so the out-of-date mark goes: this is its single owner, which is why a
+  // deferred background reload clears it here rather than in the watcher's handler.
+  tab.reloading = false;
   renderChrome();
   await paintActive();
   scheduleSave();
@@ -1165,20 +1168,22 @@ async function boot(): Promise<void> {
         toast(i18n.t("edit.reloaded", { name: tab.name }), "warn");
       }
 
+      /* Out of date is what the mark means, and it is the same mark in both cases: the tab you are
+         looking at re-renders now, and a background tab keeps the amber dot until it is activated —
+         which is when `loadTab` (the mark's single owner) clears it. Before this, a background tab
+         changed under the reader with no sign at all, and reloaded only when they happened to look. */
+      tab.reloading = true;
       if (tab === activeTab()) {
-        tab.reloading = true;
         tabs.renderTabs();
         tab.source = null;
-        void loadTab(tab).finally(() => {
-          tab.reloading = false;
-          tabs.renderTabs();
-        });
+        void loadTab(tab).finally(() => tabs.renderTabs());
       } else {
         // Off screen: drop the parse so `activate` reloads it, and clear `missing` in case the
         // file is on its way back. Reloading it now would repaint the wrong DOM.
         tab.doc = null;
         tab.source = null;
         tab.missing = false;
+        tabs.renderTabs();
       }
     }
   });

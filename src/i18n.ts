@@ -153,6 +153,7 @@ const en = {
   // ---- tabs / menus ----
   "tabs.all": "all tabs · {n}",
   "tab.close": "close tab",
+  "tab.changed": "changed on disk",
   "menu.recent": "recent",
 
   // ---- toasts ----
@@ -393,6 +394,7 @@ const zh: Record<Key, string> = {
 
   "tabs.all": "全部标签页 · {n}",
   "tab.close": "关闭标签页",
+  "tab.changed": "磁盘上已改动",
   "menu.recent": "最近",
 
   "toast.sourceCopied": "源码已复制到剪贴板",

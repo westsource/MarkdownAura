@@ -385,8 +385,9 @@ step left to detect. `IMPL.md` §7 has the loading details, §9 the resulting si
 Minimal by design, but correct:
 
 - Six states: `active`, `inactive`, `hover`, `preview` (italic), `missing` (strikethrough —
-  the file could not be read), `reloading` (amber dot replaces the file icon while the watcher
-  re-renders).
+  the file could not be read), `reloading` (amber dot replaces the file icon while the tab is
+  **out of date**: the re-render may be in flight, for the tab you are looking at, or deferred
+  until you activate it, for a background one).
 - Class naming, so the two do not collide: the shipped preview state is **`.tab.preview`**;
   **`.tab.pinned`** is reserved for manual pinning (§v1 status below) and must not borrow
   the preview italic. No pin action ships, and `components.css` has **no rule for
@@ -414,8 +415,10 @@ Minimal by design, but correct:
   opening a second, a double click pins it
 - the four reader states `active`, `inactive`, `hover`, `preview`, **plus `missing` and
   `reloading`**: a failed load marks the tab `missing`, a removal event from the watcher
-  marks it `missing` too, and a watcher batch marks it `reloading` for the duration of the
-  re-render. Wiring the two v2 fields cost nothing — the record and the CSS already existed
+  marks it `missing` too, and a watcher batch marks it `reloading` for as long as the tab is
+  out of date — the tab being re-rendered clears it when the load lands, and a background tab
+  keeps the amber dot until it is activated, which is when its reload happens. Wiring the two
+  v2 fields cost nothing — the record and the CSS already existed
   — so they ship rather than being documented as absent.
 - per-tab state: view mode, scroll position, find query/case/hit
 - overflow: compress to min width, then horizontal scroll, active tab scrolled into view,
