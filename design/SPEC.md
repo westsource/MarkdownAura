@@ -26,16 +26,21 @@ of the status notes:
 
 ## 1. Product position
 
-**A reader, not an editor.** Every design decision below follows from this.
+**A reader first, and now editable in place — on request.** Amended 2026-10-04 (product owner's
+call): the reader's guarantees are unchanged and are still the default. What changed is that the
+source pane can be edited deliberately; §12 is the design.
 
-- The source view is read-only. There is no caret, no undo, no save. The app shows a
-  `read-only` pill over the source view; the pane is a `<pre>`, not a `<textarea>`.
+- The source view is read-only **until you ask otherwise**. In the reader's default state there is no
+  caret, no undo and no save; the pane is a `<pre>`, not a `<textarea>`, and the `read-only` pill is
+  the control that changes that (§12).
 - Vertical space goes to content: the title bar hosts the tabs, the status bar is 26px.
 - Chrome disappears on demand (`F11` immersive, `ctrl B` sidebar, `ctrl alt O` outline).
 - Reading comfort is the product: `--measure` (a preset — 60ch, 100ch, or the whole pane),
   `line-height: 1.7`, two font weights only.
 
-If a proposed feature turns MarkdownAura into an editor, it is out of scope.
+**Still out of scope:** editing the *rendered* view (WYSIWYG), and anything that would make this an
+IDE — project-wide editing, completion, Git. Editing is a mode you enter; it is never the state the
+app opens in.
 
 ## 2. Window anatomy
 
@@ -139,7 +144,7 @@ Three view modes, one segmented control:
 |---|---|---|---|
 | `preview` | single column, text lines | rendered markdown, full measure | reading — the default |
 | `split` | column split by a vertical rule, lines only on the left | source left (soft-wrapped), rendered right, draggable splitter | checking a diagram block against its output |
-| `source` | chevrons `‹ ›` in a frame | read-only highlighted markdown | copying a block, checking raw syntax |
+| `source` | chevrons `‹ ›` in a frame | read-only highlighted markdown, editable on request (§12) | copying a block, checking raw syntax |
 
 **The switch is icons, not text.** (Decision confirmed 2026-10-01; implemented in the
 mockup, `index.html` and `components.css`.) Rationale: view mode is a set-once,
@@ -487,6 +492,8 @@ The window opens here when no folder is loaded. It is also the drop target.
 | `ctrl F` | find in document | implemented |
 | `enter` / `shift enter` | next / previous match (while the find bar is open) | implemented |
 | `ctrl R` | re-render | implemented |
+| `ctrl E` | edit the source pane (toggle) | **not bound** (§12) |
+| `ctrl S` | save | **not bound** (§12) |
 | `ctrl ,` | settings | implemented |
 | `ctrl +` / `ctrl -` / `ctrl 0` | zoom in / out / reset | implemented |
 | `ctrl shift M` | cycle reading width | implemented |
@@ -506,8 +513,9 @@ exist in the mockup's keymap so the shape is recorded.
 > fall back to `ctrl shift K` (currently unbound).
 
 `esc` dismissal is ordered, and the app's order is the **reverse of opening order**: menu
-→ diagram viewer → settings → help → about → find bar → immersive. Only one layer closes per
-keypress.
+→ diagram viewer → settings → help → about → find bar → **edit mode (§12)** → immersive. Only one
+layer closes per keypress. Leaving edit mode with unsaved changes asks first, which is why it belongs
+inside this chain rather than beside it.
 
 **A menu also closes on any pointer press outside it, and a second press on the control that opened
 it closes it** — the control is a toggle. One rule, one implementation (`dom.ts`): every menu opened
@@ -798,3 +806,125 @@ Tab-related deferrals are not here — they live in §5, already designed and wa
 - Windows high-contrast and forced-colors modes
 - Syntax highlighting for ordinary (non-diagram) code fences. The source view's 5-role
   highlighting (§9) covers the source pane; a rendered code block is monochrome today.
+
+## 12. Editing
+
+**Status: designed, nothing built.** §1 was amended for this section on 2026-10-04 (product owner's
+call). The control is chosen and measured in `IMPL.md` §11 — CodeMirror 6 with an explicit extension
+list, 498.8 KB minified / 173.4 KB gzip as its own lazy chunk — together with the four integration
+facts that were measured rather than assumed.
+
+### The stance
+
+- **Read-only stays the default.** Editing is a mode of the *source* pane; the app never opens in it,
+  and every reading affordance keeps working while it is on.
+- **The rendered view is never edited.** WYSIWYG is a different product: the document is the source
+  and the preview is a rendering of it. That relationship is what the split view exists for (§3).
+- **The pill becomes the control.** The `read-only` pill already says what the pane is; it is the one
+  thing in the pane that can say the other thing, so it is the pointer path into the mode.
+- **Editing is per tab**, like every other per-tab value (§5). Switching tabs or views does not lose
+  a buffer, and it does not silently commit one either.
+
+### Entering and leaving
+
+- `ctrl E` toggles the mode; the pill is the same action with a pointer. `esc` leaves it, as the
+  outermost layer of the dismissal chain (§7) — so a menu, the find bar or an overlay closes first.
+- In **split view** the left pane becomes editable and the right pane keeps rendering. That is the
+  most valuable shape this mode has: the app already keeps both panes at one size and syncs their
+  scroll (§3), so "edit on the left, watch the render on the right" costs no new layout.
+- In **source view** the same pane is the only one, at the uncompacted size (§3).
+- Leaving the mode with unsaved changes asks first. Immersive (`F11`), view switches and tab switches
+  never ask — they are not a commit and they do not drop the buffer.
+- The mode is visible without being loud: the pill changes state and the pane gains a caret. Nothing
+  else in the chrome moves.
+
+### What cannot be edited
+
+Five refusals. Four of them exist because the reader only *badges* the condition today (§9 and the
+status bar), and a badge is safe only while nothing can write:
+
+- **Truncated** (a file past the 8 MiB cap): the buffer holds the first 8 MiB, so saving would delete
+  everything after it.
+- **Lossy decode** (`utf-8-lossy`, invalid UTF-8): the replacement characters are already in the
+  buffer, so saving would make them permanent.
+- **Missing** (the file was deleted or renamed under us, §5): there is nothing to write into.
+- **Not writable** (read-only attribute, permissions, a read-only medium): the OS's refusal is
+  surfaced as an error, never swallowed.
+- **A preview tab is not a refusal but a promotion.** A single tree click reuses the one preview tab
+  *in place* (§5), so a buffer with edits in it would be replaced by the next click without a word.
+  Entering the mode pins the tab first, and the pin is what the tab strip already reserves
+  (`.tab.pinned`, §5).
+
+### Saving
+
+- `ctrl S`. The write is atomic — temp file plus rename — which is the rule the session already
+  follows, for the same reason: a crash mid-write must not lose what was there.
+- **Byte fidelity is the contract, not a nicety.** The file is written back in the encoding it was
+  read in: `utf-8`, `utf-8-bom` (the BOM is restored, since reading strips it), `utf-16le` /
+  `utf-16be` (re-encoded, same endianness). Line endings are preserved **per line**, never
+  normalised: the `eol` value the reader carries is a display heuristic — "CRLF wins if it appears at
+  all" — and trusting it for a write would rewrite every LF in a mixed file. A trailing newline, or
+  its absence, is preserved too.
+- **Dirty is visible in two places**, because a lost buffer is the failure this mode can cause: the
+  tab strip (§5's six states gain a seventh, `dirty`) and the status bar. Closing a dirty tab, or
+  quitting with any dirty buffer, asks first.
+- **A failed save stays dirty.** The error is a toast (§10's shell) and the buffer keeps its state;
+  a failure must never look like a success.
+- After a successful save the document is re-rendered through the normal path, so the preview, the
+  outline, the word count and `rendered in N ms` all follow the new text.
+
+### External changes
+
+- **Decided 2026-10-04: an external change reloads silently.** That is what the watcher already does
+  — it drops the tab's parsed document and source and re-reads through Rust — so the mode adds no
+  conflict machinery. The accepted cost, recorded so it is not later mistaken for an oversight: an
+  unsaved buffer is lost when something else writes the file.
+- One addition is still required: when the buffer **was dirty**, the reload is announced. Text that
+  reverts under the cursor with no explanation is indistinguishable from a bug.
+- A deleted file keeps today's behaviour (the tab goes `missing`, the last rendering stays) and
+  additionally refuses to save into a file that is gone.
+
+### Coexisting with the reading features
+
+This is where the work is; the control itself is the easy part.
+
+- **Find moves into the pane.** Today it walks DOM text nodes and injects `<mark>` elements, which
+  cannot work over an editable surface. When the pane is editable, the editor's own search replaces it
+  *in that pane only*: the find bar, `ctrl F`, `enter` / `shift enter` and the hit count are unchanged
+  from the reader's point of view (§7).
+- **Outline jumps, the scroll spy and split scroll sync** keep working: they address the pane's
+  scroller, which becomes the editor's.
+- **Reading width, zoom and font size reach the editable pane like any other pane.** `--measure`
+  applies to its content column, and the same `--doc-size` × `--zoom` multipliers apply. Two measured
+  traps: the `ch` preset resolves against the *preview* element's font today, which is sans while this
+  pane is mono — the same preset would mean a different number of columns — and the editor brings its
+  own `line-height: 1.4` against this pane's `1.8`.
+- **The status bar reports the buffer**, not the last render: word count, byte size, encoding and EOL
+  follow what is on screen. `rendered in N ms` keeps meaning "the last render" and refreshes on save.
+- **One pane, one editor, one state per tab.** Every tab shares the single source element, so the
+  mode swaps the editor's document state per tab instead of creating an editor per tab — which is also
+  what keeps undo history per tab and the DOM count at one.
+- **The keyboard map gains two bindings** (§7), and this mode makes the existing "the help table and
+  the dispatcher are two lists" problem worse before it gets better: an editable surface swallows keys
+  the reader never noticed. Settle the two-lists question as part of this work, not after it.
+
+### v1 status — nothing is implemented
+
+- **implemented**: nothing in this section. The source view is read-only, there is no save path in the
+  frontend or in Rust (the file layer only reads), no dirty state exists on a tab, and neither `ctrl E`
+  nor `ctrl S` has a handler.
+- **deferred**: all of the above, with the structure it depends on: the per-tab state gains its dirty
+  field, the session gains its version decision, and the keyboard map gains its two rows.
+- **deviates**: §1's former prohibition ("if a proposed feature turns MarkdownAura into an editor, it
+  is out of scope") is kept in the record but no longer governs. This section supersedes it for
+  **source** editing only.
+- **Deliberately not in this section**, so that it is a boundary rather than a backlog: project-wide or
+  multi-file editing, completion and language services, Git, collaborative editing, formatters,
+  project-wide search and replace, visual table editing, image drag-and-drop, and WYSIWYG editing of
+  the rendered view. Syntax highlighting inside *rendered* code fences stays where it is (§11).
+- **The mockup does not carry this mode yet.** It is the behaviour reference for everything that
+  exists, so an unbuilt section is the one place it is allowed to run ahead; mocking up the editable
+  pane is the artifact this section owes next, not an oversight to be discovered later.
+- **Open, and the owner's call**: what ships first. The recommendation is the smallest coherent slice
+  — edit, save, the five refusals, byte fidelity, and the coexistence items above — with split
+  live-preview and rendered code-fence highlighting after it.
