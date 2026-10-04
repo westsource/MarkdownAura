@@ -823,7 +823,9 @@ facts that were measured rather than assumed.
 - **The pill becomes the control.** The `read-only` pill already says what the pane is; it is the one
   thing in the pane that can say the other thing, so it is the pointer path into the mode.
 - **Editing is per tab**, like every other per-tab value (§5). Switching tabs or views does not lose
-  a buffer, and it does not silently commit one either.
+  a buffer, and it does not silently commit one either. The mode itself is **not persisted**: a restored
+  session comes back read-only, because "never opens in it" has to hold across a restart too, not only
+  on a cold start.
 
 ### Entering and leaving
 
