@@ -503,7 +503,14 @@ input:focus { border-color: var(--ac); }
   color: var(--tx);
   user-select: text;
 }
-.view.split .pane-src pre { font-size: calc(var(--doc-size, 15px) * .867 * var(--zoom, 1)); }
+/* The selection opt-in again: `body` sets `user-select: none` for the chrome, and every surface that
+   holds readable text has to say otherwise. `.prose` and `.source-view pre` do; this pane did not, so
+   the same document was selectable in source view and not in split view — which is exactly how it was
+   reported. `design/check-prose-css.mjs` now fails if a surface forgets. */
+.view.split .pane-src pre {
+  font-size: calc(var(--doc-size, 15px) * .867 * var(--zoom, 1));
+  user-select: text;
+}
 .readonly-pill {
   position: sticky;
   top: 0;

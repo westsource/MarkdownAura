@@ -99,6 +99,17 @@ const sourceView = componentRules.get(".source-view") ?? "";
 check(/flex:\s*1 1 auto/.test(sourceView), "`.source-view` is `flex: 1 1 auto`, not content-sized");
 check(/min-width:\s*0/.test(sourceView), "`.source-view` carries `min-width: 0`");
 
+/* `body` turns text selection off, so the chrome cannot be selected. Every surface that shows readable
+ * text has to opt back in by hand — and the split pane's `pre` did not, which made the same document
+ * selectable in source view and unselectable in split view. */
+for (const selector of [".prose", ".source-view pre", ".view.split .pane-src pre"]) {
+  const rule = componentRules.get(selector) ?? "";
+  check(
+    /user-select:\s*text/.test(rule),
+    `${selector} opts back into text selection — body sets user-select: none`,
+  );
+}
+
 for (const selector of [".source-view pre", ".view.split .pane-src pre"]) {
   const declared = sizeOf(componentRules, selector);
   check(
