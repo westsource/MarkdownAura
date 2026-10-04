@@ -384,10 +384,11 @@ step left to detect. `IMPL.md` §7 has the loading details, §9 the resulting si
 
 Minimal by design, but correct:
 
-- Six states: `active`, `inactive`, `hover`, `preview` (italic), `missing` (strikethrough —
+- Seven states: `active`, `inactive`, `hover`, `preview` (italic), `missing` (strikethrough —
   the file could not be read), `reloading` (amber dot replaces the file icon while the tab is
   **out of date**: the re-render may be in flight, for the tab you are looking at, or deferred
-  until you activate it, for a background one).
+  until you activate it, for a background one), `dirty` (an accent dot **after the name** while
+  the buffer differs from the file — the mark SPEC §12's editing mode adds).
 - Class naming, so the two do not collide: the shipped preview state is **`.tab.preview`**;
   **`.tab.pinned`** is reserved for manual pinning (§v1 status below) and must not borrow
   the preview italic. No pin action ships, and `components.css` has **no rule for

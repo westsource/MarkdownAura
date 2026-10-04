@@ -37,15 +37,24 @@ export function renderTabs(): void {
       if (tab.missing) classes.push("missing");
       if (tab.reloading) classes.push("reloading");
       if (tab.pinned) classes.push("pinned");
+      // The buffer differs from the file (SPEC §12). This mark existed in the mockup and in the status
+      // bar from the start, and this file — the app's real tab renderer — never learned about it, so an
+      // edited buffer showed no mark on its tab at all.
+      if (tab.dirty) classes.push("dirty");
 
       const marker = tab.reloading
         ? '<span class="dot warn"></span>'
         : '<svg class="tab-icon" width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M3.6 1.8h5.6l3.2 3.2v9.2H3.6z"/><path d="M9.2 1.8v3.2h3.2"/></svg>';
 
+      // One tooltip for both conditions, so hovering the tab explains whichever mark is showing.
+      const notes = [tab.reloading ? t("tab.changed") : null, tab.dirty ? t("edit.unsaved") : null].filter(Boolean);
+      const title = notes.length ? `${tab.file} — ${notes.join(" · ")}` : tab.file;
+
       return (
-        `<div class="${classes.join(" ")}" data-i="${index}" title="${escapeAttr(tab.reloading ? `${tab.file} — ${t("tab.changed")}` : tab.file)}">` +
+        `<div class="${classes.join(" ")}" data-i="${index}" title="${escapeAttr(title)}">` +
         marker +
         `<span class="tab-name">${escapeHtml(middleEllipsis(tab.name, 22))}</span>` +
+        (tab.dirty ? '<span class="tab-dirty" aria-hidden="true"></span>' : "") +
         `<button class="tab-close" data-close="${index}" aria-label="${t("tab.close")}">${CLOSE_ICON}</button>` +
         `</div>`
       );
