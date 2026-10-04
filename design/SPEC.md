@@ -619,8 +619,8 @@ which carry colour because they carry identity.
 
 | block | content |
 |---|---|
-| brand line | logo · `MarkdownAura` · `v0.3.0` (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline |
-| update | its own area below the facts block, after a hairline, and nothing else: `check for updates` (ghost) → `v0.3.0 is available` + `download and install` (primary), with the state beside the button. The note that used to sit under it — claiming this was the app's only network call — is gone: the launch check exists now, so that sentence stopped being true |
+| brand line | logo · `MarkdownAura` · `v0.3.1` (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline |
+| update | its own area below the facts block, after a hairline, and nothing else: `check for updates` (ghost) → `v0.3.1 is available` + `download and install` (primary), with the state beside the button. The note that used to sit under it — claiming this was the app's only network call — is gone: the launch check exists now, so that sentence stopped being true |
 | what it is | **one** paragraph: what the app is, then the six capabilities after a `capabilities:` lead-in — same size, same colour, no separate block |
 | facts | hanging labels (`author` / `engines` / `data`): 道荣（黄超） · the three engine badges with their licence (and a version where the UI shows one) · the data path in mono with an `open` button |
 | foot | `LICENSE · THIRD-PARTY.md` (both ship next to the executable) |
