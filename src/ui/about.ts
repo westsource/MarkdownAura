@@ -27,6 +27,7 @@ import {
 } from "../ipc";
 import { t } from "../i18n";
 import { $, toast } from "./dom";
+import * as status from "./statusbar";
 
 /** The only external URL in the app, and the only one the capability allows. */
 const GITHUB_URL = "https://github.com/westsource/MarkdownAura";
@@ -64,6 +65,22 @@ async function runUpdateCheck(): Promise<void> {
     updateText = t("about.updateFailed", { msg: message(err) });
   }
   renderUpdate();
+}
+
+/** The boot-time check (SPEC §10). Quiet by design: no sheet, no spinner, no failure surfaced — an
+ *  offline launch has to look exactly like a launch that found nothing. The status bar is the only
+ *  place the answer appears, and clicking its chip opens this sheet with the state already set. */
+export async function checkQuietly(): Promise<void> {
+  try {
+    const found = await updateCheck();
+    if (!found) return;
+    updateState = "available";
+    updateText = t("about.available", { v: found.version });
+    status.setUpdateAvailable(found.version);
+    if (isOpen()) renderUpdate();
+  } catch {
+    // Offline, rate-limited, or no release published yet: all the same from here, and all silent.
+  }
 }
 
 async function runUpdateInstall(): Promise<void> {
@@ -126,6 +143,10 @@ export function wire(): void {
 
   $("#aboutUpdateCheck").addEventListener("click", () => void runUpdateCheck());
   $("#aboutUpdateInstall").addEventListener("click", () => void runUpdateInstall());
+
+  // The chip is created hidden and only the boot check reveals it. Clicking it is the route to the
+  // update: the sheet opens showing whatever that check already found.
+  $("#stUpdate").addEventListener("click", open);
 
   // Fetched once at boot: the path never changes while the app runs, and failing to get it must not
   // stop the sheet from opening — it shows "—" instead.

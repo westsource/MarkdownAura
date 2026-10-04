@@ -50,7 +50,7 @@ const en = {
   "sidebar.noMarkdown": "no markdown files here",
   "sidebar.watching": "watching {n} files",
   "empty.title": "Drop a folder or .md file here",
-  "empty.subtitle": "mermaid · dot · d2 render locally — no network, no telemetry",
+  "empty.subtitle": "mermaid · dot · d2 render locally — no network needed, no telemetry",
   "empty.openFolder": "open folder",
   "empty.openFile": "open file",
   "empty.shortcutOpen": "open",
@@ -94,7 +94,7 @@ const en = {
   "about.title": "about",
   "about.closeTitle": "close (esc)",
   "about.close": "close about",
-  "about.intro": "A fast, minimal Markdown reader: typesetting and diagrams are produced on this machine, with no network connection and nothing sent anywhere. Capabilities: preview · split · source　mermaid · dot · d2 rendered locally　width presets · font size · zoom　outline · find · immersive reading　session restore · live reload　bilingual · light and dark",
+  "about.intro": "A fast, minimal Markdown reader: typesetting and diagrams are produced on this machine, and nothing about you is sent anywhere. The only request it makes on its own is the update manifest — a version number and a download URL. Capabilities: preview · split · source　mermaid · dot · d2 rendered locally　width presets · font size · zoom　outline · find · immersive reading　session restore · live reload　bilingual · light and dark",
   "about.k.author": "author",
   // The author's name as he writes it — deliberately not transliterated.
   "about.author": "道荣（黄超）",
@@ -112,7 +112,6 @@ const en = {
   "about.downloadingUnknown": "downloading…",
   "about.installing": "installing… the app will restart",
   "about.updateFailed": "update failed: {msg}",
-  "about.updateHint": "the app's only network call — it happens when you click, never on its own",
   "about.notices": "shipped with the app: LICENSE · THIRD-PARTY.md",
 
   // ---- outline ----
@@ -131,6 +130,8 @@ const en = {
   "status.engine": "{id} engine",
   "status.measureTitle": "reading width — {name}",
   "status.resetZoom": "reset zoom (ctrl 0)",
+  "status.updateAvailable": "v{v} available",
+  "status.updateTitle": "open about to update",
 
   // ---- immersive ----
   "immersive.exit": "exit",
@@ -265,7 +266,7 @@ const zh: Record<Key, string> = {
   "sidebar.noMarkdown": "这里没有 Markdown 文件",
   "sidebar.watching": "正在监视 {n} 个文件",
   "empty.title": "把文件夹或 .md 文件拖到这里",
-  "empty.subtitle": "mermaid · dot · d2 本地渲染 — 不联网、不采集任何数据",
+  "empty.subtitle": "mermaid · dot · d2 本地渲染 — 无需联网、不采集任何数据",
   "empty.openFolder": "打开文件夹",
   "empty.openFile": "打开文件",
   "empty.shortcutOpen": "打开",
@@ -305,7 +306,7 @@ const zh: Record<Key, string> = {
   "about.title": "关于",
   "about.closeTitle": "关闭 (esc)",
   "about.close": "关闭关于",
-  "about.intro": "极速极简的 Markdown 阅读器，排版和图表都在本机完成，不联网，也不向任何地方发送数据。能力：预览 · 分栏 · 源码　mermaid · dot · d2 本地渲染　行宽档位 · 字号 · 缩放　大纲 · 查找 · 沉浸阅读　会话恢复 · 变更自动刷新　中英双语 · 深浅主题",
+  "about.intro": "极速极简的 Markdown 阅读器：排版和图表都在本机完成，不向任何地方发送关于你的信息。它唯一会自行发起的请求是更新清单——一个版本号与一个下载地址。能力：预览 · 分栏 · 源码　mermaid · dot · d2 本地渲染　行宽档位 · 字号 · 缩放　大纲 · 查找 · 沉浸阅读　会话恢复 · 变更自动刷新　中英双语 · 深浅主题",
   "about.k.author": "作者",
   "about.author": "道荣（黄超）",
   "about.k.engines": "引擎",
@@ -322,7 +323,6 @@ const zh: Record<Key, string> = {
   "about.downloadingUnknown": "下载中…",
   "about.installing": "安装中…应用将自动重启",
   "about.updateFailed": "更新失败：{msg}",
-  "about.updateHint": "应用唯一会联网的动作，只在你点击时发生",
   "about.notices": "随程序分发：LICENSE · THIRD-PARTY.md",
 
   "outline.label": "大纲",
@@ -339,6 +339,8 @@ const zh: Record<Key, string> = {
   "status.engine": "{id} 引擎",
   "status.measureTitle": "阅读宽度 — {name}",
   "status.resetZoom": "重置缩放 (ctrl 0)",
+  "status.updateAvailable": "有 v{v} 可用",
+  "status.updateTitle": "打开关于面板进行更新",
 
   "immersive.exit": "退出",
   "immersive.toast": "沉浸模式 — 悬停顶部边缘或按 esc 退出",
@@ -386,7 +388,7 @@ const zh: Record<Key, string> = {
   "settings.mermaidSub": "入口 29 KB，按需分块加载",
   "settings.dotSub": "约 0.9 MB",
   "settings.bundled": "已内置",
-  "settings.d2Sub": "11.5 MB · 与其它引擎一样内置，不联网",
+  "settings.d2Sub": "11.5 MB · 与其它引擎一样内置，无需下载",
   "settings.watchDebounce": "监视去抖",
   "settings.watchDebounceSub": "编辑器连续写入只触发一次重载",
   "settings.cacheSvg": "已渲染 SVG",

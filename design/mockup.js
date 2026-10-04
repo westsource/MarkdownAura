@@ -1212,6 +1212,8 @@ Errors render inline with the line number instead of blanking the page.`
   $("#setClose").addEventListener("click", closeSettings);
   $("#helpClose").addEventListener("click", closeHelp);
   $("#openAbout").addEventListener("click", openAbout);
+  /* The chip is the other route into About: it only exists after the check finds something. */
+  $("#stUpdate").addEventListener("click", openAbout);
   $("#aboutClose").addEventListener("click", closeAbout);
   $("#aboutOverlay").addEventListener("click", (e) => { if (e.target.id === "aboutOverlay") closeAbout(); });
   $("#aboutReveal").addEventListener("click", () => toast("shell: explorer /select,%APPDATA%\\MarkdownAura"));
@@ -1229,6 +1231,9 @@ Errors render inline with the line number instead of blanking the page.`
       $("#aboutUpdateCheck").textContent = "check for updates";
       state.textContent = "v0.2.0 is available";
       install.hidden = false;
+      // A hit is what makes the status bar grow the chip, exactly as the app does (SPEC §10).
+      $("#stUpdate").hidden = false;
+      $("#stUpdateLabel").textContent = "v0.2.0 available";
       toast("the mockup has no updater — the real app would fetch latest.json from the release");
     }, 600);
   });

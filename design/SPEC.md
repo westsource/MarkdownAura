@@ -277,8 +277,9 @@ showing — and does not open the viewer; that stays a deliberate click on the c
 
 ### Status bar
 
-Left: path, word count, encoding. Right: three engine health dots, render time, **reading width**,
-zoom. The path is the only unbounded item in the row, so it ellipsises rather than pushing the
+Left: path, word count, encoding. Right: three engine health dots, render time, **the update chip when a
+release is newer** (absent otherwise — it is the only control in this row that comes and goes), **reading
+width**, zoom. The path is the only unbounded item in the row, so it ellipsises rather than pushing the
 controls off the edge.
 
 The engine dots are the honest answer to "is this thing offline?" — green when the WASM
@@ -609,8 +610,8 @@ which carry colour because they carry identity.
 
 | block | content |
 |---|---|
-| brand line | logo · `MarkdownAura` · `v0.2.1` (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline |
-| update | its own area below the facts block, after a hairline: `check for updates` (ghost) → `v0.2.0 is available` + `download and install` (primary), the state beside the button and the opt-in note under it |
+| brand line | logo · `MarkdownAura` · `v0.3.0` (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline |
+| update | its own area below the facts block, after a hairline, and nothing else: `check for updates` (ghost) → `v0.3.0 is available` + `download and install` (primary), with the state beside the button. The note that used to sit under it — claiming this was the app's only network call — is gone: the launch check exists now, so that sentence stopped being true |
 | what it is | **one** paragraph: what the app is, then the six capabilities after a `capabilities:` lead-in — same size, same colour, no separate block |
 | facts | hanging labels (`author` / `engines` / `data`): 道荣（黄超） · the three engine badges with their licence (and a version where the UI shows one) · the data path in mono with an `open` button |
 | foot | `LICENSE · THIRD-PARTY.md` (both ship next to the executable) |
@@ -639,19 +640,21 @@ Decisions inside that shape, each of which was made deliberately:
   in its own voice — 2026-10-03, product owner's call: 极速极简 / "fast, minimal" — because that is
   a statement of what the app is for, not a claim about how it performs.
 - **The foot carries the notices and nothing else.** It used to also carry a privacy claim ("nothing
-  leaves this machine"); 2026-10-03, product owner's call: removed. The claim itself still holds — the
-  app's runtime fetches nothing except the update check a reader asks for (below) — but it is a claim,
-  and the foot is where facts about the build live.
+  leaves this machine"); 2026-10-03, product owner's call: removed. Nothing about the reader is ever sent,
+  and the runtime fetches only the update manifest (below) — but that is a claim, and the foot is where
+  facts about the build live.
 
-- **The update check is the app's only network call, and it takes a click.** No startup check, no
-  background poll, no telemetry: the row says so out loud, and what it fetches is one GitHub release
-  asset — a version and the URL plus signature of an installer. The installer is verified against the
-  public key baked into `tauri.conf.json`, so an artifact that did not come from this project's signing
-  key is refused before it reaches the disk. `IMPL.md` §12 carries the key custody and the release steps.
+- **The update check happens at launch and when asked, and either way it is one small manifest.** The launch
+  makes one request for `latest.json` — a version, a download URL and a signature — and does it silently:
+  offline, rate-limited and "nothing published yet" are indistinguishable from one another and none of them
+  is surfaced. When it does find something, the status bar gains a chip, and clicking that chip opens this
+  sheet to do the install — which is also what the *check for updates* button is for. Nothing about the
+  reader is sent either way, and an update is refused unless it is signed by the key baked into
+  `tauri.conf.json` (key custody and the release steps are in `IMPL.md` §12).
 - **It sits below the facts block, not inside it.** Tried under `author` first (2026-10-03, product
   owner's request) and moved again the same day: the facts block is hanging labels answering "what is
-  this build", and a button and its state are a control, not one of those answers. A hairline and the
-  opt-in note are enough to say what it is.
+  this build", and a button and its state are a control, not one of those answers. A hairline, the button
+  and its state are enough to say what it is.
 - **The GitHub line is the only external URL in the app**, and it is opened through
 `tauri-plugin-opener` rather than by shelling out to `cmd /C start`. The capability allows **that
 one URL** (`opener:allow-open-url` with a single-entry `allow` scope); anything else is refused by

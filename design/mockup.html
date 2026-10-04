@@ -257,7 +257,6 @@
                 <button class="primary-btn" id="aboutUpdateInstall" hidden>download and install</button>
                 <span class="about-update-state" id="aboutUpdateState"></span>
               </div>
-              <div class="about-update-hint">the app's only network call — it happens when you click, never on its own</div>
             </div>
           </div>
           <div class="sheet-foot">
@@ -292,6 +291,8 @@
     <span class="cluster" id="eng-dot" title="graphviz engine"><span class="dot off"></span>dot</span>
     <span class="cluster" id="eng-d2" title="d2 engine"><span class="dot off"></span>d2</span>
     <span id="stRender">rendered in 0 ms</span>
+    <button id="stUpdate" class="status-chip update" hidden title="update available"
+      ><span class="dot"></span><span id="stUpdateLabel">v0.0.0</span></button>
     <button id="stMeasure" class="status-chip" title="reading width"
       ><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4v8M13.5 4v8M4.5 8h7M6.3 6.2L4.5 8l1.8 1.8M9.7 6.2L11.5 8 9.7 9.8"/></svg
       ><span id="stMeasureLabel">100ch</span></button>

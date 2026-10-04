@@ -920,6 +920,13 @@ package manager owns that. `--clean` restores the old wipe-first behaviour; with
 accumulates, which is what lets two machines fill one release. A manifest from a *different* version is
 never merged into.
 
+**The app checks this at launch now, not only when asked.** `boot()` calls `about.checkQuietly()` once the
+window is up and does not await it: an offline launch has to look exactly like one that found nothing, so no
+failure is surfaced. A hit sets the About sheet's state and reveals the status bar's update chip, whose click
+opens the sheet; the install path itself is unchanged. The copy that claimed the check was "the app's only
+network call, and it takes a click" is gone from the sheet, the SPEC and both READMEs — with a launch check,
+that sentence would be false.
+
 **Pushing needs the credential helper named explicitly here.** `$HOME` is empty in this shell and
 `credential.helper` is `manager`, which wants a prompt it cannot have, so `git push` dies with
 `unable to read askpass response from 'false'` — even in a session where an earlier push went through,
@@ -939,8 +946,18 @@ be detached in the web UI first. The token (scope `projects`) comes from `GITEE_
 github.com is not. The Gitee repository is private, so its assets need a login to download, and the updater
 endpoint above still points at GitHub: this release is a download mirror, not an update channel.
 
+**The updater refuses a non-`https` endpoint before anything else runs.** Pointing `plugins.updater.endpoints`
+at a local `http://127.0.0.1:…` fixture does not give you a cheap offline test — the config fails to
+deserialize and the app panics on startup with *"must use a secure protocol like `https`"*. Verify the launch
+check against the live release instead, with the version lowered (next paragraph) and a CDP probe like
+`var/cdp-verify-chip.mjs`: wrap-and-fake is not an option, because `__TAURI_INTERNALS__.invoke` is not
+writable from the page (a wrapper records nothing and the real call goes through anyway). Note also that the
+app's own `reqwest` reaches GitHub when `curl` times out on the release-asset redirect — do not conclude the
+endpoint is unreachable from a failed `curl`.
+
 **Testing the path without shipping a downgrade.** Build once at the released version (the manifest's), and
-once with `package.json`'s version temporarily lowered (say `0.0.9`): the lowered build sees the release as
+once with the version lowered in **all three** places (`package.json`, `tauri.conf.json`, `Cargo.toml`) — the
+updater compares against `tauri.conf.json`'s version, so changing `package.json` alone verifies nothing. The lowered build sees the release as
 newer, downloads it, verifies the signature, and stops before `install()`. The install step runs the NSIS
 installer, which is the only part that cannot be exercised without installing.
 

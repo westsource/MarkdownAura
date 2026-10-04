@@ -7,7 +7,7 @@ A Markdown **reader** for Windows and Linux — built for reading well, not for 
 ![MarkdownAura: a document open in the preview view, with the explorer, the outline and the status bar](assets/readme-preview.png)
 
 - Three views — preview / split / source — one click apart, with a draggable split
-- Diagrams render **locally**: mermaid, graphviz (dot) and d2 all ship inside the app, with no network at runtime and no telemetry
+- Diagrams render **locally**: mermaid, graphviz (dot) and d2 all ship inside the app — drawing a diagram needs no network, and no telemetry is collected
 - Close it and open it again: tabs, scroll positions, folder, window size and every setting come back
 
 ---
@@ -17,7 +17,7 @@ A Markdown **reader** for Windows and Linux — built for reading well, not for 
 **It is a reader, not an editor.**
 The source view is read-only — no caret, no undo, no save, and no unsaved-changes nagging. Sidebar, outline and toolbar fold away on demand, so the vertical space goes to the text.
 
-**All three diagram engines ship inside the app, and nothing goes over the network.**
+**All three diagram engines ship inside the app, so drawing a diagram needs no network. The one thing the app does fetch by itself is the update manifest at launch** — a version number and a download URL, and nothing about you (the About sheet says the same).
 `mermaid`, `dot` / `graphviz` and `d2` render locally: there is no remote service to call and no engine to install first. When an engine fails, the error lands inside the diagram card with the source line number — it never blanks the page.
 
 **Big files and odd encodings do not get in the way.**
@@ -54,7 +54,7 @@ The installer carries the WebView2 loader. It only fetches the WebView2 Runtime 
 | Reading | body size 12–22px; three reading widths (narrow 60ch / comfortable 100ch / full); light / dark / follow the system; UI language follows the system (Chinese / English); reduce motion |
 | Immersive | `F11` hides every piece of chrome; `esc` or `F11` leaves |
 | Help | `F1` — the keyboard map plus a diagram-syntax card for each engine |
-| About | version, author, licence, the three engines with their licences, the data folder (openable from there), a link to the project, and a **check for updates** row — the app's only network call, and it runs when you click it |
+| About | version, author, licence, the three engines with their licences, the data folder (openable from there), a link to the project, and a **check for updates** row. That row also runs by itself at launch: it fetches one small manifest (a version and a download URL) and, when something is newer, the status bar grows a chip that opens this sheet — nothing about you is sent either way |
 | Settings (an overlay, not a second window) | theme / language / font size / reading width / reduce motion / default app / engine sizes / watch debounce / render-cache size and clear |
 | Data | `%APPDATA%\MarkdownAura\session.json` on Windows, `~/.config/MarkdownAura/session.json` on Linux, written atomically (a crash cannot lose the previous session); the render cache is measured in SVG bytes and clears in one click |
 
@@ -94,7 +94,7 @@ All three run inside the application, so no document needs a network connection.
 ## Install and run
 
 - **Portable (zip)**: `MarkdownAura-<version>-portable.zip` holds `markdownaura.exe` together with the `WebView2Loader.dll` it needs. Unzip it anywhere and double-click the exe; the exe on its own will not start. There is no single-file edition any more — it was dropped in 0.1.2, because the launcher it needed was a second updater of its own and earned nothing the zip does not.
-- **Installer**: `MarkdownAura_<version>_x64-setup.exe`. The wizard shows the licence page and puts `LICENSE` and `THIRD-PARTY.md` in the install directory. This is also the update path: the About sheet's **check for updates** downloads the next signed installer from the GitHub release and runs it. A portable copy that updates this way becomes a proper installation; staying portable means downloading the new zip by hand.
+- **Installer**: `MarkdownAura_<version>_x64-setup.exe`. The wizard shows the licence page and puts `LICENSE` and `THIRD-PARTY.md` in the install directory. This is also the update path: when a newer release exists the status bar shows a chip, and clicking it opens the About sheet, whose **check for updates** row downloads the next signed installer from the GitHub release and runs it. A portable copy that updates this way becomes a proper installation; staying portable means downloading the new zip by hand.
 - **Linux (x86-64)**: `MarkdownAura_<version>_amd64.deb` installs with `sudo apt install ./MarkdownAura_<version>_amd64.deb` and pulls WebKitGTK 4.1 in as a dependency; `MarkdownAura_<version>_amd64.AppImage` needs nothing installed, because it carries the toolkit inside itself — which is the whole of the size difference between them. Both register the app as a handler for Markdown files. The deb is the package manager's to update; the AppImage is what the in-app updater replaces.
 - **Requirements**: Windows 10 / 11 (x64) with the WebView2 Runtime (already present on Windows 11 and on Windows 10 with Edge); Linux (x86-64), where the deb needs WebKitGTK 4.1 and the AppImage needs nothing.
 - **Sizes**: portable zip ≈ 12.1 MB; installer 11.8 MB; deb ≈ 12.6 MB; AppImage ≈ 88 MB (it bundles WebKitGTK).

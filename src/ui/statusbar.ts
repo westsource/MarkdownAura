@@ -58,6 +58,18 @@ export function setZoomLabel(percent: number): void {
   $("#stZoom").textContent = `${percent}%`;
 }
 
+/** The update chip: hidden until the boot check finds something (SPEC §10). Its label is a version, so
+ *  it is generated here rather than sitting in the shell markup — like every other label in this row,
+ *  and so a language change re-renders it. */
+export function setUpdateAvailable(version: string | null): void {
+  const chip = $<HTMLButtonElement>("#stUpdate");
+  chip.hidden = version === null;
+  if (version !== null) {
+    $("#stUpdateLabel").textContent = t("status.updateAvailable", { v: version });
+    chip.title = t("status.updateTitle", { v: version });
+  }
+}
+
 /** The reading-width chip: the value (`72ch`) or the preset's name when the column has no cap.
  *  Only the label is written — the chip's icon must survive. */
 export function setMeasureLabel(label: string, title: string): void {

@@ -876,6 +876,10 @@ async function boot(): Promise<void> {
 
   if (startup.path) await openPath(startup.path);
 
+  // Deliberately last and not awaited: a launch must never wait on the network, and a failed check is
+  // invisible (about.ts). The status bar is where an answer shows up.
+  void about.checkQuietly();
+
   renderChrome();
 }
 

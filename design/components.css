@@ -710,6 +710,11 @@ mark.current { background: var(--ac); color: #fff; }
 .status-chip { display: inline-flex; align-items: center; gap: 4px; }
 .status-chip svg { flex: 0 0 auto; opacity: .8; }
 .status-chip:hover svg { opacity: 1; }
+/* The update chip is the only control here that appears by itself, so it is the only one that carries
+   the accent — and its dot uses the same shape as the engine dots, with a colour that means nothing
+   else in this row (`warn` there means "still loading", which would be a lie here). */
+.statusbar .status-chip.update { color: var(--ac); }
+.statusbar .status-chip.update .dot { background: var(--ac); }
 /* The path is the only unbounded item in the row: without this it pushes the width/zoom controls
    off the right edge on a deep path. Everything else here has a fixed, small size. */
 #stPath { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
