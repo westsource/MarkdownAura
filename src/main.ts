@@ -996,10 +996,17 @@ async function boot(): Promise<void> {
     const action = pendingAction;
     const tab = activeTab();
     if (tab) {
+      /* Discard means "the file's text wins" — for the tab *and* for the editor, which keeps its own
+         copy of the buffer. Clearing the tab's fields alone left the pane showing the discarded text,
+         and the next sync read it straight back and re-marked the tab dirty. */
       tab.buffer = null;
       tab.dirty = false;
+      for (const key of ["source", "split"] as editor.PaneKey[]) editor.reset(key, tab.id, tab.source ?? "");
     }
     closeUnsaved();
+    // The tab strip and the status chip both carry the dirty mark, so the chrome is repainted too —
+    // the editor reset above already put the file's text back in the pane.
+    if (tab) renderChrome();
     if (tab) void paintActive();
     action?.();
   });
@@ -1087,8 +1094,11 @@ async function boot(): Promise<void> {
     askUnsaved(
       i18n.t("unsaved.quit", { n: dirty.length }),
       () => {
+        /* `destroy`, not `close`: the request has already been prevented once, and asking again is what
+           `close()` does — it re-emits the event, which is exactly the loop this flag exists to break.
+           The reader has answered the question, so the window goes. */
         closing = true;
-        void win.close();
+        void win.destroy();
       },
       saveAllDirty,
     );

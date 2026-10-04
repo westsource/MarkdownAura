@@ -232,6 +232,23 @@ export function scroller(key: PaneKey): HTMLElement | null {
   return panes.get(key)?.view?.scrollDOM ?? null;
 }
 
+/** Replaces a tab's document outright, without the diff `show` uses.
+ *
+ *  Needed by discard: the editor holds its own copy of the buffer, so clearing the tab's fields is not
+ *  enough to make the pane show the file again — the next sync would read the discarded text straight
+ *  back out of the editor and re-mark the tab dirty. The fresh state also drops the undo history, which
+ *  is the right thing for "throw my edits away". */
+export function reset(key: PaneKey, tabId: string, text: string): void {
+  const pane = panes.get(key);
+  if (!pane?.view || !runtime) return;
+  const state = runtime.state.EditorState.create({
+    doc: normalize(text),
+    extensions: extensionsFor(pane, runtime, false),
+  });
+  pane.states.set(tabId, state);
+  if (pane.current === tabId) pane.view.setState(state);
+}
+
 /** Drops a closed tab's history. Without this the map would keep every document ever opened. */
 export function forgetTab(tabId: string): void {
   for (const pane of panes.values()) pane.states.delete(tabId);

@@ -742,8 +742,10 @@ centred, `decorations: false`, `drag_and_drop(true)`. `transparent` is not set.
   `version.dll` because this toolchain has no `libversion.a`). "One file to double-click" is not worth a
   second updater of the app's own, so the crate, its build script and the `build:portable` script are gone.
   Portable means the zip: `markdownaura.exe` plus the loader, which is also what the installer unpacks.
-- `capabilities/default.json` is the app's whole permission surface: `core:default`, the ten window
-  permissions the custom titlebar and the session's window rect need, `core:event:allow-listen` /
+`capabilities/default.json` is the app's whole permission surface: `core:default`, the eleven window
+permissions the custom titlebar, the session's window rect and the confirmed quit need (`allow-destroy`
+is the last of them: a close request that has already been answered once cannot be answered again, so
+the quit goes through `destroy()` rather than re-emitting the event), `core:event:allow-listen` /
   `allow-unlisten` for the `fs://` and `app://` events, `dialog:allow-open`, the updater pair
   (`updater:default`, `process:allow-restart`) that the About sheet's check-for-updates path uses,
   and **one scoped opener permission** —
