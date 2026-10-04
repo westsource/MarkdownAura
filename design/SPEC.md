@@ -597,7 +597,7 @@ existing overlay shell (`.overlay` > `.sheet`), so the app gains no new window a
 surface type. This section is the design; `IMPL.md` is where each row's state is specified
 and persisted.
 
-### One shell, four panels
+### One shell, every panel
 
 | panel | sheet | body |
 |---|---|---|
@@ -605,6 +605,13 @@ and persisted.
 | help | `.sheet.wide` (640px) | top-aligned, two columns |
 | about | `.sheet.tight` (560px) | top-aligned, scrolling — a colophon page, not form rows |
 | diagram viewer | `.sheet` (full bleed) | centred (unchanged, §4) |
+| unsaved | `.sheet.tight` (560px) | centred: one sentence, and the action row in the foot |
+
+**The foot's action row is right-aligned, primary last.** One row pushed to the right edge by a leading
+`.spacer` (the repo's flex idiom): `cancel` · `discard` · `save`. That is the order a native dialog uses —
+the affirmative nearest the corner the hand comes from — and it keeps the destructive action adjacent to
+the safe one rather than to the primary. Tab order follows the visual order for the same reason. The
+unsaved sheet is the first sheet with actions in its foot; this is the rule the next one follows.
 
 ### About
 

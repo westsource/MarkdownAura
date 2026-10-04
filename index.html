@@ -184,10 +184,12 @@
           </div>
           <div class="sheet-body"><p class="unsaved-text" id="unsavedText"></p></div>
           <div class="sheet-foot">
-            <button class="primary-btn" id="unsavedSave" data-i18n="unsaved.save">save</button>
-            <button class="ghost-btn" id="unsavedDiscard" data-i18n="unsaved.discard">discard</button>
+            <!-- One right-aligned row, primary last — the order a native dialog uses. The leading
+                 spacer is the repo's flex idiom for pushing a group to the far edge. -->
             <div class="spacer"></div>
             <button class="ghost-btn" id="unsavedCancel" data-i18n="unsaved.cancel">cancel</button>
+            <button class="ghost-btn" id="unsavedDiscard" data-i18n="unsaved.discard">discard</button>
+            <button class="primary-btn" id="unsavedSave" data-i18n="unsaved.save">save</button>
           </div>
         </div>
       </div>
@@ -269,6 +271,7 @@
                 <div class="row"><span class="k" data-i18n="about.k.engines">engines</span><span class="v"><span class="badge mermaid">mermaid</span>mermaid.js 12<span class="lic">MIT</span></span></div>
                 <div class="row"><span class="k"></span><span class="v"><span class="badge dot">dot</span>graphviz · @hpcc-js/wasm-graphviz<span class="lic">Apache-2.0</span></span></div>
                 <div class="row"><span class="k"></span><span class="v"><span class="badge d2">d2</span><span data-i18n="about.d2Note">bundled — wasm inlined (~11.5 MB)</span><span class="lic">MPL-2.0</span></span></div>
+                <div class="row"><span class="k" data-i18n="about.k.editor">editor</span><span class="v"><span class="badge editor">edit</span><span data-i18n="about.editorNote">CodeMirror 6 — loaded on demand, ~0.5 MB minified (167 KB gzip)</span><span class="lic">MIT</span></span></div>
                 <div class="row"><span class="k" data-i18n="about.k.data">data</span><span class="v"><span class="about-path" id="aboutDataPath">—</span><button class="ghost-btn about-open" id="aboutReveal" data-i18n="about.reveal">open</button></span></div>
               </div>
 

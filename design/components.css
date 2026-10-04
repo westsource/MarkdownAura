@@ -688,6 +688,9 @@ button.readonly-pill[aria-disabled="true"]:hover { color: var(--tx-3); border-co
 .badge.mermaid { background: var(--eng-mermaid-bg); color: var(--eng-mermaid); }
 .badge.dot     { background: var(--eng-dot-bg);     color: var(--eng-dot); }
 .badge.d2      { background: var(--eng-d2-bg);      color: var(--eng-d2); }
+/* The editor gets the app's own accent rather than a per-engine token: it is not an engine, and the
+   accent already means "this is the app itself" everywhere else. */
+.badge.editor  { background: var(--ac-bg);          color: var(--ac-tx); }
 .diagram-title { font-size: var(--fs-xs); color: var(--tx-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .diagram-body { padding: var(--sp-3); display: flex; justify-content: center; overflow: auto; }
 .diagram-body svg { max-width: 100%; height: auto; }

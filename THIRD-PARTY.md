@@ -25,8 +25,14 @@ licence text is `node_modules/@d2lang/d2/LICENSE.txt` in the source tree.
 
 | package | version | licence | copyright |
 |---|---|---|---|
+| `@codemirror/commands` | 6.11.1 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| `@codemirror/lang-markdown` | 6.5.2 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| `@codemirror/language` | 6.12.4 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| `@codemirror/state` | 6.7.6 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
+| `@codemirror/view` | 6.43.13 | MIT | Copyright (C) 2018-2021 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
 | `@d2lang/d2` | 0.1.34 | MPL-2.0 | Copyright 2022 Terrastruct Inc. |
 | `@hpcc-js/wasm-graphviz` | 1.29.2 | Apache-2.0 | — |
+| `@lezer/highlight` | 1.2.5 | MIT | Copyright (C) 2018 by Marijn Haverbeke <marijn@haverbeke.berlin> and others |
 | `@tauri-apps/api` | 2.12.1 | Apache-2.0 OR MIT | — |
 | `@tauri-apps/plugin-dialog` | 2.8.1 | MIT OR Apache-2.0 | — |
 | `@tauri-apps/plugin-opener` | 2.7.0 | MIT OR Apache-2.0 | — |
@@ -36,7 +42,7 @@ licence text is `node_modules/@d2lang/d2/LICENSE.txt` in the source tree.
 
 ## Rust crates
 
-The 263 crates that ship in the release build (normal dependencies for this target, as
+The 273 crates that ship in the release build (normal dependencies for this target, as
 resolved by Cargo — dev-dependencies and other platforms' crates are excluded because they are not
 in the binary). Where a crate offers a choice of licence (`MIT OR Apache-2.0` and the like),
 MarkdownAura takes it under the MIT terms.
@@ -271,13 +277,20 @@ MarkdownAura takes it under the MIT terms.
 | `winapi-util` | 0.1.11 | Unlicense OR MIT |
 | `window-vibrancy` | 0.8.1 | Apache-2.0 OR MIT |
 | `windows` | 0.62.2 | MIT OR Apache-2.0 |
+| `windows_aarch64_gnullvm` | 0.48.5 | MIT OR Apache-2.0 |
 | `windows_aarch64_gnullvm` | 0.53.1 | MIT OR Apache-2.0 |
+| `windows_aarch64_msvc` | 0.48.5 | MIT OR Apache-2.0 |
 | `windows_aarch64_msvc` | 0.53.1 | MIT OR Apache-2.0 |
+| `windows_i686_gnu` | 0.48.5 | MIT OR Apache-2.0 |
 | `windows_i686_gnu` | 0.53.1 | MIT OR Apache-2.0 |
 | `windows_i686_gnullvm` | 0.53.1 | MIT OR Apache-2.0 |
+| `windows_i686_msvc` | 0.48.5 | MIT OR Apache-2.0 |
 | `windows_i686_msvc` | 0.53.1 | MIT OR Apache-2.0 |
+| `windows_x86_64_gnu` | 0.48.5 | MIT OR Apache-2.0 |
 | `windows_x86_64_gnu` | 0.53.1 | MIT OR Apache-2.0 |
+| `windows_x86_64_gnullvm` | 0.48.5 | MIT OR Apache-2.0 |
 | `windows_x86_64_gnullvm` | 0.53.1 | MIT OR Apache-2.0 |
+| `windows_x86_64_msvc` | 0.48.5 | MIT OR Apache-2.0 |
 | `windows_x86_64_msvc` | 0.53.1 | MIT OR Apache-2.0 |
 | `windows-collections` | 0.3.2 | MIT OR Apache-2.0 |
 | `windows-core` | 0.62.2 | MIT OR Apache-2.0 |
@@ -288,12 +301,15 @@ MarkdownAura takes it under the MIT terms.
 | `windows-numerics` | 0.3.1 | MIT OR Apache-2.0 |
 | `windows-result` | 0.4.1 | MIT OR Apache-2.0 |
 | `windows-strings` | 0.5.1 | MIT OR Apache-2.0 |
+| `windows-sys` | 0.48.0 | MIT OR Apache-2.0 |
 | `windows-sys` | 0.60.2 | MIT OR Apache-2.0 |
 | `windows-sys` | 0.61.2 | MIT OR Apache-2.0 |
+| `windows-targets` | 0.48.5 | MIT OR Apache-2.0 |
 | `windows-targets` | 0.53.5 | MIT OR Apache-2.0 |
 | `windows-threading` | 0.2.1 | MIT OR Apache-2.0 |
 | `windows-version` | 0.1.7 | MIT OR Apache-2.0 |
 | `winnow` | 1.0.4 | MIT |
+| `winreg` | 0.52.0 | MIT |
 | `writeable` | 0.6.4 | Unicode-3.0 |
 | `wry` | 0.57.0 | Apache-2.0 OR MIT |
 | `yoke` | 0.8.3 | Unicode-3.0 |
