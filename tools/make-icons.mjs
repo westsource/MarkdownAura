@@ -1,9 +1,13 @@
-/* Generates the placeholder app icons into src-tauri/icons/.
+/* Generates the app icons into src-tauri/icons/.
  *
- * These are placeholders drawn to match SPEC §8 (flat, no gradient, no shadow): the accent
- * purple rounded square with the "text lines, short title first" motif the preview view
- * icon already uses. Replace them with a real mark when there is one — but keep the sizes,
- * because src-tauri/tauri.conf.json and the Windows resource both depend on them.
+ * The mark: a "ghosted M" — the Markdown M drawn three times, offset to the left at falling
+ * opacity, so the letter reads as moving fast. Flat per SPEC §8 (no gradient, no shadow);
+ * the ghosts are plain alpha, which stays flat and still thins out cleanly at favicon sizes.
+ * Keep the sizes: src-tauri/tauri.conf.json and the Windows resource both depend on them.
+ *
+ * The same geometry lives in three places by design — here (raster), the SEO site's
+ * build.py (favicon.svg / inline nav logo) and its scripts/make-assets.py (og-cover).
+ * Change one, change all three.
  *
  *     node tools/make-icons.mjs
  *
@@ -23,10 +27,20 @@ const BAR = [0xff, 0xff, 0xff];
 
 /* All geometry in 0..1 so one description renders correctly at every size. */
 const PLATE = { x0: 0.046875, y0: 0.046875, x1: 0.953125, y1: 0.953125, r: 0.203125 };
-const BARS = [
-  { x0: 0.203125, y0: 0.359375, x1: 0.515625, y1: 0.421875 },
-  { x0: 0.203125, y0: 0.46875, x1: 0.796875, y1: 0.53125 },
-  { x0: 0.203125, y0: 0.578125, x1: 0.796875, y1: 0.640625 },
+
+/* The M outline, clockwise: left stem up, two peaks, right stem down, then the inner valley.
+   Mirrored in build.py's LOGO_M_PATH — keep the two in step. */
+const M_PATH = [
+  [0.369141, 0.742188], [0.369141, 0.304688], [0.455078, 0.257813], [0.556641, 0.445313],
+  [0.658203, 0.257813], [0.744141, 0.304688], [0.744141, 0.742188], [0.658203, 0.742188],
+  [0.658203, 0.445313], [0.587891, 0.574219], [0.525391, 0.574219], [0.455078, 0.445313],
+  [0.455078, 0.742188],
+];
+
+/* Two ghosts to the left of the solid M, thin enough to vanish at favicon sizes. */
+const GHOSTS = [
+  { dx: -0.113281, alpha: 0.18 },
+  { dx: -0.0625, alpha: 0.4 },
 ];
 
 function inRoundRect(px, py, s) {
@@ -41,6 +55,18 @@ function inRoundRect(px, py, s) {
   return dx * dx + dy * dy <= r * r;
 }
 
+/** Even-odd point-in-polygon over the M outline. */
+function inM(px, py, dx = 0) {
+  const x = px - dx;
+  let inside = false;
+  for (let i = 0, j = M_PATH.length - 1; i < M_PATH.length; j = i++) {
+    const [xi, yi] = M_PATH[i];
+    const [xj, yj] = M_PATH[j];
+    if (yi > py !== yj > py && x < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
 /** Straight-alpha RGBA buffer, top-down. 4x4 supersampled so small sizes stay clean. */
 function render(size) {
   const SS = 4;
@@ -48,21 +74,22 @@ function render(size) {
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       let plateHit = 0;
-      let barHit = 0;
+      let markA = 0; // accumulated alpha of the M and its ghosts
       for (let sy = 0; sy < SS; sy++) {
         for (let sx = 0; sx < SS; sx++) {
           const px = (x + (sx + 0.5) / SS) / size;
           const py = (y + (sy + 0.5) / SS) / size;
           if (!inRoundRect(px, py, PLATE)) continue;
           plateHit++;
-          if (BARS.some((b) => inRoundRect(px, py, { ...b, r: (b.y1 - b.y0) / 2 }))) barHit++;
+          if (inM(px, py)) markA += 1;
+          else for (const g of GHOSTS) if (inM(px, py, g.dx)) markA += g.alpha;
         }
       }
       const total = SS * SS;
       if (!plateHit) continue;
-      const barFrac = barHit / total;
       const plateFrac = plateHit / total;
-      const mix = (a, b) => Math.round(a * (1 - barFrac) + b * barFrac);
+      const a = Math.min(1, markA / total); // ghosts overlap only the plate, so plain sum is fine
+      const mix = (plate, bar) => Math.round(plate * (1 - a) + bar * a);
       const i = (y * size + x) * 4;
       out[i] = mix(ACCENT[0], BAR[0]);
       out[i + 1] = mix(ACCENT[1], BAR[1]);
