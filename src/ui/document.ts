@@ -8,6 +8,7 @@ import type { RenderedDoc } from "../ipc";
 import { frontmatterHtml, paint } from "../render/pipeline";
 import type { Tab } from "../state";
 import { $, $$, esc } from "./dom";
+import * as editor from "./editor";
 
 export type ViewMode = "preview" | "split" | "source";
 
@@ -38,12 +39,20 @@ export function activeScroller(): HTMLElement {
   return $(".prose-wrap");
 }
 
+/** The element that actually scrolls a pane: the editor's scroller while the pane is editable, the pane
+ *  itself otherwise. SPEC §12 promises the reading features "address the pane's scroller, which becomes
+ *  the editor's" — this is that sentence, in one place. */
+function scrollerOf(pane: HTMLElement): HTMLElement {
+  const key = pane.classList.contains("source-view") ? "source" : pane.classList.contains("pane-src") ? "split" : null;
+  return (key && editor.scroller(key)) || pane;
+}
+
 export function captureScroll(tab: Tab): void {
-  tab.scroll = activeScroller().scrollTop;
+  tab.scroll = scrollerOf(activeScroller()).scrollTop;
 }
 
 export function restoreScroll(tab: Tab): void {
-  activeScroller().scrollTop = tab.scroll;
+  scrollerOf(activeScroller()).scrollTop = tab.scroll;
 }
 
 /**
@@ -183,7 +192,7 @@ const OUT_PANE = ".pane-out";
  *  diagrams (dozens), never one element per line. */
 function paneTops(pane: HTMLElement, isSource: boolean): Map<string, number> {
   const paneTop = pane.getBoundingClientRect().top;
-  const scroll = pane.scrollTop;
+  const scroll = scrollerOf(pane).scrollTop;
   const tops = new Map<string, number>();
   for (const id of anchorIds) {
     const escaped = CSS.escape(id);
@@ -196,6 +205,8 @@ function paneTops(pane: HTMLElement, isSource: boolean): Map<string, number> {
 }
 
 function mapScroll(from: HTMLElement, to: HTMLElement, fromIsSource: boolean, toIsSource: boolean): number {
+  const fromEl = scrollerOf(from);
+  const toEl = scrollerOf(to);
   const a = paneTops(from, fromIsSource);
   const b = paneTops(to, toIsSource);
   const shared = anchorIds.filter((id) => a.has(id) && b.has(id));
@@ -203,12 +214,12 @@ function mapScroll(from: HTMLElement, to: HTMLElement, fromIsSource: boolean, to
   if (shared.length === 0) {
     // Nothing common — an empty pane, or a document with neither headings nor diagrams. Fall back
     // to proportional scrolling: wrong in detail, right in direction.
-    const fromMax = Math.max(0, from.scrollHeight - from.clientHeight);
-    const toMax = Math.max(0, to.scrollHeight - to.clientHeight);
-    return fromMax === 0 ? 0 : (from.scrollTop / fromMax) * toMax;
+    const fromMax = Math.max(0, fromEl.scrollHeight - fromEl.clientHeight);
+    const toMax = Math.max(0, toEl.scrollHeight - toEl.clientHeight);
+    return fromMax === 0 ? 0 : (fromEl.scrollTop / fromMax) * toMax;
   }
 
-  const y = from.scrollTop;
+  const y = fromEl.scrollTop;
   let prev = shared[0];
   let next: string | null = null;
   for (const id of shared) {
@@ -242,8 +253,9 @@ function mapScroll(from: HTMLElement, to: HTMLElement, fromIsSource: boolean, to
 function syncSplit(from: HTMLElement): void {
   if (current !== "split") return;
 
+  const fromEl = scrollerOf(from);
   const echo = expectedScroll.get(from);
-  if (echo !== undefined && Math.abs(from.scrollTop - echo) <= 1) return;
+  if (echo !== undefined && Math.abs(fromEl.scrollTop - echo) <= 1) return;
 
   const src = document.querySelector<HTMLElement>(SRC_PANE);
   const out = document.querySelector<HTMLElement>(OUT_PANE);
@@ -254,7 +266,7 @@ function syncSplit(from: HTMLElement): void {
 
   const target = mapScroll(from, to, from === src, to === src);
   expectedScroll.set(to, target);
-  to.scrollTop = target;
+  scrollerOf(to).scrollTop = target;
 }
 
 // ---------------------------------------------------------------- scroll spy
@@ -282,13 +294,16 @@ export function wireScrollSpy(onActive: (headingId: string | null) => void): voi
   // too, not just the pane that owns the outline), and the source view. The spy reads
   // `activeScroller()` so a view switch needs no re-wiring and cannot end up listening to a
   // detached element.
+  /* `capture` on purpose: `scroll` does not bubble, so a listener on the pane never hears the editor's
+     own scroller — and in the mode that inner element is the one doing the scrolling (SPEC §12). The
+     capture phase still runs for a non-bubbling event, which is what makes this work. */
   for (const el of [".prose-wrap", OUT_PANE, SRC_PANE, ".source-view"]) {
-    document.querySelector<HTMLElement>(el)?.addEventListener("scroll", handler, { passive: true });
+    document.querySelector<HTMLElement>(el)?.addEventListener("scroll", handler, { passive: true, capture: true });
   }
 }
 
 function findCurrentHeading(): string | null {
-  const scroller = activeScroller();
+  const scroller = scrollerOf(activeScroller());
   const top = scroller.getBoundingClientRect().top;
   const headings = $$<HTMLElement>("[id^='h']", scroller);
 
@@ -330,6 +345,7 @@ export function jumpTo(target: string): void {
 function scrollToAnchor(container: HTMLElement, selector: string): void {
   const el = container.querySelector<HTMLElement>(selector);
   if (!el) return;
+  const scroller = scrollerOf(container);
   const delta = el.getBoundingClientRect().top - container.getBoundingClientRect().top - 12;
-  container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
+  scroller.scrollTo({ top: scroller.scrollTop + delta, behavior: "smooth" });
 }

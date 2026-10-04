@@ -45,6 +45,10 @@ pub struct FilePayload {
     pub bytes: u64,
     pub mtime_ms: i64,
     pub truncated: bool,
+    /// Whether this file can be written at all: the read-only attribute on Windows, no write bit for
+    /// anyone on Unix. SPEC §12 refuses to *edit* such a file instead of letting the save fail later —
+    /// a buffer that cannot be written is a trap, not an editor.
+    pub writable: bool,
 }
 
 /// Directories the watcher and the tree both skip. Lives in Rust so the counter and the tree
@@ -222,6 +226,7 @@ pub fn read_file(path: &Path) -> Result<FilePayload> {
         bytes: bytes_len,
         mtime_ms: mtime_ms(&meta),
         truncated,
+        writable: !meta.permissions().readonly(),
     })
 }
 
@@ -447,6 +452,24 @@ mod tests {
         let err = write_file(&path, "mine\n", "utf-8", "lf", loaded.mtime_ms - 1_000).unwrap_err();
         assert!(matches!(err, ApiError::Conflict { .. }), "got {err:?}");
         assert_eq!(std::fs::read(&path).unwrap(), b"two\n", "the newer content wins");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_read_only_file_is_reported_as_unwritable() {
+        let (dir, path) = scratch("locked.md", b"# locked\n");
+        let mut perms = std::fs::metadata(&path).unwrap().permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&path, perms).unwrap();
+
+        let loaded = read_file(&path).unwrap();
+        assert!(!loaded.writable, "the pane must refuse to edit it");
+        // The write itself fails too; the frontend refuses before it gets here, and this is the backstop.
+        assert!(write_file(&path, "# mine\n", "utf-8", "lf", loaded.mtime_ms).is_err());
+
+        let mut perms = std::fs::metadata(&path).unwrap().permissions();
+        perms.set_readonly(false);
+        std::fs::set_permissions(&path, perms).unwrap();
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

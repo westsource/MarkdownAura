@@ -245,6 +245,7 @@ function blockedReason(payload: ipc.FilePayload): Tab["blocked"] {
   if (payload.truncated) return "truncated";
   if (payload.encoding === "utf-8-lossy") return "lossy";
   if (payload.eol === "mixed") return "mixed";
+  if (!payload.writable) return "readonly";
   return null;
 }
 
@@ -268,7 +269,9 @@ function paintEditorChrome(tab: Tab | null): void {
       ? i18n.t(BLOCKED_KEY[blocked])
       : tab?.editing
         ? i18n.t("view.doneTitle")
-        : i18n.t("view.editTitle");
+        : editor.editorState() === "failed"
+          ? i18n.t("edit.failed")
+          : i18n.t("view.editTitle");
   }
   const chip = $("#stDirty") as HTMLButtonElement;
   chip.hidden = !tab?.dirty;
@@ -358,16 +361,12 @@ function leaveEdit(force = false): void {
   scheduleSave();
 }
 
-/**
- * Saves, then re-reads through the normal path.
- *
- * Re-reading is not ceremony: afterwards the file on disk is the truth, and going back through
- * `read_file` + `render_doc` is what proves the round-trip — the preview that comes back is built from
- * the bytes that were just written, not from the buffer that wrote them.
- */
-async function saveActiveTab(): Promise<void> {
-  const tab = activeTab();
-  if (!tab || !tab.editing || !tab.dirty) return;
+/** Writes one tab's buffer back, then re-reads through the normal path. Returns whether anything was
+ *  written. Re-reading is not ceremony: afterwards the file on disk is the truth, and going back through
+ *  `read_file` + `render_doc` is what proves the round-trip — the preview that comes back is built from
+ *  the bytes that were just written, not from the buffer that wrote them. */
+async function saveTab(tab: Tab): Promise<boolean> {
+  if (!tab.editing || !tab.dirty) return false;
   try {
     tab.loadedMtimeMs = await ipc.saveDoc(
       tab.file,
@@ -377,15 +376,35 @@ async function saveActiveTab(): Promise<void> {
       tab.loadedMtimeMs,
     );
     tab.dirty = false;
-    tab.source = null;
     tab.buffer = null;
-    await loadTab(tab);
-    toast(i18n.t("edit.saved"), "ok");
+    tab.source = null;
+    /* Re-reading is not ceremony: afterwards the file on disk is the truth, and going back through
+       `read_file` + `render_doc` is what proves the round-trip — the preview that comes back is built
+       from the bytes that were just written, not from the buffer that wrote them. An off-screen tab
+       defers that to its next activation, the way the watcher does. */
+    if (tab === activeTab()) await loadTab(tab);
+    else tab.doc = null;
+    return true;
   } catch (err) {
     // A refusal is the point of the guard, not a crash: the buffer keeps its state and the toast says why.
     const { message, silent } = ipc.describeError(err);
     if (!silent) toast(message, "err");
+    return false;
   }
+}
+
+async function saveActiveTab(): Promise<void> {
+  const tab = activeTab();
+  if (tab && (await saveTab(tab))) toast(i18n.t("edit.saved"), "ok");
+}
+
+/** Every dirty buffer — for the one moment where "the active tab" is the wrong question: quitting. */
+async function saveAllDirty(): Promise<void> {
+  let saved = 0;
+  for (const tab of state.tabs.filter((candidate) => candidate.dirty)) {
+    if (await saveTab(tab)) saved++;
+  }
+  if (saved) toast(i18n.t("edit.saved"), "ok");
 }
 
 let previewTimer = 0;
@@ -419,17 +438,25 @@ function schedulePreview(tab: Tab): void {
 }
 
 let pendingAction: (() => void) | null = null;
+/** What the sheet's `save` button runs. Not always "the active tab": quitting has to write every
+ *  dirty buffer, and the sheet is the same sheet either way. */
+let pendingSave: (() => Promise<void>) | null = null;
+/** Set once the quit has been confirmed, so the window can actually close. `close()` fires the close
+ *  request again, and without this the app would ask the same question forever. */
+let closing = false;
 
-/** Leaving a dirty buffer — or closing its tab — asks first (SPEC §12). The sheet reuses the existing
- *  overlay shell, so the mode adds no new surface type. */
-function askUnsaved(what: string, action: () => void): void {
+/** Leaving a dirty buffer — closing its tab, or quitting — asks first (SPEC §12). The sheet reuses the
+ *  existing overlay shell, so the mode adds no new surface type. */
+function askUnsaved(what: string, action: () => void, save: () => Promise<void> = saveActiveTab): void {
   pendingAction = action;
+  pendingSave = save;
   $("#unsavedText").textContent = i18n.t("unsaved.body", { what });
   $("#unsavedOverlay").classList.add("on");
 }
 
 function closeUnsaved(): void {
   pendingAction = null;
+  pendingSave = null;
   $("#unsavedOverlay").classList.remove("on");
 }
 
@@ -961,8 +988,9 @@ async function boot(): Promise<void> {
   dirtyChip.addEventListener("mousedown", (event) => event.preventDefault());
   dirtyChip.addEventListener("click", () => void saveActiveTab());
   $("#unsavedSave").addEventListener("click", () => {
+    const save = pendingSave;
     closeUnsaved();
-    void saveActiveTab();
+    if (save) void save();
   });
   $("#unsavedDiscard").addEventListener("click", () => {
     const action = pendingAction;
@@ -1048,6 +1076,24 @@ async function boot(): Promise<void> {
   $("#winMax").addEventListener("click", () => void win.toggleMaximize());
   $("#winClose").addEventListener("click", () => void win.close());
 
+  /* Quitting with unsaved work asks first (SPEC §12) — the same sheet, because a buffer that is not in
+     the file is the same problem wherever it is about to be lost. The titlebar's ×, the taskbar and
+     Alt+F4 all end up here. */
+  await win.onCloseRequested((event) => {
+    if (closing) return;
+    const dirty = state.tabs.filter((tab) => tab.dirty);
+    if (dirty.length === 0) return;
+    event.preventDefault();
+    askUnsaved(
+      i18n.t("unsaved.quit", { n: dirty.length }),
+      () => {
+        closing = true;
+        void win.close();
+      },
+      saveAllDirty,
+    );
+  });
+
   // The titlebar's `⋯` is a real control, not decoration: it lists every tab (SPEC §5).
   $("#listTabsBtn").addEventListener("click", (event) => {
     event.stopPropagation();
@@ -1096,6 +1142,18 @@ async function boot(): Promise<void> {
   await ipc.onFsChanged((payload) => {
     for (const tab of state.tabs) {
       if (!payload.paths.some((path) => samePath(path, tab.file))) continue;
+
+      /* The policy is the product owner's: an external change wins, silently (SPEC §12). Applied to an
+         editable pane that means the *buffer* is replaced, not kept — and when it was dirty that is
+         announced, because text vanishing under the cursor with no explanation is indistinguishable from
+         a bug. Clearing `dirty` is also what keeps the save honest: the reload refreshes the mtime
+         baseline, so a buffer left dirty would sail past the conflict check and overwrite the change
+         that just arrived. */
+      if (tab.editing && tab.dirty) {
+        tab.buffer = null;
+        tab.dirty = false;
+        toast(i18n.t("edit.reloaded", { name: tab.name }), "warn");
+      }
 
       if (tab === activeTab()) {
         tab.reloading = true;

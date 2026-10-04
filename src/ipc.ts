@@ -102,6 +102,9 @@ export interface FilePayload {
   bytes: number;
   mtimeMs: number;
   truncated: boolean;
+  /** The read-only attribute (Windows) or a file with no write bit at all (Unix). The pane refuses to
+   *  edit such a file rather than letting the save fail later (SPEC §12). */
+  writable: boolean;
 }
 
 export interface Heading {

@@ -299,6 +299,10 @@ permissions survive the atomic replace. Three refusals guard that contract — `
 `utf-8-lossy` decode, an encoding this build cannot produce — and a file that changed under the buffer
 is a `Conflict`. Both are tagged variants, so the UI decides what to say rather than parsing a string.
 
+`FilePayload` also carries `writable` — the read-only attribute on Windows, no write bit for anyone on
+Unix — so the pane can refuse to edit such a file up front instead of letting the save fail after the
+reader has already typed into it. The write itself fails too; that is the backstop, not the plan.
+
 ### Events (Rust → frontend)
 
 | event | payload | notes |

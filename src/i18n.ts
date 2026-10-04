@@ -180,6 +180,7 @@ const en = {
   "edit.pinned": "pinned — a preview tab is reused in place, so edits would be replaced by the next click",
   "edit.saved": "saved",
   "edit.unsaved": "unsaved",
+  "edit.reloaded": "{name} changed on disk — the buffer was reloaded",
   "edit.saveTitle": "save (ctrl S)",
   "unsaved.title": "unsaved changes",
   "unsaved.save": "save",
@@ -188,6 +189,7 @@ const en = {
   "unsaved.leave": "leave the editable pane",
   "unsaved.close": "close {name}",
   "unsaved.closeMany": "close {n} unsaved tabs",
+  "unsaved.quit": "Quit with {n} unsaved buffer(s)",
   "unsaved.body": "{what}? This buffer has changes that are not in the file.",
 
   // ---- settings rows ----
@@ -413,6 +415,7 @@ const zh: Record<Key, string> = {
   "edit.pinned": "已转为常驻——预览标签页会被就地复用，否则编辑会被下一次点击替换",
   "edit.saved": "已保存",
   "edit.unsaved": "未保存",
+  "edit.reloaded": "{name} 已在磁盘上被改动——缓冲区已重新载入",
   "edit.saveTitle": "保存 (ctrl S)",
   "unsaved.title": "未保存的修改",
   "unsaved.save": "保存",
@@ -421,6 +424,7 @@ const zh: Record<Key, string> = {
   "unsaved.leave": "离开编辑状态",
   "unsaved.close": "关闭 {name}",
   "unsaved.closeMany": "关闭 {n} 个未保存的标签页",
+  "unsaved.quit": "带着 {n} 个未保存的缓冲区退出",
   "unsaved.body": "{what}？这个缓冲区里有尚未写入文件的修改。",
 
   "settings.section.reading": "阅读",

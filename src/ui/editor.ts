@@ -108,7 +108,7 @@ function extensionsFor(pane: Pane, rt: Runtime, readOnly: boolean): Extension[] 
   const { EditorView, keymap, drawSelection } = rt.view;
   const { defaultKeymap, history, historyKeymap } = rt.commands;
   const { syntaxHighlighting, defaultHighlightStyle, bracketMatching, indentOnInput } = rt.language;
-  const { markdown } = rt.markdown;
+  const { markdown, markdownKeymap } = rt.markdown;
 
   return [
     history(),
@@ -120,9 +120,10 @@ function extensionsFor(pane: Pane, rt: Runtime, readOnly: boolean): Extension[] 
     bracketMatching(),
     syntaxHighlighting(defaultHighlightStyle),
     markdown(),
-    /* The window owns the document-level keys (ctrl E / ctrl S / ctrl F / esc). CodeMirror keeps its
-       own editing keys — undo and redo among them — and lets anything it does not claim bubble up. */
-    keymap.of([...defaultKeymap, ...historyKeymap]),
+    /* Markdown's own keys come first: Enter continues a list item or a quote, and its markup-aware
+       deletions only fire where they make sense. Then CodeMirror's defaults, then history — the window
+       owns everything else (ctrl E / ctrl S / ctrl F / esc), which is why nothing here claims those. */
+    keymap.of([...markdownKeymap, ...defaultKeymap, ...historyKeymap]),
     pane.theme!.of(themeOf(rt)),
     pane.readOnly!.of(EditorState.readOnly.of(readOnly)),
     EditorView.updateListener.of((update) => {
@@ -220,6 +221,15 @@ export function revealRange(key: PaneKey, from: number, to: number): void {
     selection: runtime.state.EditorSelection.range(from, to),
     effects: runtime.view.EditorView.scrollIntoView(from, { y: "center" }),
   });
+}
+
+/** The element that actually scrolls this pane while the editor owns it.
+ *
+ *  `document.ts` needs this because the pane itself stops scrolling in the mode (`overflow: hidden`),
+ *  so reading `pane.scrollTop` there would always give zero — which is how per-tab scroll restore and
+ *  the split-view sync would quietly stop working (SPEC §12 promises both). */
+export function scroller(key: PaneKey): HTMLElement | null {
+  return panes.get(key)?.view?.scrollDOM ?? null;
 }
 
 /** Drops a closed tab's history. Without this the map would keep every document ever opened. */
