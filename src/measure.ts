@@ -44,11 +44,21 @@ let cachedChPx = 0;
 /** `ch` is resolved against the *using* element's font size, so a token written as `72ch` used by
  *  an `h1` (22px) is 40% wider than the same token on a paragraph (16px) — the reading column came
  *  out ragged, heading by heading. The measure is therefore resolved **once**, against the prose
- *  font, into a pixel value every block shares. */
-function chToPx(ch: number): string {
-  // Measured in the preview pane: it is the element whose font the token describes, so the probe
-  // inherits the exact family, size and zoom without duplicating the CSS here.
-  const host = document.querySelector<HTMLElement>("#out-preview") ?? document.body;
+ *  font, into a pixel value every block shares.
+ *
+ *  `null` means "there is nothing laid out to measure right now" — see the host lookup. */
+function chToPx(ch: number): string | null {
+  /* Measured in a *laid out* `.prose`. This used to hard-code `#out-preview`, which is
+     `display: none` in split view (that view renders into `#out-split`) and in source view — and a
+     `display: none` element measures **zero**. So changing the font size from either of those views
+     resolved the token to `0px`, and `max-width: 0` with `overflow-wrap: anywhere` renders exactly
+     one character per line. The preview and the editable pane share this one token, which is why
+     both collapsed together.
+     Split view's prose is `.prose.compact`, so the column is resolved against the pane the reader is
+     actually looking at — the same thing the token describes. */
+  const host = [...document.querySelectorAll<HTMLElement>(".prose")].find((el) => el.offsetParent !== null);
+  if (!host) return null;
+
   const font = getComputedStyle(host).font;
   if (cachedFont !== font) {
     const probe = document.createElement("span");
@@ -71,7 +81,15 @@ function chToPx(ch: number): string {
  *  resolved pixel value does not follow either by itself. */
 export function applyMeasure(id: Measure): void {
   const { ch } = MEASURES[id];
-  document.documentElement.style.setProperty("--measure", ch === null ? "100%" : chToPx(ch));
+  if (ch === null) {
+    document.documentElement.style.setProperty("--measure", "100%");
+    return;
+  }
+  const px = chToPx(ch);
+  // No laid-out prose to measure (source view): leave the token as it is. Writing a number derived
+  // from nothing is how the column collapsed to one character per line.
+  if (px === null) return;
+  document.documentElement.style.setProperty("--measure", px);
 }
 
 /** What the tooltip reports: the resolved width, and the share of the pane it uses, so the number
