@@ -95,9 +95,9 @@
 
 ## 安装与运行
 
-- **免安装版（zip）**：`MarkdownAura-<version>-portable.zip` 里是 `markdownaura.exe` 与它需要的 `WebView2Loader.dll`。解压到任意位置双击 exe 即可（只拷 exe 无法启动）。不再提供单文件版——0.1.2 起移除，因为承载它的那个壳等于自带一套升级逻辑，却换不来 zip 做不到的事。
-- **安装版**：`MarkdownAura_<version>_x64-setup.exe`。安装向导含许可页，并把 `LICENSE` 与 `THIRD-PARTY.md` 放进安装目录。它同时也是升级通道：存在更新版本时状态栏会出现一枚提示，点它打开关于面板，其中的 **检查更新** 会从 GitHub release 下载下一个已签名的安装包并运行。免安装版这样升级后会变成正式安装；想保持免安装，就到 release 页手动下载新的 zip。
-- **Linux（x86-64）**：`MarkdownAura_<version>_amd64.deb` 用 `sudo apt install ./MarkdownAura_<version>_amd64.deb` 安装，依赖会自动带上 WebKitGTK 4.1；`MarkdownAura_<version>_amd64.AppImage` 不需要预装任何东西——工具链装在它自己里面，这也正是两者体积差的来源。两者都会把本应用注册为 Markdown 文件的打开方式。deb 装的那份归包管理器升级，AppImage 则是应用内更新时被替换的那个产物。
+- **免安装版（zip，Windows x64）**：`MarkdownAura-<version>-windows-x64-portable.zip` 里是 `markdownaura.exe` 与它需要的 `WebView2Loader.dll`。解压到任意位置双击 exe 即可（只拷 exe 无法启动）。不再提供单文件版——0.1.2 起移除，因为承载它的那个壳等于自带一套升级逻辑，却换不来 zip 做不到的事。
+- **安装版（Windows x64）**：`MarkdownAura_<version>_windows-x64-setup.exe`。安装向导含许可页，并把 `LICENSE` 与 `THIRD-PARTY.md` 放进安装目录。它同时也是升级通道：存在更新版本时状态栏会出现一枚提示，点它打开关于面板，其中的 **检查更新** 会从 GitHub release 下载下一个已签名的安装包并运行。免安装版这样升级后会变成正式安装；想保持免安装，就到 release 页手动下载新的 zip。
+- **Linux（x86-64）**：`MarkdownAura_<version>_linux-amd64.deb` 用 `sudo apt install ./MarkdownAura_<version>_linux-amd64.deb` 安装，依赖会自动带上 WebKitGTK 4.1；`MarkdownAura_<version>_linux-amd64.AppImage` 不需要预装任何东西——工具链装在它自己里面，这也正是两者体积差的来源。两者都会把本应用注册为 Markdown 文件的打开方式。deb 装的那份归包管理器升级，AppImage 则是应用内更新时被替换的那个产物。
 - **系统要求**：Windows 10 / 11（x64）+ WebView2 Runtime（Win11 与装了 Edge 的 Win10 已自带）；Linux（x86-64），deb 需要 WebKitGTK 4.1，AppImage 无需预装。
 - **体积**：免安装 zip 约 12.3 MB；安装包 12.0 MB；deb 约 12.8 MB；AppImage 约 88 MB（内含 WebKitGTK）。
 

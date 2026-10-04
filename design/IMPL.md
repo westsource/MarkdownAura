@@ -992,6 +992,13 @@ TAURI_SIGNING_PRIVATE_KEY="$(cygpath -wa var/updater/markdownaura.key)" npm run 
 beside the installer. `plugins.updater.windows.installMode` is `passive`: a small progress window, no
 prompts.
 
+**Staged names carry the platform.** The bundler names what it emits (`…_x64-setup.exe`, `…_amd64.deb`),
+and `stage(file, as)` renames on the way into `var/release/`: `…_windows-x64-setup.exe`,
+`…-windows-x64-portable.zip`, `…_linux-amd64.deb`, `…_linux-amd64.AppImage`. Without it a reader looking at
+a release page sees `x64` beside `amd64` and no system word anywhere — the portable zip in particular named
+nothing at all. The arch spelling stays each bundler's own; only the platform word is added. `latest.json`
+points at the staged names, so the rename cannot desync the updater.
+
 **Manifest and assets.** `node tools/make-latest-json.mjs --notes "…"` reads the version from `package.json`
 and the signature from the bundle, writes `var/release/latest.json` and stages every asset: the installer,
 its `.sig`, `latest.json`, `LICENSE`, `THIRD-PARTY.md`, and — as one **zip** with a single top-level folder —

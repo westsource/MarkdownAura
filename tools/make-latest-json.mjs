@@ -56,9 +56,12 @@ fs.mkdirSync(releaseDir, { recursive: true });
 const platforms = { ...(carry ? carry.platforms : {}) };
 const staged = [];
 
-function stage(file) {
+/** Copies a bundle artifact into the staging directory. `as` renames it on the way in: the bundler
+ *  owns the name it emits, the release owns the name people download, and the two differ because an
+ *  artifact with no platform word in it is ambiguous once it is sitting next to the other platform's. */
+function stage(file, as) {
   if (!fs.existsSync(file)) return false;
-  const name = path.basename(file);
+  const name = as || path.basename(file);
   fs.copyFileSync(file, path.join(releaseDir, name));
   staged.push(name);
   return true;
@@ -69,12 +72,16 @@ const urlOf = (name) => `${repo}/releases/download/${tag}/${name}`;
 
 // ---------------------------------------------------------------- Windows
 
+/* `x64` is the bundler's spelling in the file it emits, and it stays: only the platform word is added,
+ * because `MarkdownAura_1.0.0_x64-setup.exe` next to `MarkdownAura_1.0.0_amd64.deb` reads like two
+ * architectures rather than two systems. */
 const installer = `MarkdownAura_${version}_x64-setup.exe`;
+const installerName = `MarkdownAura_${version}_windows-x64-setup.exe`;
 const installerPath = path.join(bundleDir, "nsis", installer);
 if (fs.existsSync(installerPath) && fs.existsSync(`${installerPath}.sig`)) {
-  platforms["windows-x86_64"] = { signature: sigOf(installerPath), url: urlOf(installer) };
-  stage(installerPath);
-  stage(`${installerPath}.sig`);
+  platforms["windows-x86_64"] = { signature: sigOf(installerPath), url: urlOf(installerName) };
+  stage(installerPath, installerName);
+  stage(`${installerPath}.sig`, `${installerName}.sig`);
 
   /* The two-file portable is distributed as a zip rather than as two loose assets: the pair only
    * works together (the exe imports the DLL), so a reader who downloads one of them has nothing. The
@@ -82,7 +89,7 @@ if (fs.existsSync(installerPath) && fs.existsSync(`${installerPath}.sig`)) {
    * Downloads. */
   const appExe = path.join(root, "src-tauri", "target", "release", "markdownaura.exe");
   const loaderDll = path.join(root, "src-tauri", "target", "release", "WebView2Loader.dll");
-  const folderName = `MarkdownAura-${version}-portable`;
+  const folderName = `MarkdownAura-${version}-windows-x64-portable`;
   if (fs.existsSync(appExe) && fs.existsSync(loaderDll)) {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ma-portable-"));
     const folder = path.join(tmp, folderName);
@@ -108,20 +115,22 @@ if (fs.existsSync(installerPath) && fs.existsSync(`${installerPath}.sig`)) {
 // ---------------------------------------------------------------- Linux
 
 const appImage = `MarkdownAura_${version}_amd64.AppImage`;
+const appImageName = `MarkdownAura_${version}_linux-amd64.AppImage`;
 const appImagePath = path.join(bundleDir, "appimage", appImage);
 const deb = `MarkdownAura_${version}_amd64.deb`;
+const debName = `MarkdownAura_${version}_linux-amd64.deb`;
 const debPath = path.join(bundleDir, "deb", deb);
 
 if (fs.existsSync(appImagePath) && fs.existsSync(`${appImagePath}.sig`)) {
   // The AppImage is what the Linux updater replaces, so it is the platform's updater artifact.
-  platforms["linux-x86_64"] = { signature: sigOf(appImagePath), url: urlOf(appImage) };
-  stage(appImagePath);
-  stage(`${appImagePath}.sig`);
+  platforms["linux-x86_64"] = { signature: sigOf(appImagePath), url: urlOf(appImageName) };
+  stage(appImagePath, appImageName);
+  stage(`${appImagePath}.sig`, `${appImageName}.sig`);
 }
 if (fs.existsSync(debPath)) {
   // Published for installation, not for updating: the package manager owns that path.
-  stage(debPath);
-  stage(`${debPath}.sig`);
+  stage(debPath, debName);
+  stage(`${debPath}.sig`, `${debName}.sig`);
 }
 if (!fs.existsSync(appImagePath) && !fs.existsSync(debPath)) {
   console.log("linux: no deb or AppImage here, nothing to stage for it");
