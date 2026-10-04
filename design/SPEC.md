@@ -630,10 +630,10 @@ which carry colour because they carry identity.
 
 | block | content |
 |---|---|
-| brand line | logo · `MarkdownAura` · `v0.3.1` (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline |
-| update | its own area below the facts block, after a hairline, and nothing else: `check for updates` (ghost) → `v0.3.1 is available` + `download and install` (primary), with the state beside the button. The note that used to sit under it — claiming this was the app's only network call — is gone: the launch check exists now, so that sentence stopped being true |
+| brand line | logo · `MarkdownAura` · the version (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline. The version is `__APP_VERSION__`, injected at build time from `package.json`, and written every time the sheet opens — never a literal in the markup: one lived there and showed `0.1.0` through two releases to anyone reading the unopened DOM |
+| update | its own area below the facts block, after a hairline, and nothing else: `check for updates` (ghost) → `v1.0.0 is available` + `download and install` (primary), with the state beside the button. The note that used to sit under it — claiming this was the app's only network call — is gone: the launch check exists now, so that sentence stopped being true |
 | what it is | **one** paragraph: what the app is, then the six capabilities after a `capabilities:` lead-in — same size, same colour, no separate block |
-| facts | hanging labels (`author` / `engines` / `data`): 道荣（黄超） · the three engine badges with their licence (and a version where the UI shows one) · the data path in mono with an `open` button |
+| facts | hanging labels (`author` / `engines` / `editor` / `data`): 道荣（黄超） · the three engine badges with their licence (and a version where the UI shows one) · the editor badge with CodeMirror's licence and its measured size, loaded on demand · the data path in mono with an `open` button |
 | foot | `LICENSE · THIRD-PARTY.md` (both ship next to the executable) |
 
 Decisions inside that shape, each of which was made deliberately:

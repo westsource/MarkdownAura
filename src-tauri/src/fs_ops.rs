@@ -465,6 +465,17 @@ mod tests {
         let loaded = read_file(&path).unwrap();
         assert!(!loaded.writable, "the pane must refuse to edit it");
         // The write itself fails too; the frontend refuses before it gets here, and this is the backstop.
+        // Root ignores the mode bits, and this suite runs as root under WSL, so verify the premise
+        // rather than assume it: what is under test is that *our* backstop refuses, not that the OS
+        // does. Without this the test fails for the wrong reason on any root login.
+        if std::fs::write(&path, b"probe").is_ok() {
+            eprintln!("skipping the write assertion: this user can write to a read-only file (running as root?)");
+            let mut perms = std::fs::metadata(&path).unwrap().permissions();
+            perms.set_readonly(false);
+            std::fs::set_permissions(&path, perms).unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+            return;
+        }
         assert!(write_file(&path, "# mine\n", "utf-8", "lf", loaded.mtime_ms).is_err());
 
         let mut perms = std::fs::metadata(&path).unwrap().permissions();
