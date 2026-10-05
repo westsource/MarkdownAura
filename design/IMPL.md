@@ -179,18 +179,23 @@ path).
 // --- tree ---
 #[tauri::command] async fn open_folder(app: AppHandle, path: PathBuf) -> Result<FolderView>;
 // -> { root, name, entries: TreeEntry[] }   (one level; children load on expand)
-//    also widens the asset-protocol scope to `path`, or every relative image is a broken icon
+//    also widens the asset-protocol scope to `path`: a document in it may reference images beside
+//    it, and a document in a subfolder may reach back up to a shared assets folder inside it
 
 #[tauri::command] async fn read_dir(path: PathBuf) -> Result<Vec<TreeEntry>>;
-#[tauri::command] async fn resolve_target(path: PathBuf) -> Result<FolderView>;
+#[tauri::command] async fn resolve_target(app: AppHandle, path: PathBuf) -> Result<FolderView>;
 // -> a file resolves to its own folder, a folder to itself. Lives in Rust because
 //    `C:\file.md` minus its last segment is `C:`, not `C:\` — don't do this in TypeScript.
+//    Widens the scope like `open_folder`: this command adopts a folder too.
 
 #[tauri::command] async fn read_file(path: PathBuf) -> Result<FilePayload>;
-#[tauri::command] async fn render_doc(path: PathBuf) -> Result<RenderedDoc>;
+#[tauri::command] async fn render_doc(app: AppHandle, path: PathBuf) -> Result<RenderedDoc>;
 // -> rendering happens in Rust (§4); the frontend never sees raw markdown for the preview
 //    view. `encoding` is carried on the render result so the status bar can badge a lossy
 //    read without a second round trip for the same file.
+//    Widens the scope to the *document's* folder, whatever the tree shows: a document reached
+//    from the dialog, the recent list or "Open with" lives wherever it lives, and its images
+//    have to load. The app handle is what the scope and `convert_file_src` are reached through.
 #[tauri::command] async fn reveal_in_explorer(path: PathBuf) -> Result<()>;
 // -> the write half (SPEC §12). `save_doc` takes the buffer, the encoding and the EOL the file was
 //    read in, and the mtime that load reported; it returns the *new* mtime, which becomes the next
@@ -200,8 +205,10 @@ path).
                                    expected_mtime_ms: i64) -> Result<i64>;
 // -> a buffer has no file behind it, so the live preview cannot go through `render_doc`. Same
 //    `RenderedDoc` shape; `encoding` and `truncated` come back empty because a buffer is neither
-//    decoded nor cut, and the caller already holds both facts on the tab.
-#[tauri::command] async fn render_text(text: String) -> Result<RenderedDoc>;
+//    decoded nor cut, and the caller already holds both facts on the tab. `path` is the document
+//    the buffer belongs to: the text is unsaved, but its images are still the file's images.
+#[tauri::command] async fn render_text(app: AppHandle, text: String, path: Option<PathBuf>)
+                                       -> Result<RenderedDoc>;
 // -> implemented for Windows (`explorer /select,<path>`) and other platforms (`xdg-open`), but
 //    nothing in the UI calls it: the tab menu that would is deferred (SPEC §5).
 
@@ -369,6 +376,14 @@ pulldown_cmark::Options::ENABLE_TABLES
 - Heading *text* is collected from both `Text` and `Code` events, so `# use \`render_doc\``
   outlines as `use render_doc here`. `Code` is a separate event from `Text`; handling only
   `Text` silently drops the identifier, which is the part of a heading people scan for.
+- Image destinations go through a resolver the caller supplies (`render_with(src, resolver)`;
+  `render(src)` is the no-op case). A webview resolves a relative `src` against *its own* origin,
+  never against the folder the document came from, so `![x](images/a.png)` is a broken icon until
+  the destination becomes an asset-protocol URL — the only origin the CSP lets an image through.
+  `commands.rs` passes one that joins the destination to the document's folder (percent-decoding
+  it, resolving `.`/`..` lexically, because the protocol refuses any URL that still contains `..`)
+  and converts the result with `WebviewWindow::convert_file_src`. `None` leaves the destination
+  byte-for-byte as parsed: a `data:` URI or a remote URL is the CSP's business, not the renderer's.
 - UTF-8 that will not decode is rendered lossily and the encoding rides back on the render
   result. An unreadable file must not blank the window.
 - One `push_html` over the whole event stream, never one call per event: the writer carries
@@ -702,8 +717,10 @@ connect-src 'self' ipc: http://ipc.localhost blob: data:;
 worker-src  'self' blob:;
 ```
 
-`assetProtocol.enable: true` with an empty static scope: the scope is widened at runtime to
-the folder the user opens (`open_folder`), not declared up front.
+`assetProtocol.enable: true` with an empty static scope: the scope is widened at runtime, not
+declared up front — to the folder the user opens (`open_folder`, `resolve_target`) and to the
+folder of every document that gets rendered (`render_doc`, `render_text`), because a document
+reached from the dialog, the recent list or "Open with" is not necessarily under the open root.
 
 d2 is in the installer like every other engine, which is what makes the app's "no network at
 runtime" claim unconditional. `IMPL.md` §9 carries the resulting sizes.
@@ -792,8 +809,11 @@ CLI and single-instance:
   window per file. It used to be gated to Windows, which silently cost the Linux build that
   behaviour; on Linux the plugin goes through the session D-Bus, so a Flatpak or Snap whose id
   differs from the app identifier has to set `DBUS_ID`.
-- `open_folder` widens the asset-protocol scope to the opened folder, or every relative
-  image in every document is a broken icon.
+- The asset-protocol scope is widened, not declared: `open_folder` and `resolve_target` allow the
+  folder they adopt, and `render_doc`/`render_text` allow the folder of the document they render
+  (a document opened from the dialog or the recent list may live outside the open root). Without
+  this, a relative image resolves against the app's origin and every one of them is a broken icon —
+  §4 covers the destination rewrite that goes with it.
 - Windows shell integration (context-menu entry) is a separate installer concern, out of scope here.
 - Vite must bind `127.0.0.1`, not the default `localhost`: Node resolves `localhost` to
   `::1` here, Vite ends up IPv6-only, and WebView2 reaches for IPv4 — the symptom is a

@@ -197,8 +197,12 @@ export const renderDoc = (path: string) => invoke<RenderedDoc>("render_doc", { p
 
 /** Renders a buffer that has no file behind it yet, so the split view can show what is being typed
  *  (SPEC §12). `encoding` and `truncated` come back empty/false — the caller overrides them from the
- *  tab, which is where those two facts live. */
-export const renderText = (text: string) => invoke<RenderedDoc>("render_text", { text });
+ *  tab, which is where those two facts live.
+ *
+ *  `path` is still the document's: the text is unsaved, but its relative images are not, and they
+ *  resolve against the folder the file lives in (null for text with no file behind it). */
+export const renderText = (text: string, path: string | null) =>
+  invoke<RenderedDoc>("render_text", { text, path });
 
 /** Writes an edited buffer back (SPEC §12), and returns the file's new mtime — that becomes the
  *  next save's baseline. The Rust side refuses a mixed-ending file, a lossy decode, and any write

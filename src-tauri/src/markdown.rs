@@ -83,6 +83,16 @@ fn canonical_tag(raw: &str) -> Option<&'static str> {
     }
 }
 
+/// Rewrites one markdown image destination into a URL the webview can actually load, or `None` to
+/// leave the author's URL alone.
+///
+/// It is a parameter rather than something this module decides because the rewrite needs the
+/// document's own folder and the webview's asset-protocol origin — and because a relative image is
+/// dead in *any* webview: `images/a.png` resolves against the app's own origin, not the folder the
+/// document came from. `markdown.rs` stays a pure function of its input; `commands.rs` supplies the
+/// mapping.
+pub type ImageResolver<'a> = &'a dyn Fn(&str) -> Option<String>;
+
 fn options() -> Options {
     Options::ENABLE_TABLES
         | Options::ENABLE_TASKLISTS
@@ -209,7 +219,16 @@ fn split_frontmatter(src: &str) -> (Vec<FrontmatterField>, usize) {
     (Vec::new(), 0)
 }
 
+/// Renders without touching image destinations — the shape every caller with no file behind the
+/// text wants: the tests below, and a buffer whose tab has no path.
 pub fn render(src: &str) -> RenderedDoc {
+    render_with(src, &|_| None)
+}
+
+/// `image` is called once per markdown image with the destination as the author wrote it. `None`
+/// leaves the destination byte-for-byte as parsed, which is the only safe default: a `data:` URI or
+/// a remote URL must not be rewritten into a local path.
+pub fn render_with(src: &str, image: ImageResolver<'_>) -> RenderedDoc {
     let (frontmatter, body_start) = split_frontmatter(src);
     let body = src.get(body_start..).unwrap_or("");
     let lines = LineIndex::new(src);
@@ -292,6 +311,26 @@ pub fn render(src: &str) -> RenderedDoc {
                     }
                     None => out.push(Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(info)))),
                 }
+            }
+            // Every other image destination is rewritten through the resolver (or left alone when
+            // it says `None`): the `<img src>` that comes out is what the webview will actually
+            // request, and only the caller knows what a relative path is relative to.
+            Event::Start(Tag::Image {
+                link_type,
+                dest_url,
+                title,
+                id,
+            }) => {
+                let dest_url = match image(&dest_url) {
+                    Some(url) => CowStr::from(url),
+                    None => dest_url,
+                };
+                out.push(Event::Start(Tag::Image {
+                    link_type,
+                    dest_url,
+                    title,
+                    id,
+                }));
             }
             // The allow-list. `Html` is block-level raw HTML, `InlineHtml` is inside a
             // paragraph; both go through the same table.
@@ -471,5 +510,33 @@ mod tests {
         assert_eq!(idx.line_of(2), 2);
         assert_eq!(idx.line_of(3), 2);
         assert_eq!(idx.line_of(5), 3);
+    }
+
+    #[test]
+    fn the_image_resolver_rewrites_only_what_it_answers_for() {
+        // A destination the resolver declines (`None`) must come out byte-for-byte as parsed —
+        // that is what keeps a remote URL or a `data:` URI out of the rewrite.
+        let resolve = |dest: &str| {
+            if dest.starts_with("http") || dest.starts_with("data:") {
+                None
+            } else {
+                Some(format!("asset://localhost/{dest}"))
+            }
+        };
+        let doc = render_with(
+            "![local](images/a.png)\n\n![remote](https://evil/x.png)\n\n![inline](data:image/png;base64,AA)\n",
+            &resolve,
+        );
+        assert!(doc.html.contains("src=\"asset://localhost/images/a.png\""), "{}", doc.html);
+        assert!(doc.html.contains("src=\"https://evil/x.png\""), "{}", doc.html);
+        assert!(doc.html.contains("src=\"data:image/png;base64,AA\""), "{}", doc.html);
+        // The alt text and the surrounding paragraph are untouched by the rewrite.
+        assert!(doc.html.contains("alt=\"local\""), "{}", doc.html);
+    }
+
+    #[test]
+    fn render_leaves_image_destinations_alone() {
+        let doc = render("![x](images/a.png)\n");
+        assert!(doc.html.contains("src=\"images/a.png\""), "{}", doc.html);
     }
 }

@@ -425,7 +425,7 @@ function schedulePreview(tab: Tab): void {
     void (async () => {
       if (!tab.editing || tab.buffer === null) return;
       try {
-        const rendered = await ipc.renderText(tab.buffer);
+        const rendered = await ipc.renderText(tab.buffer, tab.file);
         rendered.encoding = tab.encoding;
         rendered.truncated = false;
         tab.doc = rendered;
