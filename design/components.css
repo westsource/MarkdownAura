@@ -50,6 +50,8 @@ html, body {
   height: 100%;
   flex: 0 0 auto;
 }
+/* The box is the letter, not the icon space it was drawn in: the markup crops the viewBox to the
+   mark's ink (index.html), so 15px is the size of the glyph. */
 .brand svg { width: 15px; height: 15px; }
 
 .win-controls {

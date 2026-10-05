@@ -18,7 +18,10 @@
 
   <div class="titlebar" data-tauri-drag-region>
     <div class="brand">
-      <svg viewBox="0 0 512 512" aria-hidden="true">
+      <!-- The mark is written in the icon's 512-unit space (make-icons.mjs: x 0.256–0.744, y
+           0.258–0.742) and there is no plate here, so the box is cropped to that ink. Left as
+           `0 0 512 512` the glyph filled 48% of the box: a 15px logo drew at 7px. -->
+      <svg viewBox="131 131 250 250" aria-hidden="true">
         <path d="M189 380V156l44-24 52 96 52-96 44 24v224h-44V228l-36 66h-32l-36-66v152z" fill="var(--ac)" fill-opacity="0.18" transform="translate(-58,0)"/>
         <path d="M189 380V156l44-24 52 96 52-96 44 24v224h-44V228l-36 66h-32l-36-66v152z" fill="var(--ac)" fill-opacity="0.4" transform="translate(-32,0)"/>
         <path d="M189 380V156l44-24 52 96 52-96 44 24v224h-44V228l-36 66h-32l-36-66v152z" fill="var(--ac)"/>
@@ -251,7 +254,8 @@
           <div class="sheet-body">
             <div class="about-page">
               <div class="about-brand">
-                <svg width="22" height="22" viewBox="0 0 512 512" aria-hidden="true">
+                <!-- Same mark, same ink crop as the title bar's. -->
+                <svg width="22" height="22" viewBox="131 131 250 250" aria-hidden="true">
                   <path d="M189 380V156l44-24 52 96 52-96 44 24v224h-44V228l-36 66h-32l-36-66v152z" fill="var(--ac)" fill-opacity="0.18" transform="translate(-58,0)"/>
                   <path d="M189 380V156l44-24 52 96 52-96 44 24v224h-44V228l-36 66h-32l-36-66v152z" fill="var(--ac)" fill-opacity="0.4" transform="translate(-32,0)"/>
                   <path d="M189 380V156l44-24 52 96 52-96 44 24v224h-44V228l-36 66h-32l-36-66v152z" fill="var(--ac)"/>
