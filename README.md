@@ -126,7 +126,7 @@ npm run notices        # regenerates THIRD-PARTY.md from the real dependency tre
 
 Captured from the real app at 1280 × 800, with the document in [`examples/showcase.md`](examples/showcase.md) open — one file that uses every block type the renderer handles, and all three diagram engines.
 
-![The editor open in split view: line numbers and syntax colours on the left, the rendered document following on the right, the tab carrying the unsaved mark](assets/readme-editing.png)
+![Split view with the editor open: line numbers and syntax colours on the left, the caret at the end of the paragraph just typed, the rendered document following on the right, the tab carrying the unsaved mark](assets/readme-editing.png)
 
 |  |  |
 |---|---|

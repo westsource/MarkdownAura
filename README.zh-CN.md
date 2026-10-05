@@ -126,7 +126,7 @@ npm run notices        # 依据真实依赖树重新生成 THIRD-PARTY.md
 
 均为真机截图，分辨率 1280 × 800，打开的是 [`examples/showcase.md`](examples/showcase.md)——一份用上渲染器所有块类型、并同时含三个图表引擎的文档。
 
-![分屏下打开编辑器：左侧有行号与语法着色，右侧渲染结果随输入更新，标签页带着未保存标记](assets/readme-editing.png)
+![分屏下打开编辑器：左侧有行号与语法着色、光标停在刚敲进去的那句话末尾，右侧渲染结果随输入更新，标签页带着未保存标记](assets/readme-editing.png)
 
 |  |  |
 |---|---|

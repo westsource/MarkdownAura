@@ -888,8 +888,11 @@ status bar's `rendered in N ms` is where a reader sees it.
 - **How the app itself gets verified** (kept in `var/`, gitignored): a fixture folder
   (`var/demo-docs/`), a CDP probe (`var/cdp-run.mjs`) against
   `--remote-debugging-port=9222`, and Win32 screen capture (`var/capture-screen.ps1`;
-  `PrintWindow` returns black for WebView2, so it must use `CopyFromScreen`). Tauri's
-  `listen` is an internal IPC channel, not a DOM event, so `emit()` from the page can
+  `PrintWindow` returns black for WebView2, so it must use `CopyFromScreen`). **The README frames
+  are a viewport capture, never a window grab** (`var/shot-readme-editing.mjs`): `GetWindowRect` is
+  the window *plus* its invisible frame ring, so a `PrintWindow` frame comes back 1312×818 with a
+  black border around a 1280×800 document, while `Page.captureScreenshot` is the document alone.
+  Tauri's `listen` is an internal IPC channel, not a DOM event, so `emit()` from the page can
   synthesise `tauri://drag-*` for a drop-zone test. Two environment facts that cost time:
   a dev instance holds the build-script output file so `cargo test` fails with
   `os error 32` until the app is killed, and background jobs die with the turn, so the whole

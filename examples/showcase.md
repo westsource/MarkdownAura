@@ -126,6 +126,37 @@ else is dropped before it becomes HTML. Press <kbd>ctrl</kbd> + <kbd>F</kbd> to 
 immersive mode, and <kbd>esc</kbd> to leave it.
 </details>
 
+## Every block, on one page
+
+A document is a handful of blocks used again and again: a heading, a paragraph with **weight**,
+*emphasis* and `inline code`, a [link](https://github.com/westsource/MarkdownAura), a list that nests,
+a table that lines up, a quote that indents, and a fence that is left exactly as it was written.
+
+1. an ordered list, for the steps that have an order
+2. a bullet under it, for the detail
+   - `ctrl E` starts the editor, and the pill reads `editing` instead of `read-only`
+   - `ctrl S` writes the buffer back in the file's own encoding and line endings
+3. a task list, for what is still open
+
+- [x] a preview that follows the buffer as it is typed
+- [ ] the block type this document has not met yet
+
+> A quote is the reading column, indented once, and it can hold a list — which is how a document
+> states a rule without giving the rule a heading of its own.
+
+| Column | Carries | Set by |
+|---|---|---|
+| prose | the reading column | `--measure` |
+| code | weight 600, on one size base | `prose.css` |
+| a diagram | an engine badge and the first source line | `render/` |
+
+```rust
+/// A fence keeps its own line endings and is never reflowed or re-wrapped.
+pub fn save_doc(path: &Path, text: &str, eol: Eol) -> Result<()> {
+    write_atomic(path, text, eol)
+}
+```
+
 ## Footnotes and small print
 
 Sizes on the reading surface are all relative to one base, so a heading can never end up smaller than the
