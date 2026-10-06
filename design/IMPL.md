@@ -1103,3 +1103,315 @@ the first character of `var/…`), and a relative *Windows* path dies on symbol 
 path. Use `cygpath -wa var/updater/markdownaura.key`. The 0.1.2 build failed exactly this way, and it fails
 *after* the bundle has been written, so it leaves an installer with no `.sig` beside it — `make-latest-json`
 then refuses, which is the right outcome.
+
+## 13. Diagnostics — a log for crashes that leave nothing behind
+
+**Status: implemented 2026-10-06, verified in a release build — §13.11 has the cases and the numbers.**
+Numbered last on purpose: it is an appendix to §2–§12, and appending avoids renumbering the
+cross-references that source comments make to `IMPL §3`, `§5`, `§6`, `§8`.
+
+### 13.1 What is invisible today
+
+A crash reported from another machine had **no evidence of any kind**, and that is a design gap rather than a
+user's mistake. Four separate blind spots, each verified in the tree:
+
+| failure | why there is nothing to read |
+|---|---|
+| Rust panic | release builds are `panic = "abort"` + `strip = true`, and `main.rs` sets `windows_subsystem = "windows"`. No console, no hook, no panic message, no location — the process is simply gone |
+| front-end exception | no global handler exists (`grep -rn "onerror\|unhandledrejection" src/` → nothing). Every `catch` in `ipc.ts` is silent by construction |
+| WebView2 renderer dies | tauri 2.12's `WindowEvent` has no render-process-gone variant (`tauri-runtime-2.12.1/src/window.rs:30`), and `wry` exposes no `ProcessFailed` callback. The window stays, the page is dead, and §2's "one Crashpad dump per launch, no error surfaced anywhere" was written from experience |
+| abort / power loss / force-kill | no marker, no `run.end`, nothing |
+
+The three `eprintln!` calls that *do* exist (`lib.rs:119`, `lib.rs:129`, `commands.rs:43` — a fourth,
+`fs_ops.rs:472`, is test-only) reach no one: the release binary is a windowed process with no console
+attached, so the text is discarded. The watcher additionally drops notify's error stream on the floor
+(`watcher.rs:205`, `Ok(Err(_)) => {}`), which is the most likely silent degradation in the whole app: a
+watcher that stopped working looks exactly like a file that stopped changing.
+
+### 13.2 Decision: a hand-rolled `diag.rs`, and no new crates
+
+`log`, `time`, `tracing` and `windows-sys` are already in `Cargo.lock` as transitive dependencies, and none
+of them is needed. `src-tauri/src/diag.rs` is roughly 260 lines including tests, and it keeps the app's
+one-dependency-one-justification rule intact (see the `getopts` removal and the `native-tls` note in §12).
+
+`tauri-plugin-log` was the alternative and was rejected on coverage, not taste: it has no unclean-exit
+detection, no crash-report file, and no way to locate the WebView2 data folder; its size-based rotation has a
+public open issue (`plugins-workspace#707`, `max_file_size` has no effect on a `LogTarget::Folder` target —
+verify against the current release before reconsidering). Its panic hook and rotation would cover perhaps half
+of §13.5, and the rest would still be ours to write.
+
+Two hard constraints on the module:
+
+- **`diag::init()` is the first statement of `run()`**, before `tauri::Builder::default()`. A panic inside
+  plugin init or `window.build()` has to be loggable, so nothing here may depend on a Tauri `AppHandle`.
+- **Directory resolution is pure `std` + env**, in the same shape as `session::data_dir()`
+  (`session.rs:161`). Tauri's path API needs a `Manager`, which does not exist that early.
+
+Timestamps: epoch seconds to ISO-8601 UTC via a hand-written civil-date conversion (Hinnant's algorithm,
+~15 lines, unit-tested against known instants). The machine's timezone offset is not computed in Rust — it
+arrives once from the front end (below), which is also where the WebView2 version lives.
+
+### 13.3 Where the logs live
+
+```
+Windows:  %LOCALAPPDATA%\MarkdownAura\logs\       (never the roaming %APPDATA%)
+Linux:    $XDG_STATE_HOME/MarkdownAura/logs       (fallback ~/.local/state/MarkdownAura/logs)
+
+logs/
+  app.log                 the current file, 1 MB at most
+  app.1.log … app.3.log   rotation, ≤ 4 MB in total
+  crash/<ts>-<run>.md     one self-contained report per crash, 10 kept
+  run.json                written while running, deleted on a clean exit
+```
+
+`session.json` stays in `%APPDATA%` (§6). Logs go to the state/data directory for two reasons that are not
+interchangeable: a roaming profile has no business syncing 4 MB of rolling logs, and `XDG_STATE_HOME` is the
+specified home for state that is not configuration. The About sheet already prints one directory with an
+*open* button; §13.8 mirrors the row instead of introducing a new concept.
+
+Resolution order, decided 2026-10-06 (§13.13): `MARKDOWNAURA_LOG_DIR`, else `Session.logDir` when non-empty,
+else the platform default above. Pointing it at a synced folder is how a log from a second machine reaches
+you without a server — which is the whole reason this section exists. A configured directory that cannot be
+created falls back to the platform default and says so.
+
+### 13.4 Line format, rotation, and two processes
+
+One JSON object per line (NDJSON): greppable, machine-readable, and consistent with a tree whose other
+persistent formats are all JSON.
+
+```json
+{"ts":"2026-10-06T13:22:04.512Z","lvl":"warn","run":"7f3a21","mod":"watcher","msg":"notify error","d":{"path":"E:\\notes","err":"…"}}
+```
+
+- A single `Mutex<File>` opened in append mode; one `write_all` per line. Lines are capped at 4 KB and
+  truncated with `"trunc":true`, so one pathological message cannot eat the rotation budget.
+- Rotation: `app.log` over 1 MB is renamed at startup, and again in-process once the byte counter crosses the
+  cap. Same temp-then-rename discipline the session already uses (§6), for the same reason.
+- Two processes coexist for a moment when a second launch hands its path over (the single-instance plugin
+  kills it — see its `callback` docs). Append mode plus a 4 KB line cap makes the worst case one interleaved
+  line, and `run.json` is only ever deleted by the process whose pid it records (below), so the marker
+  survives a second instance cleanly.
+- `run` is a 6-hex-digit id minted per launch, so lines from one run can be selected without a timestamp
+  range — the front end reuses the same id on every line it reports.
+
+### 13.5 The four capture paths
+
+```
+Rust panic ──► std::panic::set_hook ──┐
+front-end error ──► diag.ts + IPC ────┼──► logs/app.log  (+ logs/crash/*.md)
+unclean exit ──► run.json residual ───┤
+WebView2 dies ──► crashpad dump + heartbeat gap
+```
+
+**1. Rust panic.** `set_hook` runs even under `panic = "abort"` — the hook is called, then the process
+aborts, so this is the only recourse there is. The hook:
+
+- writes `crash/<ts>-<run>.md` through a **freshly created** `File`, never through the main writer's mutex,
+  which the panicking thread may already hold. The one-line entry in `app.log` is written only if
+  `try_lock` succeeds; no flush, no deadlock, no second panic.
+- records the message, `PanicHookInfo::location()` (compiled-in `file:line`, which survives `strip` and is
+  usually the whole answer), the thread name, a backtrace or its raw frames, the last 50 lines of `app.log`,
+  and the environment block.
+- is guarded by an `AtomicBool` so a panic inside the hook cannot recurse.
+
+**2. Front-end exceptions.** `src/diag.ts` installs `window.onerror` and `unhandledrejection`, plus a
+pass-through for `console.error`/`warn`, and ships them to Rust over a new `log_event` command. A 250 ms
+batch, a hard limit of 200 lines per minute per module (over that, one `suppressed=n` line), and a flush
+before `relaunchApp()` — a render loop must not be able to fill a disk or to spam the IPC bridge.
+
+**3. WebView2 death.** The data directory is **not** moved (that would be a behaviour change for every
+existing install); it is *located and recorded*. Four candidates are probed in order — `<exe name>.exe.WebView2`
+and `<exe name>.WebView2` next to the executable, then the same two under `%LOCALAPPDATA%` — and the first that
+exists is written into the startup line and the report; `unknown` when none does, which is the honest answer on
+a machine whose runtime never created one. The Crashpad minidumps live under that folder's `EBWebView\Crashpad\`
+(not confirmed on this machine: no profile directory exists beside the dev-build executable here, and the
+release never moved it). Relocation stays available behind `MARKDOWNAURA_WEBVIEW_DATA` via
+`WebviewWindowBuilder::data_directory`, which exists
+(`tauri-2.12.1/src/webview/webview_window.rs:1089`) — an escape hatch in the same spirit as
+`MARKDOWNAURA_BROWSER_ARGS` in §8, not a default.
+
+The runtime's version needs no registry read: `navigator.userAgent` carries `Edg/<version>` on Windows and
+the WebKitGTK version on Linux (the front end reports both, §13.7). The v1 limitation is standing: the app
+cannot be *told* that the renderer died, so the evidence is the dump plus the shape of the log. The heartbeat
+is Rust-side for exactly this reason, and it is what makes the two deaths distinguishable: a heartbeat that
+keeps arriving while the front end's lines stop means the render process died and the window is a corpse; a
+heartbeat that stops with no `run.end` means the process itself died.
+
+**4. Unclean exit.** `run.json` holds `{pid, run, started}` and is written in `setup` — the earliest point at
+which the single-instance plugin has already decided that this process owns the main window, so the
+short-lived second process never writes or deletes it. `RunEvent::Exit` (and `ExitRequested`, which also
+records whether the exit came from the window's close button or from `relaunch()`) deletes it when the pid
+matches and writes `app.exit`. A residual file at startup therefore means the previous run aborted, and the
+next launch logs `prev_run=unclean` with the old run id.
+
+**The previous run is read once, at that moment, and kept in memory** — not re-read when the About sheet or
+the report asks. The marker is a single file, so writing this run's destroys the evidence of the last one, and
+a lazily-read `previous_unclean()` would return "clean" forever: the About row's unclean line could never
+appear on any machine. The pure reader is correct either way, which is why this survived the unit tests and
+only fell out of driving the shipped build over CDP with a seeded marker (§13.11).
+
+`RunEvent::ExitRequested` is worth the second callback because the updater's relaunch is exactly the path that
+must not be mistaken for a crash: `tauri-plugin-process` calls `app.request_restart()`, not `restart()`, so
+`ExitRequested` and `Exit` are both delivered (tauri 2.12.1 `app.rs:606`) and the marker is removed before the
+new process starts. A direct `restart()` from the main thread would skip both events — which is why making the
+marker's deletion depend on the event *and* on the recorded pid is the safe pairing.
+
+This is why `lib.rs` moves from `builder.run(context)` to `builder.build(context)?.run(|_app, event| …)`.
+
+### 13.6 Instrumentation points
+
+| where | what is logged |
+|---|---|
+| `lib.rs:62` `run()` | version, pid, argv, OS/arch, exe path, log dir, WebView2 data dir, whether `MARKDOWNAURA_BROWSER_ARGS` is set |
+| `lib.rs:119`, `lib.rs:129`, `commands.rs:43` | the three surviving `eprintln!` sites, re-pointed at the logger (debug builds keep mirroring to stderr) |
+| `watcher.rs:205` | notify's error stream, currently discarded |
+| `watcher.rs:100` and every `#[tauri::command]` | already covered by the IPC wrapper in §13.7 — no per-command code |
+| `session::save` failure, engine load/render failure, render over budget | `warn` / `debug` |
+| front-end `main.ts:753` (session save swallowed) and `render/engines.ts:134` (d2 preload swallowed) | the two silent real failures; `dom.ts:38`-style clipboard misses are deliberately not logged |
+| every file switch / view-mode switch | one low-frequency breadcrumb, so a report says which document and which mode was on screen |
+
+### 13.7 Front-end: one wrapper covers every IPC failure
+
+`ipc.ts` is the app's entire Tauri boundary (§2 rule 3), so wrapping `invoke` there logs **every** command
+failure with the command name and the error, and none of the nineteen commands changes. The rule that comes
+with it is absolute: **the wrapper logs the command name and the error, never the arguments** — `saveDoc`'s
+arguments include the whole document text.
+
+`src/diag.ts` (≈130 lines) owns the global handlers, the queue, the rate limit, and the environment block
+that is sent once per run: `userAgent` (hence the WebView2/WebKitGTK version), timezone offset, screen size,
+device pixels, UI language, and a best-effort WebGL renderer string. Rust cannot see any of these and a crash
+report is much weaker without them.
+
+### 13.8 Where it surfaces
+
+No new window, no new overlay — the existing sheet shell (§10) and the existing rows:
+
+- **About**: a diagnostics row next to the existing data row — the log directory with *open*, *export*
+  (written to `logs/report-<ts>.md` and revealed in the file manager, so it can be attached to an issue) and
+  *copy* (the same text to the clipboard, for pasting inline). The report is Markdown: version, run
+  id, OS/arch, user agent, install/log paths, the WebView2 data directory, and the last 200 lines. When the
+  previous run was unclean, the row says so with its run id.
+- **Settings**: two diagnostics rows. *Log level* (`off` / `error` / `warn` / `info` / `debug`, persisted as
+  `Session.logLevel` with `#[serde(default)]` so existing session files load unchanged and
+  `SESSION_VERSION` stays 1; `MARKDOWNAURA_LOG` overrides it for a reproduction run), and *log directory*
+  (`Session.logDir`, empty meaning the platform default, with the dialog plugin's directory picker and a
+  reset) — the control that puts the logs where a second machine can reach them.
+- Startup is deliberately passive: a crashed run produces **no dialog**, only a line in the log and a
+  sentence in the About sheet, matching the quiet boot check in §10.
+
+New strings go into both catalogues in `i18n.ts` (the `zh` object is typed against `en`, so a miss is a
+compile error).
+
+### 13.9 Privacy rules
+
+- Paths, byte counts, counts, durations and error kinds only. **Never document content, never a buffer.**
+- No IPC arguments (§13.7) — that is the one place a document could leak in by accident.
+- Front-end messages are `Error.message`, truncated to 200 characters. Diagram sources are never attached:
+  mermaid's parse errors echo the offending line of the document, which may be private.
+- The report header states that it contains local paths, so a reader knows before pasting it into an issue.
+- Nothing leaves the machine. The CSP already forbids it (`connect-src 'self' ipc: http://ipc.localhost
+  blob: data:`, `tauri.conf.json:15`), the front end makes no request of any kind, and the app's one network
+  call remains the click-driven updater (§10). **Diagnostics adds no server, no endpoint, and no telemetry.**
+
+### 13.10 Files and size
+
+| file | change | ≈ lines |
+|---|---|---|
+| `src-tauri/src/diag.rs` | new: writer, rotation, panic hook, `run.json`, report, tail, civil-time helper + tests | 260 |
+| `src-tauri/src/lib.rs` | `init`, marker lifecycle, `RunEvent` callback, three `eprintln!` sites | 25 |
+| `src-tauri/src/commands.rs` | seven new commands (`log_event`, `set_log_level`, `set_log_dir`, `diag_status`, `diag_report`, `save_diag_report`, `open_log_folder`) | 70 |
+| `src-tauri/src/{watcher,session,markdown}.rs` | instrumentation | 12 |
+| `src/diag.ts` | new: handlers, queue, rate limit, environment block | 130 |
+| `src/ipc.ts` | `invoke` wrapper + seven wrappers | 40 |
+| `src/main.ts` | `diag.install()`, two silent catches, flush before relaunch | 15 |
+| `src/ui/{about,settings}.ts`, `index.html` | the About row and the two settings rows | 75 |
+| `src/i18n.ts`, `session.rs`, `state.ts` | copy and the two new setting fields | 45 |
+
+Unchanged: `tauri.conf.json` (no plugin, no CSP edit), `Cargo.toml` (no dependency),
+`capabilities/default.json` (the new commands ride the existing IPC permission).
+
+### 13.11 Build order and how each phase is verified
+
+1. **`diag.rs` + hooks.** `cargo test --lib` for rotation, tail reading, the 4 KB truncation, the residual
+   `run.json` decision and the civil-date conversion. Smoke: `MARKDOWNAURA_LOG=debug npm run tauri dev` and
+   read the file that appears.
+2. **Self-destruct hooks, in a release build.** `MARKDOWNAURA_SELFTEST=panic|abort|jserror` (compiled in,
+   inert unless the variable is set — the same shape as `MARKDOWNAURA_BROWSER_ARGS`) plus a manual
+   `taskkill /f /im msedgewebview2.exe` for the renderer case. **This is the acceptance test for the whole
+   section**: three crashes that the old build reported as nothing must each produce a readable report.
+3. **Front end.** Throw from the devtools console, reject a promise, break an engine load; confirm the lines
+   carry the run id.
+4. **UI.** Copy a report, switch the level, and (with a `run.json` left behind on purpose) see the About row
+   report the unclean exit.
+5. **Docs.** SPEC §10 (the two rows), README's data row, release notes — see §13.14.
+
+**How it was verified (2026-10-06, release build, rustc 1.99).** `cargo test --lib`: 61 pass. The cases below
+ran against the tree as it stood before the 1.2.0 version bump — the code that ships is the same code, one
+version string apart.
+`var/diag-acceptance.ps1` — one PowerShell run, one log directory per case, driving the release binary
+(Windows process control has to be PowerShell; a bash `taskkill` in this environment is not resolvable):
+
+| case | observed |
+|---|---|
+| `MARKDOWNAURA_SELFTEST=panic` | exit `0xC0000409`, `run.json` left behind, one `crash/*.md` with `location: src\lib.rs:220`, thread `markdownaura-selftest`, the run id, the last 50 lines and the `env` entry |
+| the launch after it | `previous run did not exit cleanly` naming that run id, then a clean close writes `app.exit` and removes `run.json` |
+| `=abort` | exit `0xC0000409`, `run.json` left behind, **no** crash report — nothing can hook an abort |
+| `=jserror` | the process survives and the file gets `{"mod":"ui","msg":"Uncaught Error: MARKDOWNAURA_SELFTEST"}` with source/line/col |
+| the heartbeat | `{"msg":"alive","d":{"lines":3,"uptime":300}}` after five minutes, then a clean close |
+
+`var/cdp-verify-diag.mjs` drives the shipped page over CDP (the recipe in §12); `var/cdp-shot-diag.mjs` is the
+same driver with a screenshot, and `var/shots/diag-about.png` / `diag-settings.png` are what it produced. It
+found the two defects the unit tests could not:
+
+1. **`previous_unclean()` could never report anything.** It re-read `run.json`, which `mark_running` had
+   already overwritten with this run's marker, so `status()` filtered out the only marker there was and the
+   About row's unclean line was unreachable on every machine. Fixed by remembering what was on disk at
+   startup (§13.5.4); the seeded-marker CDP run now shows `上次运行没有正常退出（运行 deadbe）`.
+2. **The copy toast lied.** `dom.ts`'s `copyText` swallowed the clipboard promise, and About toasted
+   "copied" regardless — and WebView2 *does* refuse the write (Chromium puts up a permission dialog). It now
+   returns whether the write landed, and the toast follows it.
+
+Same run, positively: the About sheet renders the `logs` fact row with the effective path, `export`
+writes `report-<ts>.md` (header, sharing warning, `previous run: unclean (run deadbe, …)`, the `env` entry
+scanned out of the whole file, the last 200 lines) and reveals it, and the Settings level control is wired to
+both halves of the filter — with the level at `off` a `console.error` produced **no** line, and after
+switching back to `info` the same call produced exactly one.
+
+### 13.12 Non-goals and honest limits
+
+- **No automatic upload.** The app makes one network call, on a click (§10). It stays that way.
+- **Import-time front-end errors are covered only from `main.ts` onwards.** ES module imports are evaluated
+  before any statement of the module that imports them, so a throw while a dependency module is being
+  evaluated happens before `diag.install()` can run. Closing that would mean a separate entry module that
+  installs the handlers and only then imports `main.ts` — a `vite.config.ts` entry change this pass does not
+  make. Dynamically imported engine chunks *are* covered: they load after boot.
+- **No WebView2 `ProcessFailed` subscription.** It needs `webview2-com` and COM plumbing to learn something
+  the Crashpad dump and the heartbeat gap already imply.
+- **`panic = "abort"` costs the symbol names.** A backtrace from a stripped release binary is addresses, not
+  names; `file:line` from `location()` is what actually locates the bug. Changing the strip or unwind policy
+  for diagnostics is not worth the size and the behaviour change.
+- **Nothing survives a hard kill mid-write.** The front-end queue is flushed on a 250 ms timer, so up to that
+  much of the front-end's tail can be lost. Rust-side lines are already on disk.
+- **A log proves what the app was doing, not always why it died.** If the root cause is a GPU/WebView2
+  failure, the minidump is the artifact and the log is its context.
+
+### 13.13 Decisions (2026-10-06, product owner)
+
+1. **Default level `info`, with a 5-minute heartbeat.** ≈30 KB/day, and the heartbeat is what separates the
+   two deaths in §13.5.3 — it is cheap and it is the reason the file is worth writing at all.
+2. **`%LOCALAPPDATA%\MarkdownAura\logs` (Linux `$XDG_STATE_HOME`), with a configurable override in the same
+   pass**: `MARKDOWNAURA_LOG_DIR`, a `Session.logDir` setting and a directory picker in Settings. The
+   override is not a nicety — it is the only zero-server way for a log from a second machine to reach the
+   person who has to read it.
+3. **Clipboard *and* a saved file**: *export* writes `logs/report-<ts>.md` and reveals it (so it can be
+   dragged into an issue), *copy* puts the same text on the clipboard for pasting inline. No
+   pre-filled-issue button: it would cost a new entry in the `opener` allow-list
+   (`capabilities/default.json:24`) and cannot carry the full log through a URL.
+
+### 13.14 Docs
+
+Already written into this pass: SPEC §10 (the About `logs` fact row and the settings `diagnostics` row),
+README and README.zh-CN (the About, Settings and Data rows). `THIRD-PARTY.md` is unaffected because no
+dependency is added. Still owed at ship time: the release notes have to say where the log lives and how to
+send it, and the version bump that ships this should mention the new `%LOCALAPPDATA%` directory so a reader
+knows a second location now exists.

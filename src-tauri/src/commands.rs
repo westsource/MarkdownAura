@@ -40,6 +40,12 @@ fn lock_failed(what: &str) -> ApiError {
 /// fatal, because a missing image must not take the document with it.
 fn allow_folder<R: tauri::Runtime>(app: &AppHandle<R>, dir: &Path) {
     if let Err(err) = app.asset_protocol_scope().allow_directory(dir, true) {
+        crate::diag_warn!("ipc", "asset scope not widened", {
+            "dir": dir.display().to_string(),
+            "err": err.to_string()
+        });
+        // Debug builds keep the stderr mirror; the release binary has no console to print to.
+        #[cfg(debug_assertions)]
         eprintln!("asset scope not widened for {}: {err}", dir.display());
     }
 }
@@ -385,6 +391,92 @@ pub fn default_app_status() -> crate::defaultapp::DefaultAppStatus {
 #[tauri::command]
 pub async fn set_default_app(path: Option<PathBuf>) -> Result<String> {
     blocking(move || crate::defaultapp::set_default(path)).await
+}
+
+// ---------------------------------------------------------------- diagnostics
+
+/// The front end's error reporter (IMPL.md §13.7). Enforcement lives here, not only in TS: an
+/// unknown level becomes `info`, `module` and `message` are clipped, and the whole call is a no-op
+/// when logging is `off`. Never the arguments — `save_doc`'s carry the document.
+#[tauri::command]
+pub async fn log_event(
+    level: String,
+    module: String,
+    message: String,
+    data: Option<serde_json::Value>,
+) -> Result<()> {
+    blocking(move || {
+        crate::diag::log_event(&level, &clip(&module, 32), &clip(&message, 200), data);
+        Ok(())
+    })
+    .await
+}
+
+/// Pure in-memory set, so it does not hop threads: the caller wants the new level to apply before
+/// its next line, and persistence is the front end's session save.
+#[tauri::command]
+pub fn set_log_level(level: String) -> String {
+    crate::diag::set_level(&level)
+}
+
+/// Re-opens the logger at `dir` (`""` = the platform default) and returns the path now in effect.
+/// If the new directory cannot be created the logger keeps writing where it was, and the caller
+/// still gets a usable path back.
+#[tauri::command]
+pub async fn set_log_dir(dir: String) -> String {
+    blocking(move || {
+        Ok(crate::diag::set_dir(Some(&dir))
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|err| {
+                crate::diag_warn!("diag", "log dir change failed", {"err": err.to_string()});
+                crate::diag::dir().display().to_string()
+            }))
+    })
+    .await
+    .unwrap_or_else(|_| crate::diag::dir().display().to_string())
+}
+
+#[tauri::command]
+pub async fn diag_status() -> Result<crate::diag::DiagStatus> {
+    blocking(|| Ok(crate::diag::status())).await
+}
+
+#[tauri::command]
+pub async fn diag_report() -> Result<String> {
+    blocking(|| Ok(crate::diag::report())).await
+}
+
+#[tauri::command]
+pub async fn save_diag_report() -> Result<String> {
+    blocking(|| {
+        let dir = crate::diag::dir();
+        crate::diag::save_report()
+            .map(|path| path.display().to_string())
+            .map_err(|err| ApiError::io(&dir, err))
+    })
+    .await
+}
+
+/// Opens the log directory itself. `reveal_in_explorer` selects a file, and there is no file to
+/// select here.
+#[tauri::command]
+pub async fn open_log_folder() -> Result<()> {
+    blocking(move || {
+        let dir = crate::diag::dir();
+        #[cfg(windows)]
+        let mut command = std::process::Command::new("explorer");
+        #[cfg(not(windows))]
+        let mut command = std::process::Command::new("xdg-open");
+        command.arg(&dir).spawn().map_err(|e| ApiError::io(&dir, e))?;
+        Ok(())
+    })
+    .await
+}
+
+/// Clip by characters, not bytes: a message is shown to a human, and splitting a UTF-8 sequence
+/// would be worse than cutting it short.
+fn clip(value: &str, max_chars: usize) -> String {
+    value.chars().take(max_chars).collect()
 }
 
 #[cfg(test)]

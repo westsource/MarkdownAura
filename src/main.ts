@@ -11,9 +11,9 @@ import "@design/prose.css";
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { PhysicalPosition, PhysicalSize } from "@tauri-apps/api/dpi";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 import * as ipc from "./ipc";
+import * as diag from "./diag";
 import * as i18n from "./i18n";
 import * as measure from "./measure";
 import { invalidateEngineThemes } from "./render/engines";
@@ -46,6 +46,11 @@ import * as viewer from "./ui/viewer";
 
 // The markdown extension test lives in `ipc.ts` now: the open dialog's filter, the drop and argument
 // checks, and the explorer's markdown-only toggle all read one definition (SPEC §3).
+
+// Installed before anything else runs. `install()` is what captures every later exception and
+// rejected promise, so it has to be the first statement a module can make (IMPL.md §13.6) — an
+// import is the only place earlier than this.
+diag.install();
 
 const basename = (path: string): string => path.split(/[\\/]/).pop() ?? path;
 
@@ -601,17 +606,13 @@ async function openPath(path: string): Promise<void> {
 }
 
 async function pickFolder(): Promise<void> {
-  const chosen = await openDialog({ directory: true, multiple: false, title: "Open folder" });
-  if (typeof chosen === "string") await applyFolder(chosen);
+  const chosen = await ipc.pickDirectory("Open folder");
+  if (chosen) await applyFolder(chosen);
 }
 
 async function pickFile(): Promise<void> {
-  const chosen = await openDialog({
-    multiple: false,
-    title: "Open markdown",
-    filters: [{ name: "Markdown", extensions: ipc.MD_EXTENSIONS }],
-  });
-  if (typeof chosen === "string") await openFile(chosen, false);
+  const chosen = await ipc.pickFile("Open markdown", ipc.MD_EXTENSIONS);
+  if (chosen) await openFile(chosen, false);
 }
 
 function renderRecent(): void {
@@ -750,8 +751,12 @@ function scheduleSave(): void {
     if (tab) doc.captureScroll(tab);
     void currentWindowRect()
       .then((rect) => ipc.sessionSave(toSession(rect)))
-      .catch(() => {
-        // A failed save is not worth interrupting reading for; the next change retries it.
+      .catch((err: unknown) => {
+        // A failed save is not worth interrupting reading for; the next change retries it. It is
+        // worth a line, though — a session that never persists otherwise leaves no evidence.
+        diag.log("error", "session", "session save failed", {
+          err: err instanceof Error ? err.message : String(err),
+        });
       });
   }, 500);
 }
@@ -1053,6 +1058,7 @@ async function boot(): Promise<void> {
     onMeasureChange: applyLayout,
     onMotionChange: applyLayout,
     onLangChange: applyLang,
+    onLogDirChange: about.refreshLogPath,
     onSave: scheduleSave,
   });
   help.wire();
@@ -1226,6 +1232,11 @@ async function boot(): Promise<void> {
 
   const startup = await ipc.startupTarget();
   await restoreSession();
+
+  // The session carries the level; now that it is restored, apply it to the running logger too.
+  // Rust read the same session at boot, so this only matters when the two disagree — but it also
+  // fires `set_log_level`, which is what makes a change in Settings take effect without a relaunch.
+  diag.setLevel(state.logLevel);
 
   // The session may carry an explicit language; re-render everything once it is known.
   applyLang();

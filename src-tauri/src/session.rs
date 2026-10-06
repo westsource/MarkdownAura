@@ -90,6 +90,16 @@ pub struct Session {
     /// sanitises an unknown value.
     #[serde(default = "default_measure")]
     pub measure: String,
+    /// Diagnostics log level (`off`/`error`/`warn`/`info`/`debug`, SPEC §10). Applied in the running
+    /// process immediately; the value is sanitised where it is used, so an unknown string survives a
+    /// round trip without silencing the log. Defaulted so session files written before diagnostics
+    /// existed still load.
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
+    /// Log directory override; empty means the platform default (SPEC §10). Defaulted for the same
+    /// reason as `log_level`: an old session file must not stop the app from starting.
+    #[serde(default)]
+    pub log_dir: String,
     pub sidebar: SidebarState,
     pub outline_open: bool,
     /// Outline width in px (SPEC §3), written to `--w-outline`.
@@ -114,6 +124,10 @@ fn default_lang() -> String {
 
 fn default_measure() -> String {
     "comfortable".into()
+}
+
+fn default_log_level() -> String {
+    "info".into()
 }
 
 fn default_outline_width() -> f64 {
@@ -143,6 +157,8 @@ impl Default for Session {
             reduce_motion: false,
             lang: default_lang(),
             measure: default_measure(),
+            log_level: default_log_level(),
+            log_dir: String::new(),
             sidebar: SidebarState {
                 open: true,
                 width: 224.0,
@@ -234,6 +250,8 @@ mod tests {
         // Away from the default, so a field the round trip quietly drops fails this test. `true` would
         // compare equal to the default and hide exactly that bug.
         session.md_only = false;
+        session.log_level = "debug".into();
+        session.log_dir = "E:\\logs".into();
         session.tabs.push(TabState {
             file: "E:\\notes\\README.md".into(),
             view: "split".into(),
@@ -268,6 +286,25 @@ mod tests {
 
         let back = load_from(&path).expect("session should load");
         assert!(back.md_only, "a session from before the toggle must open in markdown-only mode");
+    }
+
+    /// The log fields are optional, so a session written before diagnostics existed must load with
+    /// the same defaults a fresh session has — and, crucially, still load at all.
+    #[test]
+    fn a_session_without_the_log_fields_opens_with_defaults() {
+        let path = tmp("logfields-default");
+        save_to(&path, &Session::default()).unwrap();
+
+        let raw = std::fs::read_to_string(&path).unwrap();
+        let mut value: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        let obj = value.as_object_mut().unwrap();
+        assert!(obj.remove("logLevel").is_some(), "the saved session should have carried logLevel");
+        assert!(obj.remove("logDir").is_some(), "the saved session should have carried logDir");
+        std::fs::write(&path, serde_json::to_string(&value).unwrap()).unwrap();
+
+        let back = load_from(&path).expect("session should load");
+        assert_eq!(back.log_level, "info");
+        assert_eq!(back.log_dir, "");
     }
 
     #[test]

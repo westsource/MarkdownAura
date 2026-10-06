@@ -11,6 +11,7 @@
  *    single source of truth and a theme change does not need a second palette in TypeScript.
  */
 import { clear as clearCache } from "./cache";
+import { log } from "../diag";
 import type { D2 } from "@d2lang/d2";
 import type { EngineId } from "./types";
 
@@ -129,11 +130,16 @@ let d2Seq = 0;
 /** Starts the d2 import and does not wait for it. The parse is the 11 MB cost in SPEC §4, so both
  *  callers exist to move it off the critical path: the pipeline calls it the moment a document is known
  *  to contain an uncached d2 block, and a document that has diagrams warms it on idle (see
- *  `warmHeaviestEngineOnIdle`). A failure is dropped here — the render that needs it reports it. */
+ *  `warmHeaviestEngineOnIdle`). A failure is logged at `warn` and dropped — the render that needs d2
+ *  reports its own failure. */
 export function preloadD2(): void {
-  loadD2().catch(() => {
+  loadD2().catch((err: unknown) => {
     // A failed import must not poison the engine for the rest of the session: drop the rejected promise
-    // so the next document tries again.
+    // so the next document tries again. The render that needs d2 reports its own failure; the preload
+    // is fire-and-forget, so without this line its failure would leave no evidence at all.
+    log("warn", "render", "d2 preload failed", {
+      err: err instanceof Error ? err.message : String(err),
+    });
     d2Promise = null;
   });
 }

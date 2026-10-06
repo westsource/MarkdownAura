@@ -279,6 +279,10 @@
                 <div class="row"><span class="k"></span><span class="v"><span class="badge d2">d2</span><span data-i18n="about.d2Note">bundled — wasm inlined (~11.5 MB)</span><span class="lic">MPL-2.0</span></span></div>
                 <div class="row"><span class="k" data-i18n="about.k.editor">editor</span><span class="v"><span class="badge editor">edit</span><span data-i18n="about.editorNote">CodeMirror 6 — loaded on demand, ~0.5 MB minified (167 KB gzip)</span><span class="lic">MIT</span></span></div>
                 <div class="row"><span class="k" data-i18n="about.k.data">data</span><span class="v"><span class="about-path" id="aboutDataPath">—</span><button class="ghost-btn about-open" id="aboutReveal" data-i18n="about.reveal">open</button></span></div>
+                <!-- Diagnostics (IMPL.md §13.8). The log row mirrors the data row; the unclean row
+                     stays hidden until Rust says the previous process did not exit cleanly. -->
+                <div class="row"><span class="k" data-i18n="about.k.logs">logs</span><span class="v"><span class="about-ctl"><span class="about-path" id="aboutLogPath">—</span><button class="ghost-btn about-open" id="aboutLogOpen" data-i18n="about.openLogs">open</button><button class="ghost-btn about-open" id="aboutExportReport" data-i18n="about.exportReport">export report</button><button class="ghost-btn about-open" id="aboutCopySummary" data-i18n="about.copySummary">copy report</button></span></span></div>
+                <div class="row" id="aboutUncleanRow" hidden><span class="k"></span><span class="v"><span id="aboutUnclean"></span></span></div>
               </div>
 
               <hr class="about-rule">

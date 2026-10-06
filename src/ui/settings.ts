@@ -1,7 +1,9 @@
 /* Settings — an overlay sheet, not a second window (SPEC §10).
  *
- * Four sections: reading / engines / files / cache. The engines section reports what ships in the
- * bundle and at what cost; no row here can touch the network, because no engine is installed on demand.
+ * Four sections: reading / files / cache / diagnostics. Every row changes something: a fact nothing can
+ * act on belongs in the About sheet (the engines, their licences, their costs) or in the status bar
+ * (their live health), not in a settings sheet — which is why the engines section and the watch-debounce
+ * read-out are gone.
  *
  * Every control writes to `state` and schedules a session save. Nothing here talks to Rust
  * directly except the cache row, which reports what the render cache currently holds.
@@ -11,11 +13,19 @@
  */
 import { stats as cacheStats, clear as clearCache } from "../render/cache";
 import { state } from "../state";
-import type { Lang, ThemeChoice } from "../ipc";
+import { isLogLevel, type Lang, type LogLevel, type ThemeChoice } from "../ipc";
 import { t, type Key } from "../i18n";
 import { MEASURE_ORDER, isMeasure, measureName } from "../measure";
-import { $, $$, esc, maybe$, toast } from "./dom";
-import { defaultAppStatus, setDefaultApp, type DefaultAppStatus } from "../ipc";
+import { setLevel } from "../diag";
+import { $, $$, esc, maybe$, middleEllipsis, toast } from "./dom";
+import {
+  defaultAppStatus,
+  diagStatus,
+  pickDirectory,
+  setDefaultApp,
+  setLogDir,
+  type DefaultAppStatus,
+} from "../ipc";
 
 export interface SettingsHooks {
   onThemeChange: () => void;
@@ -23,6 +33,8 @@ export interface SettingsHooks {
   onMeasureChange: () => void;
   onMotionChange: () => void;
   onLangChange: () => void;
+  /** The log directory moved; the About sheet shows it too, so it has to re-read it. */
+  onLogDirChange: () => void;
   onSave: () => void;
 }
 
@@ -31,6 +43,19 @@ let hooks: SettingsHooks | null = null;
 /** Cached so `render` can stay synchronous. Refreshed when the sheet is wired and after a change.
  *  Asking also consumes the installer's one-shot marker, which is why the offer is toasted here. */
 let defaultApp: DefaultAppStatus | null = null;
+
+/** The log directory in effect. Rust resolves the stored `""` (the "use the default" setting) to a
+ *  real path, so the row shows what the command returned rather than what `state` holds. */
+let logDir = "";
+
+function refreshLogDir(): void {
+  void diagStatus()
+    .then((status) => {
+      logDir = status.logDir;
+      if (isOpen()) render();
+    })
+    .catch(() => {});
+}
 
 function refreshDefaultApp(): void {
   void defaultAppStatus().then((status) => {
@@ -86,6 +111,33 @@ const THEMES: Array<[ThemeChoice, Key]> = [
   ["dark", "theme.dark"],
 ];
 
+/** The five levels Rust and `diag.ts` share, in the order the control shows them. */
+const LOG_LEVELS: LogLevel[] = ["off", "error", "warn", "info", "debug"];
+
+const LEVEL_KEY: Record<LogLevel, Key> = {
+  off: "settings.level.off",
+  error: "settings.level.error",
+  warn: "settings.level.warn",
+  info: "settings.level.info",
+  debug: "settings.level.debug",
+};
+
+/** Persists a new log directory through the session and the running process. The effective path
+ *  comes back from Rust, so a configured directory it could not create shows the fallback it used. */
+async function applyLogDir(dir: string): Promise<void> {
+  try {
+    const effective = await setLogDir(dir);
+    state.logDir = dir;
+    logDir = effective;
+    toast(t("toast.logDirChanged", { path: effective }), "ok");
+    hooks?.onSave();
+    hooks?.onLogDirChange();
+    render();
+  } catch {
+    toast(t("toast.logDirFailed"), "warn");
+  }
+}
+
 function render(): void {
   const themeSeg = segment(
     "theme",
@@ -125,16 +177,6 @@ function render(): void {
       t("settings.reduceMotionSub"),
       `<button class="switch${state.reduceMotion ? " on" : ""}" data-toggle="motion" aria-label="${t("settings.reduceMotion")}"></button>`,
     ) +
-    `<div class="section-head">${t("settings.section.engines")}</div>` +
-    `<div class="form-row"><span class="badge mermaid">mermaid</span>` +
-    `<div class="grow form-sub" style="margin:0">${t("settings.mermaidSub")}</div>` +
-    `<span class="state-ok">${t("settings.bundled")}</span></div>` +
-    `<div class="form-row"><span class="badge dot">dot</span>` +
-    `<div class="grow form-sub" style="margin:0">${t("settings.dotSub")}</div>` +
-    `<span class="state-ok">${t("settings.bundled")}</span></div>` +
-    `<div class="form-row"><span class="badge d2">d2</span>` +
-    `<div class="grow form-sub" style="margin:0">${t("settings.d2Sub")}</div>` +
-    `<span class="state-ok">${t("settings.bundled")}</span></div>` +
     `<div class="section-head">${t("settings.section.files")}</div>` +
     formRow(
       t("settings.defaultApp"),
@@ -146,13 +188,31 @@ function render(): void {
         : `<span class="state-off">${esc(defaultApp?.current || t("settings.defaultAppNone"))}</span>` +
           `<button class="ghost-btn" id="setDefaultApp">${t(defaultApp?.action === "dialog" ? "settings.defaultAppChoose" : "settings.defaultAppSet")}</button>`,
     ) +
-    formRow(t("settings.watchDebounce"), t("settings.watchDebounceSub"), `<span class="state-off">120 ms</span>`) +
     `<div class="section-head">${t("settings.section.cache")}</div>` +
     formRow(
       t("settings.cacheSvg"),
       t("settings.cacheSub"),
       `${cache.bytes ? `<span class="state-off">${bytes(cache.bytes)}</span>` : `<span class="state-off">${t("settings.empty")}</span>`}` +
         `<button class="ghost-btn" id="clearCache"${cache.bytes ? "" : ' aria-disabled="true"'}>${t("settings.clear")}</button>`,
+    ) +
+    // Diagnostics last: it is the one section that exists for a problem, not for reading (IMPL §13.8).
+    `<div class="section-head">${t("settings.section.diagnostics")}</div>` +
+    formRow(
+      t("settings.logLevel"),
+      t("settings.logLevelSub"),
+      segment("logLevel", LOG_LEVELS.map((id) => [id, t(LEVEL_KEY[id])]), state.logLevel),
+    ) +
+    formRow(
+      t("settings.logDir"),
+      t("settings.logDirSub"),
+      // One flex line of its own: the path is what gives way (it wraps inside itself), the buttons
+      // never do — a button whose label breaks across two lines is always a bug (components.css).
+      // A 560px row cannot show a 45-character path and two buttons side by side, so the path is shown
+      // middle-shortened: head and leaf are the parts that identify it, and `title` carries the whole
+      // value (About prints it in full, and so does the exported report).
+      `<div class="form-ctl"><span class="about-path" title="${esc(logDir || "")}">${esc(middleEllipsis(logDir || "—", 36))}</span>` +
+        `<button class="ghost-btn" id="changeLogDir">${t("settings.logDirChange")}</button>` +
+        `<button class="ghost-btn" id="resetLogDir">${t("settings.logDirReset")}</button></div>`,
     );
 
   wireControls();
@@ -221,6 +281,36 @@ function wireControls(): void {
     });
   });
 
+  $$('[data-set="logLevel"] button', body).forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const value = button.dataset.val;
+      if (isLogLevel(value)) {
+        state.logLevel = value;
+        // The running logger changes now; the session save carries it to the next launch.
+        setLevel(value);
+        hooks?.onSave();
+        render();
+      }
+    });
+  });
+
+  maybe$<HTMLButtonElement>("#changeLogDir")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    void pickDirectory("Open folder")
+      .then((picked) => {
+        // Null is the cancelled dialog; leaving the setting alone is the only sane answer.
+        if (picked) void applyLogDir(picked);
+      })
+      .catch(() => {});
+  });
+
+  maybe$<HTMLButtonElement>("#resetLogDir")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    // Empty is the wire's "platform default"; Rust answers with the path that resolves to.
+    void applyLogDir("");
+  });
+
   maybe$<HTMLButtonElement>("#clearCache")?.addEventListener("click", (event) => {
     event.stopPropagation();
     clearCache();
@@ -251,6 +341,7 @@ function wireControls(): void {
 export function wire(settingsHooks: SettingsHooks): void {
   hooks = settingsHooks;
   refreshDefaultApp();
+  refreshLogDir();
   $("#openSettings").addEventListener("click", open);
   $("#setClose").addEventListener("click", close);
   $("#settingsOverlay").addEventListener("click", (event) => {

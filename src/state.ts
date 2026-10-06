@@ -7,7 +7,8 @@
  * make the eventual v2 work a refactor instead of a wire-up; SPEC §5 spells this out.
  */
 import { DEFAULT_MEASURE, isMeasure } from "./measure";
-import type { Lang, Measure, RenderedDoc, Session, SessionTab, ThemeChoice, ViewMode } from "./ipc";
+import { isLogLevel } from "./ipc";
+import type { Lang, LogLevel, Measure, RenderedDoc, Session, SessionTab, ThemeChoice, ViewMode } from "./ipc";
 
 export interface Tab {
   id: string;
@@ -67,6 +68,10 @@ export interface WindowState {
    *  documents. Directories always show — the tree is loaded a level at a time, so "does this folder
    *  hold markdown?" is not knowable without reading it (SPEC §3). */
   mdOnly: boolean;
+  /** Diagnostics (IMPL.md §13.8): the level `diag.ts` filters on, and the log directory Settings
+   *  shows. Empty `logDir` is the platform default, which is also what Rust assumes. */
+  logLevel: LogLevel;
+  logDir: string;
   activeTab: number;
   tabs: Tab[];
   recent: string[];
@@ -121,6 +126,8 @@ export const state: WindowState = {
   outlineOpen: true,
   outlineWidth: 200,
   mdOnly: true,
+  logLevel: "info",
+  logDir: "",
   activeTab: 0,
   tabs: [],
   recent: [],
@@ -195,6 +202,8 @@ export function toSession(windowRect: WindowRect): Session {
     outlineOpen: state.outlineOpen,
     outlineWidth: state.outlineWidth,
     mdOnly: state.mdOnly,
+    logLevel: state.logLevel,
+    logDir: state.logDir,
     activeTab: state.activeTab,
     tabs,
     recent: state.recent.slice(),
@@ -217,6 +226,9 @@ export function applySession(session: Session): void {
   state.outlineOpen = session.outlineOpen;
   state.outlineWidth = session.outlineWidth ?? 200;
   state.mdOnly = session.mdOnly ?? true;
+  // A hand-edited session may name a level that never existed; `info` is what Rust falls back to.
+  state.logLevel = isLogLevel(session.logLevel) ? session.logLevel : "info";
+  state.logDir = session.logDir ?? "";
   state.recent = session.recent.slice();
   state.tabs = session.tabs.map((t) => {
     const name = t.file.split(/[\\/]/).pop() ?? t.file;

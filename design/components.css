@@ -947,6 +947,12 @@ mark.current { background: var(--ac); color: #fff; }
 }
 .section-head + .form-row { border-top: 0; }
 .form-row .grow { flex: 1 1 auto; min-width: 0; }
+/* A control that is several things at once — a path plus the buttons that act on it — is one flex line:
+   the path is the part that gives way (it wraps inside itself, `overflow-wrap: anywhere`), and a button
+   never shrinks. A button whose label breaks across two lines is always a bug: it is what happened to the
+   log-directory row in a 560px sheet (2026-10-06). */
+.form-row .form-ctl { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.form-row .form-ctl > button { flex: 0 0 auto; }
 /* label on top, list underneath — the ignore list does not fit beside its label */
 .form-row.stack { flex-direction: column; align-items: stretch; gap: 2px; }
 .form-sub { margin-top: 2px; font-size: var(--fs-xs); color: var(--tx-2); }
@@ -1034,6 +1040,12 @@ mark.current { background: var(--ac); color: #fff; }
 .about-facts .badge { vertical-align: 1px; margin-right: 6px; }
 .about-facts .lic { margin-left: 6px; font-size: 11px; color: var(--tx-3); }
 .about-path { font-family: var(--font-mono); font-size: 11.5px; color: var(--tx-2); overflow-wrap: anywhere; }
+/* The same rule as `.form-row .form-ctl`, in the About sheet, where the value is inline flow: one
+   inline-flex box keeps the three buttons whole and lets the path shrink inside it, instead of the last
+   button dropping to a line of its own (`margin-left` on `.about-open` is the spacing here). */
+.about-ctl { display: inline-flex; align-items: center; max-width: 100%; }
+.about-ctl > .about-path { flex: 0 1 auto; min-width: 0; }
+.about-ctl > button { flex: 0 0 auto; }
 .about-open { margin-left: 8px; vertical-align: 1px; }
 /* The update row sits in the facts block under `author`: a hanging label like its neighbours, with the
    button, its state and the opt-in note as the value. It is the only control in the app that talks to the

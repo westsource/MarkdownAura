@@ -631,9 +631,9 @@ which carry colour because they carry identity.
 | block | content |
 |---|---|
 | brand line | logo · `MarkdownAura` · the version (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline. The version is `__APP_VERSION__`, injected at build time from `package.json`, and written every time the sheet opens — never a literal in the markup: one lived there and showed `0.1.0` through two releases to anyone reading the unopened DOM |
-| update | its own area below the facts block, after a hairline, and nothing else: `check for updates` (ghost) → `v1.1.0 is available` + `download and install` (primary), with the state beside the button. The note that used to sit under it — claiming this was the app's only network call — is gone: the launch check exists now, so that sentence stopped being true |
+| update | its own area below the facts block, after a hairline, and nothing else: `check for updates` (ghost) → `v1.2.0 is available` + `download and install` (primary), with the state beside the button. The note that used to sit under it — claiming this was the app's only network call — is gone: the launch check exists now, so that sentence stopped being true |
 | what it is | **one** paragraph: what the app is, then the seven capabilities after a `capabilities:` lead-in, the editing one directly after the views because it is the thing this release changed — same size, same colour, no separate block |
-| facts | hanging labels (`author` / `engines` / `editor` / `data`): 道荣（黄超） · the three engine badges with their licence (and a version where the UI shows one) · the editor badge with CodeMirror's licence and its measured size, loaded on demand · the data path in mono with an `open` button |
+| facts | hanging labels (`author` / `engines` / `editor` / `data` / `logs`): 道荣（黄超） · the three engine badges with their licence (and a version where the UI shows one) · the editor badge with CodeMirror's licence and its measured size, loaded on demand · the data path in mono with an `open` button · the log directory in mono with `open` / `export` / `copy`, and — only when the previous run did not exit cleanly — a line naming its run id |
 | foot | `LICENSE · THIRD-PARTY.md` (both ship next to the executable) |
 
 Decisions inside that shape, each of which was made deliberately:
@@ -688,14 +688,17 @@ webview itself, and CSP would block it rather than open a browser.
 costs a window lifecycle, a second webview and cross-window state sync, for a panel that is two
 screens tall. If it ever needs to be a real window the sheet markup moves across unchanged.
 
-Content order — reading, engines, files, cache:
+Content order — reading, files, cache, diagnostics. **Every row changes something** (2026-10-06, product
+owner's call): the engines section and the watch-debounce read-out are gone, because a fact nothing can act
+on is not a setting. The engines keep their three homes — the badges, licences and costs in About, the live
+health dots in the status bar, and §4 here — and the debounce keeps its one home in `IMPL.md` §3.
 
 | section | rows (shipped) |
 |---|---|
 | reading | theme (`system` / `light` / `dark`, segmented), language (`system` / `English` / `简体中文`, segmented), document font size (stepper, 12–22px, the `--doc-size` token), reading width (3 presets — 60ch / 100ch / full, the `--measure` token), reduce motion |
-| engines | all three are static `bundled` rows with their measured costs; nothing here can touch the network (SPEC §4) |
-| files | default app — a read-out of what opens `.md` now, plus the one action this platform allows: `xdg-mime` on Linux, and on Windows the *Open with* dialog (or the Default Apps page when no document is open), because the choice is the user's and no process may set it; watch debounce (read-out only; the value lives in `IMPL.md` §3) |
+| files | default app — a read-out of what opens `.md` now, plus the one action this platform allows: `xdg-mime` on Linux, and on Windows the *Open with* dialog (or the Default Apps page when no document is open), because the choice is the user's and no process may set it |
 | cache | rendered-SVG size + clear (the in-memory cap is 6 MB, `IMPL.md` §5) |
+| diagnostics | log level (`off` / `error` / `warn` / `info` / `debug`, default `info`) and the log directory with a `change…` picker and a `reset` to the platform default — the row that lets the logs live somewhere a second machine can reach; what the log is for is `IMPL.md` §13 |
 
 The theme control and the toolbar's theme button are **the same field**: toggling the button sets
 an explicit `light`/`dark`, and the sheet's `system` option is what restores OS-following. A

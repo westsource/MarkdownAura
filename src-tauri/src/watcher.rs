@@ -202,7 +202,11 @@ fn spawn_coalescer(app: AppHandle, rx: mpsc::Receiver<notify::Result<Event>>) {
                         // twenty notifications collapse into one.
                         deadline = Some(Instant::now() + DEBOUNCE);
                     }
-                    Ok(Err(_)) => {}
+                    // notify's error stream used to be dropped here, which is how a watch that
+                    // stopped working looks exactly like a file that stopped changing.
+                    Ok(Err(err)) => {
+                        crate::diag_warn!("watcher", "notify error", {"err": err.to_string()});
+                    }
                     Err(RecvTimeoutError::Timeout) => {
                         if deadline.is_some_and(|d| Instant::now() >= d) {
                             flush(&app, &mut changed, &mut removed);

@@ -34,10 +34,16 @@ export function middleEllipsis(text: string, max: number): string {
   return `${text.slice(0, keep)}…${text.slice(text.length - keep)}`;
 }
 
-export function copyText(text: string): void {
-  navigator.clipboard?.writeText(text).catch(() => {
-    // Clipboard access can be refused; failing silently is better than a dialog for a copy.
-  });
+/** `false` means the WebView refused the write — the promise a caller can ignore (most do, since a
+ *  silent failure beats a dialog) or act on. The About sheet acts on it: a reader told "copied" has to
+ *  be able to paste. */
+export function copyText(text: string): Promise<boolean> {
+  const write = navigator.clipboard?.writeText(text);
+  if (!write) return Promise.resolve(false);
+  return write.then(
+    () => true,
+    () => false,
+  );
 }
 
 export function toast(message: string, kind?: "ok" | "warn" | "err"): void {

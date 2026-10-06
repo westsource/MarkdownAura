@@ -18,21 +18,31 @@
  */
 import {
   dataDirectory,
+  diagReport,
+  diagStatus,
   openExternal,
+  openLogFolder,
   relaunchApp,
   revealInExplorer,
+  saveDiagReport,
   updateCheck,
   updateDownload,
   updateInstall,
+  type PreviousRun,
 } from "../ipc";
 import { t } from "../i18n";
-import { $, toast } from "./dom";
+import * as diag from "../diag";
+import { $, copyText, toast } from "./dom";
 import * as status from "./statusbar";
 
 /** The only external URL in the app, and the only one the capability allows. */
 const GITHUB_URL = "https://github.com/westsource/MarkdownAura";
 
 let path = "";
+/** The effective log directory and the previous run, read from Rust. The directory can change in
+ *  Settings, so it is refreshed rather than read once at boot. */
+let logPath = "";
+let unclean: PreviousRun | null = null;
 
 type UpdateState = "idle" | "checking" | "current" | "available" | "downloading" | "installing" | "failed";
 
@@ -96,6 +106,8 @@ async function runUpdateInstall(): Promise<void> {
     updateText = t("about.installing");
     renderUpdate();
     await updateInstall();
+    // The installer replaces this process; push whatever the queue still holds before it goes.
+    diag.flush();
     await relaunchApp();
   } catch (err) {
     updateState = "failed";
@@ -120,8 +132,24 @@ export function close(): void {
 function render(): void {
   $("#aboutVersionChip").textContent = `v${__APP_VERSION__}`;
   $("#aboutDataPath").textContent = path || "—";
+  $("#aboutLogPath").textContent = logPath || "—";
+  $("#aboutUncleanRow").hidden = unclean === null;
+  $("#aboutUnclean").textContent = unclean ? t("about.unclean", { run: unclean.run }) : "";
   $("#aboutGithub").setAttribute("title", t("about.github"));
   renderUpdate();
+}
+
+/** Re-reads what Rust knows about the log, including the previous run's cleanliness. Settings calls
+ *  this after a directory change; the About sheet shows the same directory, so it must not keep the
+ *  stale one. A failure leaves the last known values rather than breaking the sheet. */
+export function refreshLogPath(): void {
+  void diagStatus()
+    .then((found) => {
+      logPath = found.logDir;
+      unclean = found.previousUnclean;
+      if (isOpen()) render();
+    })
+    .catch(() => {});
 }
 
 export function wire(): void {
@@ -141,6 +169,33 @@ export function wire(): void {
     revealInExplorer(path).catch(() => toast(path, "warn"));
   });
 
+  // The log folder, not a path inside it: the sheet shows a directory and this opens that directory.
+  $("#aboutLogOpen").addEventListener("click", () => {
+    openLogFolder().catch(() => toast(t("toast.logOpenFailed"), "warn"));
+  });
+
+  // Export writes the full report, then reveals the file and says where. Revealing is best-effort:
+  // a written report is still worth the toast even if the shell cannot select it.
+  $("#aboutExportReport").addEventListener("click", () => {
+    void saveDiagReport()
+      .then(async (saved) => {
+        await revealInExplorer(saved).catch(() => {});
+        toast(t("toast.reportSaved", { path: saved }), "ok");
+      })
+      .catch(() => toast(t("toast.reportFailed"), "warn"));
+  });
+
+  $("#aboutCopySummary").addEventListener("click", () => {
+    void diagReport()
+      .then(async (report) => {
+        // The toast follows the write, not the click: WebView2 can refuse the clipboard (it asks, and a
+        // refusal is silent), and a reader who is told "copied" has to be able to paste.
+        const copied = await copyText(report);
+        toast(copied ? t("toast.reportCopied") : t("toast.reportCopyFailed"), copied ? "ok" : "warn");
+      })
+      .catch(() => toast(t("toast.reportFailed"), "warn"));
+  });
+
   $("#aboutUpdateCheck").addEventListener("click", () => void runUpdateCheck());
   $("#aboutUpdateInstall").addEventListener("click", () => void runUpdateInstall());
 
@@ -148,12 +203,14 @@ export function wire(): void {
   // update: the sheet opens showing whatever that check already found.
   $("#stUpdate").addEventListener("click", open);
 
-  // Fetched once at boot: the path never changes while the app runs, and failing to get it must not
-  // stop the sheet from opening — it shows "—" instead.
+  // Fetched once at boot: the data path never changes while the app runs, and failing to get it must
+  // not stop the sheet from opening — it shows "—" instead. The log path is the same fetch plus the
+  // previous-run flag, and Settings can change it, so it has its own refresh.
   void dataDirectory()
     .then((dir) => {
       path = dir;
       if (isOpen()) render();
     })
     .catch(() => {});
+  refreshLogPath();
 }
