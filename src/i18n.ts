@@ -82,6 +82,8 @@ const en = {
 
   // ---- diagram cards ----
   "diagram.loading": "rendering…",
+  "code.copy": "copy this code",
+  "img.failed": "image failed to load",
 
   // ---- overlays ----
   "settings.title": "settings",
@@ -165,6 +167,7 @@ const en = {
 
   // ---- toasts ----
   "toast.sourceCopied": "source copied to clipboard",
+  "toast.codeCopied": "code copied to clipboard",
   "toast.svgCopied": "svg copied to clipboard",
   "toast.noRecent": "no recent files yet",
   "toast.noTabs": "no tabs open",
@@ -348,6 +351,8 @@ const zh: Record<Key, string> = {
 
   // ---- diagram cards ----
   "diagram.loading": "渲染中…",
+  "code.copy": "复制这段代码",
+  "img.failed": "图片未能加载",
 
   "settings.title": "设置",
   "settings.closeTitle": "关闭 (esc)",
@@ -421,6 +426,7 @@ const zh: Record<Key, string> = {
   "menu.recent": "最近",
 
   "toast.sourceCopied": "源码已复制到剪贴板",
+  "toast.codeCopied": "代码已复制到剪贴板",
   "toast.svgCopied": "SVG 已复制到剪贴板",
   "toast.noRecent": "暂无最近文件",
   "toast.noTabs": "没有打开的标签页",

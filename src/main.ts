@@ -1090,22 +1090,61 @@ async function boot(): Promise<void> {
     onMeasureMenu: (anchor) => showMeasureMenu(anchor),
   });
 
-  // Diagram card buttons are delegated: cards are recreated on every render, so per-card
-  // listeners would leak. One listener on each prose container covers every card that ever
-  // exists in it.
+  // Diagram card and code-block buttons are delegated: both are recreated on every render, so
+  // per-element listeners would leak. One listener on each prose container covers everything that
+  // ever exists in it.
   for (const container of ["#out-preview", "#out-split"]) {
     document.querySelector<HTMLElement>(container)?.addEventListener("click", (event) => {
       const button = (event.target as HTMLElement).closest<HTMLElement>("[data-act]");
       if (!button) return;
+
       const card = button.closest<HTMLElement>("figure.diagram");
-      if (!card) return;
-      const id = card.dataset.diagram ?? "";
-      if (button.dataset.act === "zoom") viewer.openById(id);
-      if (button.dataset.act === "copy") {
-        copyText(card.dataset.source ?? "");
-        toast(i18n.t("toast.sourceCopied"), "ok");
+      if (card) {
+        const id = card.dataset.diagram ?? "";
+        if (button.dataset.act === "zoom") viewer.openById(id);
+        if (button.dataset.act === "copy") {
+          copyText(card.dataset.source ?? "");
+          toast(i18n.t("toast.sourceCopied"), "ok");
+        }
+        return;
+      }
+
+      // A code block's text is the code itself, before or after Prism rewrote the markup: the text
+      // is what `textContent` reports either way.
+      const code = button.closest<HTMLElement>("figure.code");
+      if (code && button.dataset.act === "copy-code") {
+        copyText(code.querySelector("code")?.textContent ?? "");
+        toast(i18n.t("toast.codeCopied"), "ok");
       }
     });
+  }
+
+  // Images are created per render, so their two states are delegated as well. `load` and `error` do
+  // not bubble, which is why both listeners capture: on the container, they see every image inside it
+  // whatever the document's markup looks like.
+  for (const container of ["#out-preview", "#out-split"]) {
+    const root = document.querySelector<HTMLElement>(container);
+    root?.addEventListener(
+      "load",
+      (event) => {
+        const img = event.target;
+        if (img instanceof HTMLImageElement) delete img.dataset.loading;
+      },
+      true,
+    );
+    root?.addEventListener(
+      "error",
+      (event) => {
+        const img = event.target;
+        if (!(img instanceof HTMLImageElement)) return;
+        // The `alt` stays: it is the author's description, and it is what the reader gets instead of
+        // the picture. The `title` says why the box is empty.
+        delete img.dataset.loading;
+        img.classList.add("failed");
+        img.title = i18n.t("img.failed");
+      },
+      true,
+    );
   }
 
   // The titlebar is ours, so its buttons are wired by hand.

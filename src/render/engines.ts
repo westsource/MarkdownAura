@@ -34,19 +34,29 @@ let mermaidPromise: Promise<typeof import("mermaid").default> | null = null;
 
 async function loadMermaid() {
   if (!mermaidPromise) {
-    mermaidPromise = import("mermaid").then((mod) => {
-      const mermaid = mod.default;
-      mermaid.initialize({
-        // The app renders explicitly; mermaid must not go hunting for `class="mermaid"`.
-        startOnLoad: false,
-        // Diagram sources come from files on disk, so treat them as untrusted input.
-        securityLevel: "strict",
-        theme: "base",
-        themeVariables: mermaidThemeVars(),
-        fontFamily: cssVar("--font-sans", "system-ui, sans-serif"),
+    mermaidPromise = import("mermaid")
+      .then((mod) => {
+        const mermaid = mod.default;
+        mermaid.initialize({
+          // The app renders explicitly; mermaid must not go hunting for `class="mermaid"`.
+          startOnLoad: false,
+          // Diagram sources come from files on disk, so treat them as untrusted input.
+          securityLevel: "strict",
+          theme: "base",
+          themeVariables: mermaidThemeVars(),
+          fontFamily: cssVar("--font-sans", "system-ui, sans-serif"),
+        });
+        return mermaid;
+      })
+      .catch((err: unknown) => {
+        // A rejected import must not be cached. It is the one failure that *does* poison the session:
+        // every later block of this engine would reject instantly, for the rest of the run, with the
+        // same stale error. Dropping it here makes the next attempt import again — the chunk is in the
+        // bundle, so the retry costs a module lookup. (`preloadD2` did this by hand for one engine;
+        // this puts the rule on all three.)
+        mermaidPromise = null;
+        throw err;
       });
-      return mermaid;
-    });
   }
   return mermaidPromise;
 }
@@ -92,11 +102,18 @@ let graphvizPromise: Promise<Graphviz> | null = null;
 
 async function loadGraphviz(): Promise<Graphviz> {
   if (!graphvizPromise) {
-    graphvizPromise = import("@hpcc-js/wasm-graphviz").then(async (mod) => {
-      // The wasm is inlined in the package, so this resolves with no network access.
-      const GraphvizCtor = (mod as unknown as { Graphviz: { load(): Promise<Graphviz> } }).Graphviz;
-      return GraphvizCtor.load();
-    });
+    graphvizPromise = import("@hpcc-js/wasm-graphviz")
+      .then(async (mod) => {
+        // The wasm is inlined in the package, so this resolves with no network access. The package's
+        // types expose the constructor on the module namespace; bind it once, named, rather than
+        // casting the module inline at the call.
+        const hpcc = mod as unknown as { Graphviz: { load(): Promise<Graphviz> } };
+        return hpcc.Graphviz.load();
+      })
+      .catch((err: unknown) => {
+        graphvizPromise = null;   // see `loadMermaid`: a cached rejection is what poisons a session
+        throw err;
+      });
   }
   return graphvizPromise;
 }
@@ -116,7 +133,14 @@ async function renderDot(source: string): Promise<string> {
 let d2Promise: Promise<D2> | null = null;
 
 async function loadD2(): Promise<D2> {
-  if (!d2Promise) d2Promise = import("@d2lang/d2").then((mod) => new mod.D2());
+  if (!d2Promise) {
+    d2Promise = import("@d2lang/d2")
+      .then((mod) => new mod.D2())
+      .catch((err: unknown) => {
+        d2Promise = null;   // see `loadMermaid`: a cached rejection is what poisons a session
+        throw err;
+      });
+  }
   return d2Promise;
 }
 

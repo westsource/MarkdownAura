@@ -458,11 +458,13 @@ either side**. This is the weakest seam in the whole architecture.
   prices, display demoted inside a sentence).
 - `npm run check:rawhtml` asserts the same allow-list holds in the mockup, so the
   two renderers cannot quietly disagree.
-- `src/render/pipeline.ts` copies mockup.js's card markup verbatim; review keeps it so. **One state
-  is app-only**: the mockup draws its diagrams synchronously, so it has no `diagram-pending` body
-  and no `rendering…` string. A class that exists only in the app is the one place this rule cannot
-  be honoured symmetrically — the mockup is the spec for the card, and the pending state is the
-  app's answer to "the engine has not answered yet".
+- `src/render/pipeline.ts` copies mockup.js's card markup verbatim; review keeps it so. **Three states
+  are app-only**: the mockup draws its diagrams synchronously, so it has no `diagram-pending` body and
+  no `rendering…` string; it has no code caption row (`figure.code` + `.code-head` + `[data-act="copy-code"]`),
+  which is the app's affordance rather than the document's; and its images have no `data-loading` or
+  `.failed` state, since the stand-in renderer never fetches one. A class that exists only in the app is
+  the one place this rule cannot be honoured symmetrically — the mockup is the spec for what the document
+  produces, and these three are the app's answer to "the bytes have not arrived yet".
 - **The card is opened before its engine answers** and its body is filled afterwards
   (`openCard` → `showDiagram`/`showFailure`), so the head, the `zoom`/`copy` buttons and the
   `data-diagram`/`data-source` anchors exist for the whole render, and `figure.isConnected` is what
@@ -924,6 +926,11 @@ status bar's `rendered in N ms` is where a reader sees it.
   output contains none of them, and that the allowed tags still survive.
 - **Missing guards** (open item, §11): the `insta` snapshot test and the class-name lint.
   `insta` is in `[dev-dependencies]` and unused.
+- **No gate covers the engine load retry** (`engines.ts` drops a rejected import so the next render
+  imports again, added 2026-10-08). There is no JS test runner in this repo, and the step that would
+  exercise it is a build whose chunk fails to load once — so the rule is *read*, not run: it is the same
+  shape `preloadD2` has used since d2 shipped, and the observable half (a failed render no longer
+  poisoning the next one) was driven in a real build. Worth a test the day a JS runner arrives.
 - **Frontend:** `npx tsc --noEmit` is clean and is the only automated frontend gate. It also
   enforces i18n completeness: `zh` is `Record<Key, string>` typed against `en`, so a missing or
   stray translation fails the type check rather than falling back silently at runtime. The

@@ -567,6 +567,12 @@ adding a key means editing two files and the help panel can silently go stale.
   15px at the default size; h5 and h6 are grouped with h4 and carry their level through weight and
   spacing). Fixed-px headings fell behind the body the moment the reader raised the size or the zoom,
   and h3–h6 shipped *smaller* than body text because their values were lifted from the 13px UI scale.
+- **The document's furniture has its own tokens, and the thematic break is dashed** (amended
+  2026-10-08). `hr`, the table borders, list markers, and the blockquote's text and rule each read a
+  `--*` token instead of borrowing `--line`/`--tx-2`: they render identically today, and the point is
+  that a theme can move one without moving the other three. A document's `---` is drawn **1px dashed**,
+  because every other horizontal line on the page — table borders, card hairlines, a quote's rule — is
+  solid, and the one line that means "the subject changes here" has to look unlike them.
 - **One accent.** Purple `#534ab7` (the "aura"), used for: active tab bar, active tree row,
   links, focus rings, primary buttons, mermaid badge. Nothing else is saturated.
 - **Sentence case everywhere** — `open folder`, not `Open Folder`. Lowercase UI reads as
@@ -1071,3 +1077,22 @@ fakes its diagrams and has no code colouring, no math and no note section, so `m
 where these three are reviewed — §13 is. The card is the exception: the pending body is the one card
 state the mockup has no markup for (it draws its diagrams synchronously), and `IMPL.md` §4 says so
 where it says the class names match in three places.
+
+### A code block carries its language, and a copy button
+
+Every code block — fenced or indented, named or bare — gets a caption row above it with the language
+the fence named (omitted when it named none) and a `copy this code` button. Amended 2026-10-08:
+copying a snippet is the one thing a reader does with a code block, and until now the only copy
+button in the app belonged to a diagram card.
+
+The row sits **outside** the `pre`, because a control inside a horizontally scrolling block scrolls
+away the moment the code is wider than the column. The block keeps its own box; the row is a caption,
+not a second frame — which is also why the mockup (no row) does not become wrong, only plainer.
+
+### A broken image says so
+
+An image that fails to load keeps its `alt` — that is the author's description, and it is what the
+reader gets instead of the picture — inside a dashed box that carries the reason in its `title`
+(`image failed to load`). While an image is still on the wire the box is reserved at 50px, so the text
+below it does not jump when the bytes land. Amended 2026-10-08: the alternative was Chromium's
+broken-image glyph and a paragraph that moved twice.

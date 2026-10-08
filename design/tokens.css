@@ -53,6 +53,17 @@
   --code-punct: #57606a;   /* punctuation */
   --code-op: #57606a;      /* operators, urls, variables */
 
+  /* the document's own furniture (SPEC §13)
+     These exist so a theme can move *one* thing without moving the others. Each one started as a
+     reused `--line`/`--tx-2` reference: an `hr` that shared the table border's value, a table border
+     that shared the hairline, list markers and blockquote text that shared "secondary text". They
+     look identical today; the point is that changing one no longer changes four. */
+  --hr: rgba(0, 0, 0, .16);            /* thematic break */
+  --table-border: rgba(0, 0, 0, .09);  /* table cell borders */
+  --marker: #78767f;                   /* list markers */
+  --quote-tx: #78767f;                 /* blockquote text */
+  --quote-line: rgba(0, 0, 0, .28);    /* blockquote's left rule */
+
   /* type — chrome and UI only. The reading surface deliberately does not use these: prose.css sizes
      everything in `em` off `--doc-size` x `--zoom`, so that one control moves the whole document and
      no heading can silently fall behind the body text (which is what fixed px headings did).
@@ -161,6 +172,13 @@
   --code-type: #ffa657;
   --code-punct: #9b99a3;
   --code-op: #9b99a3;
+
+  /* the document's own furniture — see the light block */
+  --hr: rgba(255, 255, 255, .16);
+  --table-border: rgba(255, 255, 255, .09);
+  --marker: #9b99a3;
+  --quote-tx: #9b99a3;
+  --quote-line: rgba(255, 255, 255, .28);
 }
 
 @media (prefers-reduced-motion: reduce) {

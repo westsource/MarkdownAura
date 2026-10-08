@@ -62,7 +62,7 @@
 
 .prose ul, .prose ol { margin-block: 0 var(--sp-3); padding-left: 22px; }
 .prose li { margin-block: 2px; }
-.prose li::marker { color: var(--tx-2); }
+.prose li::marker { color: var(--marker); }
 .prose li > ul, .prose li > ol { margin-block: 2px; }
 /* GFM task lists. The item carries no class of its own — `pulldown-cmark` emits a bare `<li>` with
    a disabled `<input>` in it — so the check is structural. This rule used to read `li.task`, which
@@ -73,12 +73,17 @@
 .prose blockquote {
   margin-block: 0 var(--sp-3);
   padding: 2px 0 2px var(--sp-3);
-  border-left: 2px solid var(--line-3);
-  color: var(--tx-2);
+  border-left: 2px solid var(--quote-line);
+  color: var(--quote-tx);
 }
 .prose blockquote > :last-child { margin-bottom: 0; }
 
-.prose hr { border: 0; border-top: 0.5px solid var(--line); margin-block: var(--sp-6); }
+/* Thematic break: **dashed, with its own token**. A rule that shares the table's border colour and
+   the card hairline is the one horizontal line a reader cannot pick out of the others, and `hr` is
+   exactly the element a document uses to say "the subject changes here". `marktext` draws it dashed
+   at 2px in its *editor* (where it also marks the active region); one pixel is the reading-surface
+   weight, four times lighter than that hint. */
+.prose hr { border: 0; border-top: 1px dashed var(--hr); margin-block: var(--sp-6); }
 
 /* ---------- inline code & fences ---------- */
 
@@ -153,11 +158,28 @@
 }
 .prose th, .prose td {
   padding: 6px 12px;
-  border: 0.5px solid var(--line);
+  border: 0.5px solid var(--table-border);
   text-align: left;
 }
 .prose th { background: var(--side); font-weight: var(--fw-emphasis); white-space: nowrap; }
 .prose tbody tr:nth-child(even) { background: var(--side); }
+
+/* The caption row the app puts above every code block (`render/pipeline.ts`): the language the
+   fence named, and a copy button. It is *outside* the `pre` on purpose — a control inside a
+   horizontally scrolling block scrolls away from the reader the moment the code is wider than the
+   column. The block itself keeps its own box; the row is a caption, not a second frame. */
+.prose figure.code > pre { margin-block: 0; }
+.prose .code-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 20px;
+  padding-bottom: 3px;
+}
+.prose .code-head .badge { background: var(--chrome); color: var(--tx-2); }
+/* The language is what a reader scans for; the button stays quiet until the row is used. */
+.prose .code-head .iconbtn { opacity: .55; }
+.prose .code-head .iconbtn:hover, .prose .code-head .iconbtn:focus-visible { opacity: 1; }
 
 /* ---------- images ---------- */
 
@@ -166,6 +188,20 @@
   height: auto;
   border-radius: var(--r-md);
   border: 0.5px solid var(--line);
+}
+/* While an image is on the wire, reserve height so the text below does not jump when it lands.
+   `data-loading` is stamped per render and removed by the load listener in `main.ts`. */
+.prose img[data-loading] { min-height: 50px; background: var(--side); }
+/* A broken image keeps its `alt` — that is the author's description, and Chromium draws it inside
+   the element — and gains a box that says the load failed rather than a bare browser glyph. */
+.prose img.failed {
+  min-height: 50px;
+  background: var(--side);
+  border-style: dashed;
+  border-color: var(--line-2);
+  color: var(--tx-2);
+  font-size: .83em;   /* 12.5px at the default base: the alt text is a caption now */
+  padding: var(--sp-3) 10px;
 }
 .prose figure { margin-block: 0 var(--sp-3); }
 .prose figcaption { margin-top: 6px; font-size: .73em; color: var(--tx-2); text-align: center; }   /* 11px: the --fs-xs size, relative */

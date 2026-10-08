@@ -148,6 +148,44 @@ function showFailure(figure: HTMLElement, block: DiagramBlock, message: string):
 }
 
 /**
+ * Gives every fenced or indented code block a caption row: its language (when the fence named one)
+ * and a copy button.
+ *
+ * The row is markup the *app* adds, like the diagram card's pending body: the parser emits
+ * `<pre><code>`, and no document can spell this. That is also why a bare fence — and an indented
+ * block — still gets the row, with no badge: "copy this code" is the same gesture whatever the
+ * fence said, and the language is the only part that can be absent.
+ *
+ * Copying reads `code.textContent`, so it works the same before and after Prism has rewritten the
+ * block's inner HTML: highlighting changes the markup, never the text.
+ */
+function addCodeHeads(container: HTMLElement): number {
+  const blocks = Array.from(container.querySelectorAll<HTMLElement>("pre > code"));
+  let headed = 0;
+
+  for (const code of blocks) {
+    const pre = code.parentElement;
+    if (!pre || pre.closest("figure.code")) continue;
+
+    const language = /language-([^\s]+)/.exec(code.className)?.[1] ?? "";
+    const figure = document.createElement("figure");
+    figure.className = "code";
+    figure.innerHTML =
+      `<div class="code-head">` +
+      (language ? `<span class="badge code">${esc(language)}</span>` : "") +
+      `<div class="spacer"></div>` +
+      `<button class="iconbtn" data-act="copy-code" style="width:22px;height:22px" title="${attr(t("code.copy"))}" aria-label="${attr(t("code.copy"))}">${COPY_ICON}</button>` +
+      `</div>`;
+
+    pre.replaceWith(figure);
+    figure.append(pre);
+    headed++;
+  }
+
+  return headed;
+}
+
+/**
  * Writes `doc.html` into `container`, resolves every diagram placeholder, then highlights code and
  * renders math in place.
  *
@@ -161,6 +199,10 @@ function showFailure(figure: HTMLElement, block: DiagramBlock, message: string):
 export async function paint(container: HTMLElement, doc: RenderedDoc): Promise<PaintResult> {
   const started = performance.now();
   container.innerHTML = doc.html;
+
+  // Every image starts as "on the wire": the CSS reserves height for that state, and the load/error
+  // listeners in `main.ts` clear it. Marking them here is one loop over the document's images.
+  for (const img of container.querySelectorAll("img")) img.dataset.loading = "1";
 
   // The loop below renders cards in document order, so a d2 block behind a mermaid one waits for it and
   // *then* parses 11 MB. Start that parse now, and only when a d2 block actually needs rendering — a
@@ -222,8 +264,10 @@ export async function paint(container: HTMLElement, doc: RenderedDoc): Promise<P
   // A document with diagrams is the signal that this reader may need d2 next; warm it while they read.
   if (rendered + cached > 0) warmHeaviestEngineOnIdle();
 
-  // Both post-passes are best-effort by design: a grammar that cannot be loaded, or a KaTeX that
-  // fails to import, must leave the document readable rather than blank.
+  // The code heads are markup and cannot fail; the two passes after them can, and are best-effort by
+  // design: a grammar that cannot be loaded, or a KaTeX that fails to import, must leave the document
+  // readable rather than blank.
+  addCodeHeads(container);
   for (const [what, run] of [
     ["highlight", () => highlight(container)],
     ["math", () => renderMath(container)],
