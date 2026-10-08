@@ -1202,10 +1202,11 @@ Two facts the first attempt at this did not know:
   "it really failed" (`retry … not attached` → send again). After the prune, v1.3.1 uploaded all ten assets:
   the AppImage timed out once, the retry landed.
 
-**The quota is a release-time budget, not a one-off fix.** v1.4.0 leaves **920.6 MB / 1024 MB used** across 13
-releases, so the next release of comparable size will not fit either. The step is: run the audit
-(`node var/gitee-quota-audit.mjs`), run the prune, then publish — and when the prune would have to delete
-something recent to make room, that is a decision for the product owner, never for the script.
+**The quota is a release-time budget, not a one-off fix.** v1.4.0 leaves **1009.7 MB / 1024 MB used** across 13
+releases (14 MB free), so the next release of comparable size will not fit and there is no old AppImage left to
+give up: the step is run the audit (`node var/gitee-quota-audit.mjs`), run the prune, then publish — and when
+the prune would have to delete something recent to make room, that is a decision for the product owner, never
+for the script.
 
 **`WANT_FREE_MB` is free space, and the newest release's AppImage is not a prune candidate.** Both halves were
 learned the hard way on 2026-10-08: the loop compared the constant against the bytes *it had freed in this
