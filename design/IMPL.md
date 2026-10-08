@@ -1202,10 +1202,19 @@ Two facts the first attempt at this did not know:
   "it really failed" (`retry … not attached` → send again). After the prune, v1.3.1 uploaded all ten assets:
   the AppImage timed out once, the retry landed.
 
-**The quota is a release-time budget, not a one-off fix.** v1.3.1 leaves **968.5 MB / 1024 MB used** across 12
+**The quota is a release-time budget, not a one-off fix.** v1.4.0 leaves **920.6 MB / 1024 MB used** across 13
 releases, so the next release of comparable size will not fit either. The step is: run the audit
 (`node var/gitee-quota-audit.mjs`), run the prune, then publish — and when the prune would have to delete
 something recent to make room, that is a decision for the product owner, never for the script.
+
+**`WANT_FREE_MB` is free space, and the newest release's AppImage is not a prune candidate.** Both halves were
+learned the hard way on 2026-10-08: the loop compared the constant against the bytes *it had freed in this
+run* rather than against the free space the header describes, so after deleting 88 MB (less than the 150 it
+was set to) it went on to delete the **current** release's AppImage — precisely the cross the header warned
+about, and the reason the constant is now 100 (chosen so the run stops at the oldest AppImage, which the
+owner had approved in advance) with the loop measuring `QUOTA_MB - total + freed`. The cost of the tight
+target is real and accepted: once the old AppImages are gone, the next release needs a *product* decision
+about which newer asset to drop, because 89 MB of AppImage per release does not leave room for long.
 
 **An 88 MB attachment can outlive undici's 300 s response-header timeout** (the script's comment documents
 this and reads the release back rather than retrying blindly). When the read-back says the file is *not*
