@@ -1,6 +1,6 @@
 [package]
 name = "markdownaura"
-version = "1.4.0"
+version = "1.4.1"
 description = "A small, fast markdown reader with in-place editing and local mermaid, dot, d2, code-highlighting and math rendering"
 authors = ["道荣（黄超）"]
 edition = "2021"
