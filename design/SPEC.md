@@ -981,8 +981,8 @@ This is where the work is; the control itself is the easy part.
   instead of opening; find inside the pane searched the buffer (one hit for a word that appears once, with
   no `<mark>` elements in the DOM — the current hit is the selection); and `dirty` means "differs from the
   file", so undoing back to the saved text clears the mark instead of outliving the difference.
-- **deferred**: the rendered code-fence highlighting §11 still lists, and the `KEYMAP`/dispatcher
-  two-lists refactor this section deliberately did not absorb.
+- **deferred**: the `KEYMAP`/dispatcher two-lists refactor this section deliberately did not absorb.
+  (Rendered code-fence highlighting left this line on 2026-10-08 — it ships, §13.)
 - **deviates**: §1's former prohibition ("if a proposed feature turns MarkdownAura into an editor, it
   is out of scope") is kept in the record but no longer governs. This section supersedes it for
   **source** editing only.
