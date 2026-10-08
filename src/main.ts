@@ -620,13 +620,25 @@ function showTabMenu(index: number, x: number, y: number): void {
 
 async function setView(mode: doc.ViewMode): Promise<void> {
   const tab = activeTab();
-  doc.setView(mode);
-  if (!tab) return;
+  if (!tab) {
+    doc.setView(mode);
+    return;
+  }
 
+  // Read where the reader is *before* the view class changes. Measured after, the outgoing pane is
+  // hidden and every rect it would report is zero, which is how switching views used to drop the
+  // position and open the new one at the top (SPEC §5).
+  const from = doc.capturePosition();
   doc.captureScroll(tab);
   tab.view = mode;
+  doc.setView(mode);
   if (mode !== "preview") await ensureSource(tab);
   await paintActive();
+  // `renderDocument` restored the tab's pixel, which belongs to the mode we just left. Put the reader
+  // where they were instead, through the anchors both panes render, and store the pixel that the new
+  // mode actually landed on so a tab switch or a session save is right from here on.
+  doc.applyPosition(from);
+  doc.captureScroll(tab);
   scheduleSave();
 }
 

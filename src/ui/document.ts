@@ -32,11 +32,23 @@ export function setView(mode: ViewMode): void {
   });
 }
 
-/** The element that actually scrolls for the current view. */
-export function activeScroller(): HTMLElement {
+/** The pane the current view shows. Unlike `activeScroller` this is the *container*: the anchor
+ *  measurements are relative to it. The split's output half is the one the sync drives. */
+function activePane(): HTMLElement {
   if (current === "split") return $(".pane-out");
   if (current === "source") return $(".source-view");
   return $(".prose-wrap");
+}
+
+/** A pane showing source text rather than rendered HTML — `.source-view` alone, or the left half of
+ *  the split. The two need different anchor selectors. */
+function isSourcePane(pane: HTMLElement): boolean {
+  return pane.classList.contains("source-view") || pane.classList.contains("pane-src");
+}
+
+/** The element that actually scrolls for the current view. */
+export function activeScroller(): HTMLElement {
+  return scrollerOf(activePane());
 }
 
 /** The element that actually scrolls a pane: the editor's scroller while the pane is editable, the pane
@@ -53,6 +65,41 @@ export function captureScroll(tab: Tab): void {
 
 export function restoreScroll(tab: Tab): void {
   scrollerOf(activeScroller()).scrollTop = tab.scroll;
+}
+
+/** One pane's scroll state in a form another pane can be put back with: the pixel it is at, how far
+ *  it could go, and where its anchors sit. Every view renders the same anchors (`anchorIds`), so this
+ *  is the only description of "where the reader is" that means the same thing in all three of them. */
+export interface ScrollView {
+  scroll: number;
+  max: number;
+  tops: Map<string, number>;
+}
+
+function viewOf(pane: HTMLElement): ScrollView {
+  const el = scrollerOf(pane);
+  return {
+    scroll: el.scrollTop,
+    max: Math.max(0, el.scrollHeight - el.clientHeight),
+    tops: paneTops(pane, isSourcePane(pane)),
+  };
+}
+
+/** Reads where the current view is, for `applyPosition` after the view has changed. It has to be
+ *  measured *before* the switch: a hidden pane reports zero-height rects, so every anchor would come
+ *  back as 0 and the position would be lost — which is exactly the bug this pair exists to fix. */
+export function capturePosition(): ScrollView {
+  return viewOf(activePane());
+}
+
+/** Puts the current view where `position` was: through the anchors both panes render, interpolated
+ *  inside the segment, with a proportional fallback for a document that has neither headings nor
+ *  diagrams. A view that opened at the top of the document instead of where the reader was is the
+ *  failure this prevents (SPEC §5). */
+export function applyPosition(position: ScrollView | null): void {
+  if (!position) return;
+  const pane = activePane();
+  scrollerOf(pane).scrollTop = mapScroll(position, viewOf(pane));
 }
 
 /**
@@ -208,42 +255,36 @@ function paneTops(pane: HTMLElement, isSource: boolean): Map<string, number> {
   return tops;
 }
 
-function mapScroll(from: HTMLElement, to: HTMLElement, fromIsSource: boolean, toIsSource: boolean): number {
-  const fromEl = scrollerOf(from);
-  const toEl = scrollerOf(to);
-  const a = paneTops(from, fromIsSource);
-  const b = paneTops(to, toIsSource);
-  const shared = anchorIds.filter((id) => a.has(id) && b.has(id));
+function mapScroll(from: ScrollView, to: ScrollView): number {
+  const shared = anchorIds.filter((id) => from.tops.has(id) && to.tops.has(id));
 
   if (shared.length === 0) {
     // Nothing common — an empty pane, or a document with neither headings nor diagrams. Fall back
     // to proportional scrolling: wrong in detail, right in direction.
-    const fromMax = Math.max(0, fromEl.scrollHeight - fromEl.clientHeight);
-    const toMax = Math.max(0, toEl.scrollHeight - toEl.clientHeight);
-    return fromMax === 0 ? 0 : (fromEl.scrollTop / fromMax) * toMax;
+    return from.max === 0 ? 0 : (from.scroll / from.max) * to.max;
   }
 
-  const y = fromEl.scrollTop;
+  const y = from.scroll;
   let prev = shared[0];
   let next: string | null = null;
   for (const id of shared) {
-    if (a.get(id)! <= y) prev = id;
+    if (from.tops.get(id)! <= y) prev = id;
     else {
       next = id;
       break;
     }
   }
 
-  const prevA = a.get(prev)!;
-  const prevB = b.get(prev)!;
+  const prevA = from.tops.get(prev)!;
+  const prevB = to.tops.get(prev)!;
   if (next === null) {
     // Past the last anchor: 1:1 from it. Nothing is left to interpolate against.
     return Math.max(0, prevB + (y - prevA));
   }
   // Linear between the anchors. `fraction` is deliberately not clamped to [0,1]: above the first
   // anchor it extrapolates upwards, which is the correct direction and gets floored at 0 anyway.
-  const spanA = a.get(next)! - prevA;
-  const spanB = b.get(next)! - prevB;
+  const spanA = from.tops.get(next)! - prevA;
+  const spanB = to.tops.get(next)! - prevB;
   const fraction = spanA > 0 ? (y - prevA) / spanA : 0;
   return Math.max(0, prevB + fraction * spanB);
 }
@@ -268,7 +309,7 @@ function syncSplit(from: HTMLElement): void {
   const to = from === src ? out : from === out ? src : null;
   if (!to) return;
 
-  const target = mapScroll(from, to, from === src, to === src);
+  const target = mapScroll(viewOf(from), viewOf(to));
   expectedScroll.set(to, target);
   scrollerOf(to).scrollTop = target;
 }

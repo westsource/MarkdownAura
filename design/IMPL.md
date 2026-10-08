@@ -650,6 +650,19 @@ Invariants worth stating because they are the bugs:
   echo is not treated as a user scroll — without the guard the panes drive each other in a loop.
   The mapping is exact at anchors and approximate between them; do not "fix" that by measuring
   per line unless `markdown.rs` starts emitting line numbers for rendered blocks.
+- **A view switch carries the reading position through the anchors, and captures it before the view
+  changes** (`main.ts` `setView`, `document.ts` `capturePosition` / `applyPosition`). A tab's stored
+  `scroll` is a pixel in one mode's coordinate space and the panes wrap differently, so it cannot be
+  reused across a switch; both sides go through `viewOf` + `mapScroll`, the anchor-and-fraction mapping
+  split-view sync already uses. The order is the whole bug: the first version switched the view class
+  and *then* captured, which read the incoming pane at `scrollTop` 0 and lost the position — measured,
+  the outgoing pane must be measured while it is still visible, because a hidden pane reports every
+  anchor rect as 0. After the switch, `captureScroll` stores the pixel the new mode actually landed on,
+  so a tab switch or a session save stays consistent.
+  While the source pane is **being edited**, CodeMirror replaces the highlighted markup: `#out-split-src`
+  / `#out-source` are `display: none` and carry **no** `data-anchor` at all, so the mapping falls back to
+  proportional — right in direction, approximate in detail, and no worse than the sync that already ran
+  in that state. Nothing needs a "skip invisible anchors" guard; the set is empty rather than wrong.
 - **A paint is abandoned whole when a newer one supersedes it** (`render/pipeline.ts`). Mermaid, d2 and
   graphviz have no `cancel`: once an engine is asked, that work runs to completion. What can be called
   off is the **write**, so every `paint` takes the container's next generation from a `WeakMap` and

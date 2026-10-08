@@ -486,6 +486,15 @@ slower motion, and both were real regressions caught in verification — `paintA
 re-selects the tab's view on every switch, and `captureScroll()` runs before every switch
 away.
 
+**Switching the view keeps the reader's place too.** A tab's stored scroll is a pixel in *one*
+mode's coordinate space, and the panes wrap differently, so the same number means a different place in
+another view. The position therefore travels as **anchors plus the fraction of the segment between
+them** — headings and diagram cards, the same set split-view sync uses — and is read *before* the view
+changes and put back after the new pane has rendered. So `preview → split → source → preview` returns to
+the same heading and, between two anchors, to the same fraction of the way down (measured: `h4`→`h5` at
+0.833 / 0.831 / 0.832, and a round trip back to the identical pixel). Exact at an anchor, approximate
+between them — the same promise split-view sync makes (§3), for the same reason.
+
 **v1 status — outline highlight is not per-tab.** `Tab.outlineHit` exists in the record but
 is never written or read; the outline shows the active tab's current heading from the
 scroll spy only. Per-tab outline memory is deferred with the field. Do not "clean up" the
