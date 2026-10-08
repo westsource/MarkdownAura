@@ -20,11 +20,9 @@
 // ---- bases first, so nothing below `extend()`s a grammar that is not there yet.
 import "prismjs/components/prism-c.js";
 import "prismjs/components/prism-java.js";
-import "prismjs/components/prism-javascript.js";
 import "prismjs/components/prism-json.js";
 import "prismjs/components/prism-diff.js";
 import "prismjs/components/prism-markup-templating.js";
-import "prismjs/components/prism-javascript.js";
 import "prismjs/components/prism-typescript.js";
 
 // ---- then everything else, alphabetically, so the list stays scannable.
