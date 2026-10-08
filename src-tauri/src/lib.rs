@@ -3,12 +3,18 @@
 mod commands;
 mod defaultapp;
 mod diag;
+mod emphasis;
 mod engines;
 mod error;
 mod fs_ops;
 mod markdown;
 mod session;
 mod watcher;
+
+/// CommonMark / GFM conformance against the vendored spec fixtures (IMPL.md §10). Test-only: the
+/// fixtures are CC-BY-SA 4.0 test data and nothing in it ships.
+#[cfg(test)]
+mod spec;
 
 pub use error::ApiError;
 

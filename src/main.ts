@@ -546,11 +546,76 @@ function closeTab(index: number, force = false): void {
   }
   if (target) editor.forgetTab(target.id);
   state.tabs.splice(index, 1);
-  state.activeTab = Math.min(state.activeTab, Math.max(0, state.tabs.length - 1));
+  // Closing a tab to the *left* of the active one shifts it left with the rest; without this the
+  // reader would be moved to a different document. The tab strip's own × only ever closes the
+  // active tab, so this path is reachable only from the right-click menu.
+  if (index < state.activeTab) state.activeTab--;
+  state.activeTab = Math.max(0, Math.min(state.activeTab, state.tabs.length - 1));
 
   renderChrome();
   if (state.tabs.length > 0) void paintActive();
   scheduleSave();
+}
+
+/** Closes a set of tabs, asking *once* for any dirty buffers among them rather than once per tab
+ *  (the single-tab path in `closeTab` already asks for itself). Descending order, so each splice
+ *  leaves the lower indices pointing at the same tabs. */
+function closeTabs(indices: number[]): void {
+  const valid = [...new Set(indices)]
+    .filter((index) => index >= 0 && index < state.tabs.length)
+    .sort((a, b) => a - b);
+  if (valid.length === 0) return;
+
+  const run = (): void => {
+    for (let i = valid.length - 1; i >= 0; i--) closeTab(valid[i], true);
+  };
+  const dirty = valid.filter((index) => state.tabs[index]?.dirty).length;
+  if (dirty > 0) askUnsaved(i18n.t("unsaved.closeMany", { n: dirty }), run);
+  else run();
+}
+
+/** SPEC §5's tab right-click menu. It belongs to the tab under the pointer — never the active one
+ *  by assumption — and it does not activate that tab: closing, copying and revealing are things you
+ *  do *to* a tab, not to the document in front of you. */
+function showTabMenu(index: number, x: number, y: number): void {
+  const tab = state.tabs[index];
+  if (!tab) return;
+  const last = state.tabs.length - 1;
+  showMenu(
+    [
+      { label: i18n.t("tab.menu.close"), run: () => closeTab(index) },
+      {
+        label: i18n.t("tab.menu.closeOthers"),
+        disabled: state.tabs.length <= 1,
+        run: () => closeTabs(state.tabs.map((_, i) => i).filter((i) => i !== index)),
+      },
+      {
+        label: i18n.t("tab.menu.closeRight"),
+        disabled: index === last,
+        run: () => closeTabs(state.tabs.map((_, i) => i).filter((i) => i > index)),
+      },
+      {
+        label: i18n.t("tab.menu.closeAll"),
+        run: () => closeTabs(state.tabs.map((_, i) => i)),
+      },
+      "sep",
+      {
+        label: i18n.t("tab.menu.copyPath"),
+        run: () => {
+          copyText(tab.file);
+          toast(i18n.t("toast.pathCopied"), "ok");
+        },
+      },
+      {
+        label: i18n.t("tab.menu.reveal"),
+        run: () => {
+          void ipc.revealInExplorer(tab.file).catch(() => toast(i18n.t("toast.revealFailed"), "err"));
+        },
+      },
+    ],
+    x,
+    y,
+  );
 }
 
 async function setView(mode: doc.ViewMode): Promise<void> {
@@ -963,6 +1028,16 @@ async function boot(): Promise<void> {
   });
 
   tabs.setTabHandlers((index) => void activate(index), closeTab);
+
+  /* The tab strip is rebuilt on every render, so its right-click menu is delegated: one listener on
+     the stable strip covers every tab that ever exists in it. The menu belongs to the tab under the
+     pointer, which is not necessarily the active one — and opening it activates nothing. */
+  $("#tabstrip").addEventListener("contextmenu", (event) => {
+    const el = (event.target as HTMLElement).closest<HTMLElement>(".tab");
+    if (!el) return;
+    event.preventDefault();
+    showTabMenu(Number(el.dataset.i), event.clientX, event.clientY);
+  });
 
   // The editable pane (SPEC §12). Both pills are the pointer path into the mode and the status bar's
   // mark is the pointer path out of a dirty buffer; neither takes focus on click, or the caret would

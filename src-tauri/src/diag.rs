@@ -247,7 +247,6 @@ pub fn status() -> DiagStatus {
         level: level(),
         run: new_run().to_string(),
         log_dir: dir.display().to_string(),
-        log_bytes: std::fs::metadata(dir.join(APP_LOG)).map(|m| m.len()).unwrap_or(0),
         previous_unclean: previous_unclean(),
     }
 }
@@ -285,7 +284,9 @@ pub struct DiagStatus {
     pub level: String,
     pub run: String,
     pub log_dir: String,
-    pub log_bytes: u64,
+    /// What `mark_running` found before it wrote our own marker: the run the About row names when the
+    /// previous process did not exit cleanly. There is deliberately no log *size* here — it was computed
+    /// for a row that never shipped it (IMPL.md §13.8), and a field nothing reads is a field that rots.
     pub previous_unclean: Option<PreviousRun>,
 }
 

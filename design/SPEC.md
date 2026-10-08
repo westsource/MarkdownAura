@@ -444,6 +444,12 @@ Minimal by design, but correct:
   then the `⋯` / `ctrl shift A` all-tabs menu
 - `ctrl W` close, `ctrl tab` / `ctrl shift tab` cycle, `ctrl 1…9` jump
 - middle-click closes a tab
+- the right-click tab menu — **关闭 / 关闭其它 / 关闭右侧 / 全部关闭 / 复制路径 /
+  在资源管理器中显示** — opened on the tab under the pointer and **never activating it**: the menu is
+  about the tab you pointed at, and a right click that also changed what you are reading would lose your
+  place. Closing a tab *before* the active one keeps the reader on the same document, and a dirty buffer
+  in the set asks once before any of it closes (the same prompt as a single close). Markup and styling
+  are the app's existing `.menu` / `.menu-item` / `.menu-sep`.
 - live reload reaches **every** open tab: the visible one re-renders, a background one drops
   its parsed document and reloads when it is activated. A background tab silently showing
   stale text is the failure the watcher exists to prevent.
@@ -451,8 +457,8 @@ Minimal by design, but correct:
 
 **Deferred (target UX above, not shipped)**
 
-- the right-click tab menu (close / close others / close right / close all / pin / copy
-  path / reveal in explorer / duplicate)
+- **pin and duplicate**, the two actions the shipped tab menu does not have (everything else in it
+  ships — see above)
 - tab drag-to-reorder and drag-out-to-new-window
 - pin/unpin as a user action, and with it any `.tab.pinned` styling
 - `ctrl T`, `ctrl shift W` (§7)
@@ -1010,10 +1016,10 @@ This is where the work is; the control itself is the easy part.
 
 ## 13. Rendered markdown beyond CommonMark
 
-Amended 2026-10-07 (product owner's call). This section is the one §11 pointed at: three
-things a reader sees in the preview that CommonMark and GFM do not give us, plus the rule
-that decides how a `$` is read. All three were checked against `marktext`'s implementation
-before being designed — the reasons below are mostly its reasons.
+Amended 2026-10-07 (product owner's call), extended 2026-10-08. This section is the one §11 pointed at:
+what a reader sees in the preview that CommonMark and GFM do not give us, plus the app's own affordances
+around rendered content. All of it was checked against `marktext`'s implementation before being designed —
+the reasons below are mostly its reasons.
 
 ### Code fences are highlighted — on, with no switch
 
@@ -1071,6 +1077,23 @@ remaining freedom that the switch is for.
   input, not a style: the same file genuinely has two different HTML outputs. KaTeX's import is
   started when the setting goes on, so the first formula does not pay for it. Off by default
   also means most sessions never load its ~260 KB of JS, its CSS or its fonts.
+
+### Chinese text writes emphasis the way it is read
+
+`中文**"加粗"**中文` renders bold. CommonMark refuses it: its flanking test treats a CJK ideograph exactly
+like a Latin letter, so a `**` before `"` cannot open and the run after the closing quote cannot close.
+Chinese and Japanese have no word spacing, which makes that shape ordinary prose rather than an edge case —
+`marktext` widens it and labels the widening `NON-STANDARD EXTENSION — a deliberate divergence from
+CommonMark`; Typora, VS Code and Joplin do the same.
+
+The widening is **additive**: it applies only where the neighbour CommonMark refuses is CJK and the other
+side is punctuation, so a run can only gain an opening or closing it was denied, never lose one it had. A
+Latin neighbour is untouched, whitespace still blocks both directions, and a run the parser already
+accepted never reaches the pass. Deliberately left alone — each keeps CommonMark's answer, which is the
+status quo rather than a regression: runs longer than two characters, a delimiter at the edge of a text run
+(where the neighbouring character is not visible in the same event), and anything across an element
+boundary, footnote references included. Code spans are text, never markup, and are not touched at all: the
+pass rewrites the *event stream*, not the source.
 
 **The mockup carries none of this.** `mockup.js` renders markdown with a stand-in renderer that
 fakes its diagrams and has no code colouring, no math and no note section, so `mockup.html` is not

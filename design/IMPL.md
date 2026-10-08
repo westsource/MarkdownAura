@@ -401,6 +401,11 @@ pulldown_cmark::Options::ENABLE_TABLES
   display-versus-inline decision is patched when the paragraph closes, since "is this formula alone in
   its paragraph" is only knowable then. Both follow the heading-id rule: one parse produces the
   preview *and* the data the UI needs.
+- **The last rewrite is the emphasis pass, and it is the only one that runs on the assembled stream rather
+  than while walking** (SPEC §13, `emphasis.rs`). It has to: the runs it fixes are the ones the parser
+  *refused*, so they exist only as literal text by then, and pairing them needs to see what sits between
+  them. It runs after the footnote slots are filled (its own edits move indices, theirs are index-based),
+  and it is additive by construction — a run can only gain an opening or closing CommonMark denied it.
 - The whole body is truncated at 8 MiB (`fs_ops::MAX_FILE_BYTES`) before parsing.
 
 Rule to carry over from the mockup: an engine failure renders **inline, in the card, with the line
@@ -645,6 +650,25 @@ Invariants worth stating because they are the bugs:
   echo is not treated as a user scroll — without the guard the panes drive each other in a loop.
   The mapping is exact at anchors and approximate between them; do not "fix" that by measuring
   per line unless `markdown.rs` starts emitting line numbers for rendered blocks.
+- **A paint is abandoned whole when a newer one supersedes it** (`render/pipeline.ts`). Mermaid, d2 and
+  graphviz have no `cancel`: once an engine is asked, that work runs to completion. What can be called
+  off is the **write**, so every `paint` takes the container's next generation from a `WeakMap` and
+  re-checks it after each await; a superseded run returns a zeroed `PaintResult` and touches nothing.
+  `isConnected` alone is not the check — it covers only the diagram cards, while the code heads, the
+  Prism pass and the KaTeX pass write into the *container*, which a newer paint has already replaced.
+  Without this, a tab switch during a render left the previous document's diagrams standing in the new
+  one. `paintGeneration(container)` exposes the number for the one caller that needs it: `document.ts`
+  checks it after awaiting a paint before it inserts the frontmatter pills.
+- **The tab menu closes the tab you pointed at, never a different one** (`main.ts`, `showTabMenu` /
+  `closeTabs`). It hangs off a delegated `contextmenu` listener on `#tabstrip` — the strip is rebuilt on
+  every render, so per-tab listeners would leak on each one. It deliberately does **not** activate the tab
+  it was opened on: the menu is about what you pointed at, and a right click that also moved what you are
+  reading would lose your place. `closeTab(index, force)` adjusts `state.activeTab` when the closed index
+  is *before* it; the strip's `×` always closes the active tab, so the menu is what made that path
+  reachable — without the adjustment, closing a tab to the left of the active one switched the reader to a
+  different document. A dirty buffer in a multi-close asks once (`unsaved.closeMany`), through the same
+  overlay the single close uses. Markup and styling are the existing `.menu` / `.menu-item` / `.menu-sep`
+  (SPEC §5), so the menu needed no CSS.
 
 ## 6. Session persistence
 
@@ -924,6 +948,20 @@ status bar's `rendered in N ms` is where a reader sees it.
   `<script>`, `<img onerror>`, `<iframe>`, `<a href="javascript:…">`, attribute-carrying
   tags, and the same tags with mixed case or extra whitespace. The assertion is that the
   output contains none of them, and that the allowed tags still survive.
+- **The spec gate** (added 2026-10-08): `src/spec.rs` runs the vendored CommonMark 0.31.2 (652 examples) and
+  GFM 0.29 (672) suites against `markdown::render`, folds the differences that are not meaning
+  (`<br />` vs `<br>`, whitespace between tags), and compares. `tests/spec/expected-failures.json` is the
+  baseline, and the contract is one-way: an example that starts passing while it is listed fails the test,
+  and an example that starts failing while it is *not* listed fails it too. That is what turns "this
+  pipeline deliberately leaves the spec in five places" into a number and stops the number from growing
+  quietly. Refresh the baseline only on purpose, from the `actually failing: […]` line the test prints —
+  the test never writes it itself. Measured 2026-10-08: `commonmark-0.31.2 578/652`, `gfm-0.29 574/672`,
+  with 74 and 98 examples listed, in four classes: raw HTML the allow-list drops (the bulk of both),
+  a leading `---` block read as frontmatter (commonmark 96, 98), pulldown nesting same-type emphasis
+  where cmark flattens it (15 examples), and the GFM autolink extension, which `markdown::render` does
+  not enable (gfm 621-636). The tab convention in the fixtures (`→`, restored before running) is undone
+  the way the reference runner does it.
+  Fixtures are CC-BY-SA 4.0 test data — `tests/spec/README.md` has the provenance, and none of it ships.
 - **Missing guards** (open item, §11): the `insta` snapshot test and the class-name lint.
   `insta` is in `[dev-dependencies]` and unused.
 - **No gate covers the engine load retry** (`engines.ts` drops a rejected import so the next render

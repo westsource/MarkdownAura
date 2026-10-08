@@ -331,7 +331,6 @@ export interface DiagStatus {
   level: string;
   run: string;
   logDir: string;
-  logBytes: number;
   previousUnclean: PreviousRun | null;
 }
 

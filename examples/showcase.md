@@ -94,6 +94,35 @@ app.rust -> app.engines: fenced block
 app.engines -> app.ui: svg
 ```
 
+## Code and formulas
+
+A fenced block is highlighted per language (Prism, about 50 grammars, loaded only when a document has a
+fence), and every block carries its language and a copy button above it — outside the block, so the button
+does not scroll away when a long line does.
+
+```python
+def reading_measure(chars: int) -> str:
+    """A measure in `ch`, which is the only unit that survives a window resize."""
+    return f"{chars}ch"  # 60 · 100 · pane
+```
+
+Inline math and a display block are KaTeX's: `$a^2 + b^2 = c^2$`. **Math ships off** — *settings → math*
+turns it on, because enabling it takes `$` away from ordinary text and a sentence about prices should stay
+a sentence about prices.
+
+$$
+\int_0^1 x\,dx = \frac{1}{2}
+$$
+
+## Chinese text writes emphasis the way it is read
+
+Chinese and Japanese have no word spacing, so `中文**"加粗"**中文` is ordinary prose — and CommonMark
+refuses it, because its flanking rules treat an ideograph exactly like a Latin letter. This renderer
+widens that one shape and nothing else, which is what `marktext`, Typora and VS Code do as well:
+中文**"加粗"**中文 是粗体, `中文**加粗 **中文` keeps the `**` it was written with (a space before a
+closer must never close), and a Latin neighbour is left to CommonMark, where **bold next to "quotes"**
+already works.
+
 ## Engines, measured
 
 | Engine | Fence label | Licence | Shipped cost |

@@ -5,7 +5,7 @@
  * `restore()` after every switch in.
  */
 import type { RenderedDoc } from "../ipc";
-import { frontmatterHtml, paint } from "../render/pipeline";
+import { frontmatterHtml, paint, paintGeneration } from "../render/pipeline";
 import type { Tab } from "../state";
 import { $, $$, esc } from "./dom";
 import * as editor from "./editor";
@@ -102,7 +102,11 @@ export async function paintRendered(tab: Tab): Promise<void> {
 }
 
 async function paintInto(container: HTMLElement, doc: RenderedDoc): Promise<void> {
+  // The generation `paint` is about to take. If a newer paint starts before this one finishes, the
+  // number moves on and the frontmatter below must not be inserted into the newer document.
+  const generation = paintGeneration(container) + 1;
   await paint(container, doc);
+  if (paintGeneration(container) !== generation) return;
   // Frontmatter sits above the document rather than inside it, so it is inserted after paint
   // instead of being handed to the pipeline as a prefix.
   const pills = frontmatterHtml(doc.frontmatter);

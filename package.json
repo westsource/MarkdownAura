@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.3.1",
   "type": "module",
-  "description": "A small, fast markdown reader for Windows and Linux — read-only by default, editable on request, with mermaid, dot and d2 rendering locally",
+  "description": "A small, fast markdown reader for Windows and Linux — read-only by default, editable on request, rendering mermaid, dot, d2, code highlighting and math locally",
   "license": "MIT",
   "author": "道荣（黄超）",
   "scripts": {

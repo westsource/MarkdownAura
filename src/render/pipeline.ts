@@ -185,6 +185,22 @@ function addCodeHeads(container: HTMLElement): number {
   return headed;
 }
 
+/* One number per container, bumped by every `paint` on it. Mermaid, d2 and graphviz have no
+ * `cancel`: once an engine is asked to render, that work runs to completion and cannot be called
+ * off. What *can* be called off is the **write** — and that is the whole of this map. A tab switch
+ * or a re-render replaces the container's HTML while an engine is still thinking; the old paint's
+ * `figure` is then detached, and every later write it makes is stale. `isConnected` alone covers
+ * only the figure-level half: the code heads, the Prism pass and the KaTeX pass write into
+ * `container` itself, so they need the generation check as well. */
+const generations = new WeakMap<HTMLElement, number>();
+
+/** The generation `container` is currently on. `paint` takes the next number when it starts, so a
+ *  caller that awaited a paint can compare and learn whether that paint still owned the DOM when it
+ *  finished (used by `document.ts` before it inserts the frontmatter pills). */
+export function paintGeneration(container: HTMLElement): number {
+  return generations.get(container) ?? 0;
+}
+
 /**
  * Writes `doc.html` into `container`, resolves every diagram placeholder, then highlights code and
  * renders math in place.
@@ -195,9 +211,27 @@ function addCodeHeads(container: HTMLElement): number {
  * Nothing here is allowed to fail the page. Engines fail inside their card, and the two
  * post-passes (Prism, KaTeX) are best-effort: a document that cannot be highlighted is still a
  * document.
+ *
+ * A run is abandoned whole — no card writes, no code heads, no highlight or math — the moment it is
+ * superseded by a newer paint on the same container. There is no partial ownership: the newer paint
+ * owns the DOM, and anything the old one still had queued would bleed into it.
  */
 export async function paint(container: HTMLElement, doc: RenderedDoc): Promise<PaintResult> {
   const started = performance.now();
+  // Take this container's number. A later `paint` on the same container bumps it, which is how this
+  // run learns it has been superseded (the engines cannot be cancelled, so this is the only check).
+  const generation = paintGeneration(container) + 1;
+  generations.set(container, generation);
+  const current = (): boolean => generations.get(container) === generation;
+  // A superseded run produced nothing the reader can see: the newer paint replaced its HTML. Report
+  // zeros rather than counts for cards that no longer exist — the timing is still this run's.
+  const abandoned = (): PaintResult => ({
+    rendered: 0,
+    failed: 0,
+    cached: 0,
+    ms: performance.now() - started,
+  });
+
   container.innerHTML = doc.html;
 
   // Every image starts as "on the wire": the CSS reserves height for that state, and the load/error
@@ -248,18 +282,24 @@ export async function paint(container: HTMLElement, doc: RenderedDoc): Promise<P
 
     try {
       const svg = await renderDiagram(engine, block.source, key);
-      // The document may have been repainted while this render was in flight (a tab switch, an
-      // edit): that paint owns the DOM now, and writing into a detached card would lose the work.
-      if (!figure.isConnected) continue;
+      // The engine cannot be cancelled, so the only question the await leaves is who owns the DOM.
+      // A tab switch or an edit may have repainted this container while it worked: that paint owns
+      // the DOM now, so this run is dropped whole rather than writing into a detached card.
+      if (!current() || !figure.isConnected) return abandoned();
       cachePut(key, svg);
       showDiagram(figure, block, svg);
       rendered++;
     } catch (err) {
-      if (!figure.isConnected) continue;
+      if (!current() || !figure.isConnected) return abandoned();
       showFailure(figure, block, err instanceof Error ? err.message : String(err));
       failed++;
     }
   }
+
+  // Everything below writes into `container` (the code heads) or reads its DOM (Prism, KaTeX), and
+  // the awaits above may have let a newer paint take over. A superseded run stops here, before any
+  // of it.
+  if (!current()) return abandoned();
 
   // A document with diagrams is the signal that this reader may need d2 next; warm it while they read.
   if (rendered + cached > 0) warmHeaviestEngineOnIdle();

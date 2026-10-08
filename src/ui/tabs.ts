@@ -1,8 +1,10 @@
 /* The tab strip (SPEC §5, v1 scope).
  *
  * v1 ships four states — active, inactive, hover, preview — and the per-tab document state that
- * makes tabs mean anything. `missing`, `reloading`, `pinned` and the right-click menu are v2;
- * the fields and the CSS for them already exist and must not be cleaned up (SPEC §5).
+ * makes tabs mean anything. `missing` and `reloading` ship; `pinned` is the one still reserved. The
+ * right-click menu (close / close others / close right / close all / copy path / show in explorer)
+ * lives in `main.ts`: it is delegated on the strip because these tabs are rebuilt every render.
+ * `pinned`'s field and its CSS already exist and must not be cleaned up (SPEC §5).
  *
  * Close is always laid out on the active tab and hidden-but-space-reserved elsewhere, so tabs do
  * not jitter when the pointer moves across them.

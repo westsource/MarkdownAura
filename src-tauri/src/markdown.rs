@@ -570,6 +570,11 @@ pub fn render_with(src: &str, image: ImageResolver<'_>, math: bool) -> RenderedD
         out.push(Event::Html(CowStr::from(footnotes_html)));
     }
 
+    // The last rewrite, and the last chance to change the event stream: CJK text writes emphasis where
+    // CommonMark refuses it (`中文**"加粗"**中文`), so the runs the parser left as literal text are
+    // paired here (SPEC §13, `emphasis.rs`). Additive by construction: it can only add emphasis.
+    let out = crate::emphasis::widen_stream(out);
+
     // One `push_html` over the whole transformed stream, never one call per event — the writer
     // carries state (table alignment, tight/loose lists) across events, and per-event calls would
     // shred it.

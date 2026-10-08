@@ -1,0 +1,24 @@
+{
+  "_comment": "Spec examples this renderer does not reproduce, with the class each belongs to. Listed numbers are asserted to STILL fail: an example that starts passing is a test failure (remove it from the list), and an example that starts failing while it is not listed is a test failure too. Compliance can only go up. Refresh by copying the `actually failing: [...]` line `cargo test --lib spec -- --nocapture` prints, and only on purpose. The classes, largest first: (1) raw HTML the allow-list drops (SPEC §13) — most of both lists, including every example whose expected output contains an <a>/<img>/<table> element; (2) a leading `---` block, which this renderer reads as frontmatter and does not render (commonmark 96, 98); (3) pulldown-cmark nests same-type emphasis where cmark flattens it (`__foo, __bar__, baz__`; 12 GFM and 3 CommonMark examples); (4) the GFM autolink extension (`www.…`, bare emails) is not enabled in `markdown::render` (gfm 621-636).",
+  "commonmark": [
+    21, 31, 96, 98,
+    148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160,
+    161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171, 172, 173,
+    174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 186,
+    187, 188, 189, 190, 191,
+    201, 308, 309, 344, 475, 476, 477, 491, 494, 524, 536, 613, 614,
+    615, 616, 617, 623, 625, 626, 627, 628, 629, 630, 631, 642, 643
+  ],
+  "gfm": [
+    66, 68,
+    118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130,
+    131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143,
+    144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156,
+    157, 158, 159, 160,
+    170, 199, 205, 279, 280, 288, 289, 317, 327, 354, 398, 426, 434,
+    435, 436, 473, 474, 475, 477, 484, 485, 486, 500, 503, 532, 544,
+    621, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631, 632, 633,
+    634, 635, 636, 642, 644, 645, 646, 647, 648, 649, 650, 652, 662,
+    663
+  ]
+}
