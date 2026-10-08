@@ -161,6 +161,9 @@ fn image_resolver<'a, R: tauri::Runtime>(
 
 #[tauri::command]
 pub async fn open_folder(app: AppHandle, path: PathBuf) -> Result<fs_ops::FolderView> {
+    // Absolute before anything else looks at it: the tree, the tab paths and the watcher have to agree
+    // on one form, and the watcher reports absolute paths (`fs_ops::absolute`).
+    let path = fs_ops::absolute(&path);
     let view = blocking({
         let path = path.clone();
         move || fs_ops::open_folder(&path)

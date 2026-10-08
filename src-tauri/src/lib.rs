@@ -57,7 +57,11 @@ fn parse_args<I: Iterator<Item = String>>(args: I) -> Startup {
                 // Unknown flags are ignored rather than fatal: a stray argument from a shell
                 // integration must not stop the window from opening.
             }
-            other if startup.target.is_none() => startup.target = Some(PathBuf::from(other)),
+            // Absolute from here on: the watcher reports absolute paths, so a relative target would
+            // silently lose live reload (see `fs_ops::absolute`).
+            other if startup.target.is_none() => {
+                startup.target = Some(crate::fs_ops::absolute(std::path::Path::new(other)))
+            }
             _ => {}
         }
     }
@@ -248,6 +252,17 @@ mod tests {
     }
 
     #[test]
+    fn a_relative_target_is_made_absolute() {
+        // The watcher reports absolute paths (`notify` joins the root it resolved), so a tab holding a
+        // relative one never matched an event: live reload was silently dead for a command-line launch,
+        // and a file deleted under such a tab was never marked missing. Found 2026-10-08.
+        let s = args(&["notes/README.md"]);
+        let target = s.target.expect("a target");
+        assert!(target.is_absolute(), "{target:?} should be absolute");
+        assert!(target.ends_with("notes/README.md"), "{target:?} should keep the tail");
+    }
+
+    #[test]
     fn unknown_flags_are_ignored_and_do_not_become_a_path() {
         // `--last` used to be a flag; session restore is unconditional now, so it is just an
         // unknown argument like any other.
@@ -260,6 +275,10 @@ mod tests {
     #[test]
     fn only_the_first_path_wins_and_unknown_flags_are_ignored() {
         let s = args(&["--wat", "one.md", "two.md"]);
-        assert_eq!(s.target, Some(PathBuf::from("one.md")));
+        // The first path wins; it is absolute because `parse_args` resolves it (a relative target would
+        // never match a watcher event, see `a_relative_target_is_made_absolute`).
+        let target = s.target.expect("a target");
+        assert!(target.is_absolute(), "{target:?} should be absolute");
+        assert!(target.ends_with("one.md"), "{target:?} should be the first path");
     }
 }

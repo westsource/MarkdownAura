@@ -179,6 +179,9 @@ path).
 ```rust
 // --- tree ---
 #[tauri::command] async fn open_folder(app: AppHandle, path: PathBuf) -> Result<FolderView>;
+// -> the path is made absolute (`fs_ops::absolute`) before anything looks at it: the watcher reports
+//    absolute paths, so a relative root here would give the tree and the tabs one form and the events
+//    another, and live reload would be silently dead (found 2026-10-08).
 // -> { root, name, entries: TreeEntry[] }   (one level; children load on expand)
 //    also widens the asset-protocol scope to `path`: a document in it may reference images beside
 //    it, and a document in a subfolder may reach back up to a shared assets folder inside it
@@ -572,6 +575,14 @@ type WindowState = {
 
 Invariants worth stating because they are the bugs:
 
+- **Every path the app adopts is absolute, and Rust is what makes it so.** `argv` (the command line and
+  a forwarded second launch) is resolved in `parse_args`, and `open_folder` resolves what the frontend
+  hands it, both through `fs_ops::absolute` — which joins the working directory without resolving
+  symlinks and without Windows' `\\?\` prefix (`fs::canonicalize` adds both, and the verbatim prefix
+  would show up in the tree and the status bar). The reason is the watcher: `notify` reports absolute
+  paths, so a tab or a root that kept `argv`'s relative form matched no event — live reload and the
+  `missing` mark were silently dead for a document opened from the command line (found 2026-10-08 by
+  instrumenting the watcher, after a live-reload bug report that looked like "events never fire").
 - Opening an already-open file **activates** the tab, never duplicates it. Identity is
   `normalizePath` — on Windows `\` → `/` and lowercase, with trailing separators stripped, because
   Windows paths are case-insensitive and the same file arrives with either separator. On Linux a

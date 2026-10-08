@@ -7,7 +7,7 @@
 //! * Huge files are truncated at the head rather than refused, and `truncated` is reported.
 //!   Refusing would make "open a big log by accident" feel like a crash.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
@@ -55,6 +55,19 @@ pub struct FilePayload {
 /// can never disagree about what is being watched (IMPL.md §3).
 pub fn is_ignored_dir(name: &str) -> bool {
     name.starts_with('.') || matches!(name, "node_modules" | "target" | "dist")
+}
+
+/// Makes a path that came from a human — the command line, a shell integration, the folder dialog —
+/// absolute against this process's working directory.
+///
+/// Why not `fs::canonicalize`: it resolves symlinks *and* returns Windows' `\\?\C:\…` verbatim prefix,
+/// which would change what the tree, the tab titles and the status bar *show*. Why at all: the file
+/// watcher reports absolute paths (`notify` joins the watched root, and the root it resolves for a
+/// relative watch is absolute), while a tab that kept a relative `argv` path never matched one — so
+/// live reload was silently dead for a document opened from the command line, and so was the `missing`
+/// mark for a file deleted under it. Found 2026-10-08 by instrumenting the watcher, not by reading it.
+pub fn absolute(path: &Path) -> PathBuf {
+    std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 fn entry_for(path: &Path, name: String, is_dir: bool) -> TreeEntry {

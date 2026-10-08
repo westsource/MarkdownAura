@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{ApiError, Result};
+use crate::fs_ops;
 
 pub const SESSION_VERSION: u32 = 1;
 
@@ -196,10 +197,43 @@ pub fn session_path() -> PathBuf {
 /// None of those are errors: none of them should stop the app from starting.
 pub fn load_from(path: &Path) -> Option<Session> {
     let text = std::fs::read_to_string(path).ok()?;
-    let session: Session = serde_json::from_str(&text).ok()?;
+    let mut session: Session = serde_json::from_str(&text).ok()?;
     if session.version != SESSION_VERSION {
         return None;
     }
+
+    /* A session written before 1.4.2 can hold *relative* paths — a command-line launch stored `argv` as
+       given. A relative path is a different string from the absolute one the watcher reports, so the same
+       file came back as a *second* tab (`tabByFile` compares strings) that never live-reloaded and never
+       went `missing`. Resolving on read makes the invariant in IMPL §5 hold for a session written by any
+       version, and it is the only migration this needs: the paths are display strings, not identity. */
+    for tab in &mut session.tabs {
+        tab.file = fs_ops::absolute(Path::new(&tab.file)).display().to_string();
+    }
+    // One tab per file is the tab strip's invariant (SPEC §5), and the pre-1.4.2 relative/absolute pair
+    // is exactly how a session could end up holding two entries for one document. Keep the first.
+    let mut files: Vec<String> = Vec::new();
+    session.tabs.retain(|tab| {
+        if files.iter().any(|f| f.eq_ignore_ascii_case(&tab.file)) {
+            return false;
+        }
+        files.push(tab.file.clone());
+        true
+    });
+    for entry in &mut session.recent {
+        *entry = fs_ops::absolute(Path::new(entry)).display().to_string();
+    }
+    // Resolving can collide (the old relative entry and the new absolute one), and `push_recent`'s
+    // contract is a de-duplicated list, so keep the first of each.
+    let mut seen: Vec<String> = Vec::new();
+    session.recent.retain(|entry| {
+        if seen.iter().any(|s| s.eq_ignore_ascii_case(entry)) {
+            return false;
+        }
+        seen.push(entry.clone());
+        true
+    });
+
     Some(session)
 }
 
