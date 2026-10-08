@@ -293,8 +293,13 @@ mod tests {
         session.math = true;
         session.log_level = "debug".into();
         session.log_dir = "E:\\logs".into();
+        // A path that is already absolute on the *running* platform, so `load_from`'s resolution is a no-op
+        // and the round trip is exact. The literal `E:\notes\README.md` this used to hold is absolute on
+        // Windows and a single relative file name on Unix, where the resolution prepends the working
+        // directory — the Linux run of this suite is what noticed.
+        let file = std::env::temp_dir().join("markdownaura-roundtrip-notes.md");
         session.tabs.push(TabState {
-            file: "E:\\notes\\README.md".into(),
+            file: file.display().to_string(),
             view: "split".into(),
             scroll: 420.0,
             preview: false,

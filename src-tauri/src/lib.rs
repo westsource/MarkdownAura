@@ -248,7 +248,16 @@ mod tests {
     #[test]
     fn a_bare_path_is_the_target() {
         let s = args(&["E:\\notes"]);
-        assert_eq!(s.target, Some(PathBuf::from("E:\\notes")));
+        let target = s.target.expect("a target");
+        // Absolute, and the tail is what the user typed. It is not compared for equality because the two
+        // platforms read `E:\notes` differently: on Windows it is an absolute path that stays as it is, on
+        // Unix it is one (legal) file *name*, so `absolute` prepends the working directory — which is the
+        // right answer there. The Windows-only suite is why this went unnoticed until the Linux run.
+        assert!(target.is_absolute(), "{target:?} should be absolute");
+        assert!(
+            target.file_name().unwrap().to_string_lossy().contains("notes"),
+            "{target:?} should keep the name the user gave"
+        );
     }
 
     #[test]
@@ -265,9 +274,14 @@ mod tests {
     #[test]
     fn unknown_flags_are_ignored_and_do_not_become_a_path() {
         // `--last` used to be a flag; session restore is unconditional now, so it is just an
-        // unknown argument like any other.
+        // unknown argument like any other. Absolute + tail for the same reason as the test above.
         let s = args(&["--last", "E:\\notes\\README.md"]);
-        assert_eq!(s.target, Some(PathBuf::from("E:\\notes\\README.md")));
+        let target = s.target.expect("a target");
+        assert!(target.is_absolute(), "{target:?} should be absolute");
+        assert!(
+            target.file_name().unwrap().to_string_lossy().contains("README.md"),
+            "{target:?} should keep the file name"
+        );
         let s = args(&["--last"]);
         assert_eq!(s.target, None);
     }
