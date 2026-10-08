@@ -25,7 +25,7 @@ The source view opens read-only — no caret, no undo, no save, and no unsaved-c
 Fenced code is highlighted per language (Prism, ~50 grammars; a language it does not have stays plain text instead of growing a warning), footnotes become one numbered section at the end with a `↩` back to every citation, and math typesets through KaTeX — `$…$`, `$$…$$`, chemistry included. Math is the one switch here: it is off by default because turning it on takes `$` away from ordinary text, and a document that talks about prices should keep talking about prices. Chinese and Japanese write emphasis the way they are read — `中文**"加粗"**中文` is bold, where CommonMark refuses it because its rules treat an ideograph exactly like a Latin letter; marktext, Typora and the VS Code preview widen the same shape, and nothing else changes.
 
 **Big files and odd encodings do not get in the way.**
-A single file is read up to 8 MiB, and anything past that is marked "truncated" rather than quietly dropped. UTF-8, UTF-8 BOM, UTF-16LE and UTF-16BE are detected, and LF / CRLF is reported in the status bar.
+A single file is read up to 8 MiB, and anything past that is marked "truncated" rather than quietly dropped. UTF-8, UTF-8 BOM, UTF-16LE and UTF-16BE are detected and reported in the status bar; a file whose line endings are mixed is refused on save rather than silently normalised.
 
 **Every tab remembers its own state.**
 View mode, scroll position, the find query and the hit you were on are kept per tab, so switching back does not re-render.
@@ -49,7 +49,7 @@ The installer carries the WebView2 loader. It only fetches the WebView2 Runtime 
 | Area | What it does |
 |---|---|
 | Explorer | open a folder; drag its width (180–640px); an **md only** switch (on by default); filter by file name, revealed from the foot row on demand; directories always listed; ignored directories are dot-prefixed names plus `node_modules`, `target`, `dist`; the foot shows `watching N files` |
-| Open with | the app registers itself as the handler for Markdown files — the Windows installer and both Linux packages — so a file manager's *open with* passes the path in; a second launch hands it to the window that is already open instead of opening another |
+| Open with | the Windows installer and the Linux deb register the app as the handler for Markdown files, so a file manager's *open with* passes the path in — an AppImage has no desktop file until it is integrated with the desktop, and says so instead of failing silently; a second launch hands it to the window that is already open instead of opening another |
 | Tabs | a single click in the tree opens a *preview tab* (italic), a double click pins it; `⋯` lists every tab; `ctrl W` or a middle click closes one; a right click offers close / close others / close to the right / close all, copy path, and reveal in explorer |
 | Views | preview / split / source; the splitter drags; the split panes scroll in sync, and the position is kept per tab |
 | Markdown | CommonMark, plus tables, task lists and strikethrough from GFM — not its autolink extension, so a bare `www.…` or an unmarked email stays text while `<https://…>` links; footnotes collect into one section at the end, each with an `↩` back to the citation; fenced code is **highlighted** with Prism (~50 languages, and a fence naming a language nothing ships stays plain text, quietly); **math** renders through KaTeX (`$…$`, `$$…$$`, chemistry included) and is a setting, off by default |
@@ -62,7 +62,7 @@ The installer carries the WebView2 loader. It only fetches the WebView2 Runtime 
 | Help | `F1` — the keyboard map plus a diagram-syntax card for each engine |
 | About | version, author, licence, the three diagram engines plus the editor, each with its licence and (where the UI shows one) its size, the data folder (openable from there), the log folder (openable from there — the files in it are the report), a link to the project, and a **check for updates** row. That row also runs by itself at launch: it fetches one small manifest (a version and a download URL) and, when something is newer, the status bar grows a chip that opens this sheet — nothing about you is sent either way |
 | Settings (an overlay, not a second window) | theme / language / font size / reading width / math / reduce motion / default app / render-cache size and clear / log level and log directory — every row changes something |
-| Data | `%APPDATA%\MarkdownAura\session.json` on Windows, `~/.config/MarkdownAura/session.json` on Linux, written atomically (a crash cannot lose the previous session); the render cache is measured in SVG bytes and clears in one click; runtime logs are a 4 MB rolling file in `%LOCALAPPDATA%\MarkdownAura\logs` (`$XDG_STATE_HOME/MarkdownAura/logs` on Linux), with a self-contained report written automatically for every run that ends abnormally, and the directory is configurable |
+| Data | `%APPDATA%\MarkdownAura\session.json` on Windows, `~/.config/MarkdownAura/session.json` on Linux, written atomically (a crash cannot lose the previous session); the render cache is measured in SVG bytes and clears in one click; runtime logs are a 1 MB rolling file in `%LOCALAPPDATA%\MarkdownAura\logs` (`$XDG_STATE_HOME/MarkdownAura/logs` on Linux) — `app.log` plus three rotations, 4 MB in total — and every panic leaves a self-contained report in `crash/`; the directory is configurable |
 
 Raw HTML: only a short fixed list of tags is allowed through (`details`, `summary`, `kbd`, `sub`, `sup`, `br`, `hr`) and everything else is dropped — what a document contains cannot touch the app's own interface.
 
@@ -94,6 +94,7 @@ All three run inside the application, so no document needs a network connection.
 | View | `ctrl +` `ctrl -` / `ctrl 0` | zoom / reset zoom |
 | View | `ctrl shift M` | cycle the reading width |
 | File | `ctrl E` / `ctrl S` | edit this tab's source in place / save it |
+| File | `ctrl Z` / `ctrl Y` | undo / redo (while the pane is editable) |
 | Find | `ctrl F`, `enter` / `shift enter`, `esc` | find, next / previous, close |
 
 ---
@@ -102,7 +103,7 @@ All three run inside the application, so no document needs a network connection.
 
 - **Portable (zip, Windows x64)**: `MarkdownAura-<version>-windows-x64-portable.zip` holds `markdownaura.exe` together with the `WebView2Loader.dll` it needs. Unzip it anywhere and double-click the exe; the exe on its own will not start. There is no single-file edition any more — it was dropped in 0.1.2, because the launcher it needed was a second updater of its own and earned nothing the zip does not.
 - **Installer (Windows x64)**: `MarkdownAura_<version>_windows-x64-setup.exe`. The wizard shows the licence page and puts `LICENSE` and `THIRD-PARTY.md` in the install directory. This is also the update path: when a newer release exists the status bar shows a chip, and clicking it opens the About sheet, whose **check for updates** row downloads the next signed installer from the GitHub release and runs it. A portable copy that updates this way becomes a proper installation; staying portable means downloading the new zip by hand.
-- **Linux (x86-64)**: `MarkdownAura_<version>_linux-amd64.deb` installs with `sudo apt install ./MarkdownAura_<version>_linux-amd64.deb` and pulls WebKitGTK 4.1 in as a dependency; `MarkdownAura_<version>_linux-amd64.AppImage` needs nothing installed, because it carries the toolkit inside itself — which is the whole of the size difference between them. Both register the app as a handler for Markdown files. The deb is the package manager's to update; the AppImage is what the in-app updater replaces.
+- **Linux (x86-64)**: `MarkdownAura_<version>_linux-amd64.deb` installs with `sudo apt install ./MarkdownAura_<version>_linux-amd64.deb` and pulls WebKitGTK 4.1 in as a dependency; `MarkdownAura_<version>_linux-amd64.AppImage` needs nothing installed, because it carries the toolkit inside itself — which is the whole of the size difference between them. The deb registers the app as a handler for Markdown files; the AppImage has to be integrated with the desktop first. The deb is the package manager's to update; the AppImage is what the in-app updater replaces.
 - **Requirements**: Windows 10 / 11 (x64) with the WebView2 Runtime (already present on Windows 11 and on Windows 10 with Edge); Linux (x86-64), where the deb needs WebKitGTK 4.1 and the AppImage needs nothing.
 - **Sizes**: portable zip 13.3 MB; installer 13.0 MB; deb 13.8 MB; AppImage 89.1 MB (it bundles WebKitGTK).
 

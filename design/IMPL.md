@@ -164,8 +164,9 @@ throw and the settings panel silently refused to open.
 
 ### Commands (frontend → Rust)
 
-Fifteen commands, all registered in `lib.rs`. All are `async` — except `startup_target` and
-`data_directory`, which are pure reads of state and of a path — and the filesystem-heavy ones
+Twenty-four commands, all registered in `lib.rs`. All are `async` — except `startup_target`,
+`data_directory`, `default_app_status` and `set_log_level`, which are pure reads of state or of a
+path — and the filesystem-heavy ones
 (`open_folder`, `read_dir`, `resolve_target`, `read_file`, `render_doc`,
 `reveal_in_explorer`, `session_load`, `session_save`, `engine_status`, `note_recent`) hop
 to a blocking thread through one `spawn_blocking` helper, because the §9 budgets assume no
@@ -212,8 +213,8 @@ path).
 //    the buffer belongs to: the text is unsaved, but its images are still the file's images.
 #[tauri::command] async fn render_text(app: AppHandle, text: String, path: Option<PathBuf>, math: bool)
                                        -> Result<RenderedDoc>;
-// -> implemented for Windows (`explorer /select,<path>`) and other platforms (`xdg-open`), but
-//    nothing in the UI calls it: the tab menu that would is deferred (SPEC §5).
+// -> implemented for Windows (`explorer /select,<path>`) and other platforms (`xdg-open`); the tab
+//    menu's "show in explorer" and the About sheet's data-directory button both call it.
 
 // --- watching ---
 #[tauri::command] async fn watch_set(paths: Vec<PathBuf>) -> Result<WatcherStatus>;
@@ -262,8 +263,8 @@ The payload shapes (all `#[serde(rename_all = "camelCase")]`):
 ```ts
 type TreeEntry  = { name: string; path: string; isDir: boolean; ext: string };   // ext lowercased, no dot
 type FolderView = { root: string; name: string; entries: TreeEntry[] };
-type FilePayload = { text: string; encoding: string; eol: "lf" | "crlf";
-                     bytes: number; mtimeMs: number; truncated: boolean };
+type FilePayload = { text: string; encoding: string; eol: "lf" | "crlf" | "mixed";
+                     bytes: number; mtimeMs: number; truncated: boolean; writable: boolean };
 type Heading = { id: string; level: number; text: string; line: number };
 type DiagramBlock = { id: string; lang: "mermaid" | "dot" | "d2"; source: string; line: number };
 type FrontmatterField = { key: string; value: string };
@@ -282,7 +283,8 @@ tab goes `missing`) from "permission denied" (toast) from "not UTF-8":
 
 ```rust
 #[serde(tag = "kind", rename_all = "camelCase")]
-enum ApiError { NotFound { path }, Denied { path }, Io { path, message }, NotText { path } }
+enum ApiError { NotFound { path }, Denied { path }, Io { path, message }, NotText { path },
+                 Conflict { path }, Refused { path, reason } }
 ```
 
 Two caveats worth stating because both were wrong in the first draft:
@@ -360,6 +362,7 @@ Concretely:
 ```rust
 pulldown_cmark::Options::ENABLE_TABLES
   | ENABLE_TASKLISTS | ENABLE_FOOTNOTES | ENABLE_STRIKETHROUGH
+  | if math { ENABLE_MATH } else { Options::empty() }   // the reader's setting (SPEC §10), per call
 ```
 
 - Frontmatter is stripped before the parse and returned as `frontmatter: FrontmatterField[]`
@@ -570,8 +573,9 @@ type WindowState = {
 Invariants worth stating because they are the bugs:
 
 - Opening an already-open file **activates** the tab, never duplicates it. Identity is
-  `normalizePath` — lowercase, `/` → `\`, trailing separators stripped — because Windows
-  paths are case-insensitive and the same file arrives with either separator.
+  `normalizePath` — on Windows `\` → `/` and lowercase, with trailing separators stripped, because
+  Windows paths are case-insensitive and the same file arrives with either separator. On Linux a
+  backslash is a legal filename character, so nothing is converted there; only macOS lowercases.
 - A single tree click reuses *the one* preview tab (it keeps its position in the strip,
   which is what makes browsing feel stable); a double click pins it. Reaching an already
   open preview tab by double click clears the preview flag; reaching it by single click
@@ -909,8 +913,9 @@ The product's claim is speed, so the numbers are part of the contract:
 | first mermaid block → SVG | ≤ 250 ms after the chunk is resident |
 | idle RAM with 10 tabs open | ≤ 150 MB |
 
-The status bar's `rendered in N ms` is measured in Rust around `render_doc` and around each engine
-call, and shown as-is. If a budget is missed, the number is already on screen — do not hide it.
+The status bar's `rendered in N ms` is measured in the front end with `performance.now()` around the
+DOM paint — including the engine calls it awaits — and shown as-is. If a budget is missed, the number
+is already on screen — do not hide it.
 
 Measured 2026-10-02 (fixture with frontmatter, one mermaid and one dot diagram, d2 inline
 error): dev-mode first render ≈336 ms including both engines; the release build's
@@ -943,7 +948,8 @@ status bar's `rendered in N ms` is where a reader sees it.
 
 ## 10. Testing
 
-- **Rust: 67 unit tests, in-module** (`cargo test --lib`) — `session` (round-trip, unknown
+- **Rust: 83 unit tests, in-module** (`cargo test --lib`; 83 on 2026-10-08, and the count moves as
+  tests are added) — `session` (round-trip, unknown
   version, corrupt file, missing file, no temp file left, recent cap/dedupe/order);
   `fs_ops` (ignore rules, BOM detection, UTF-16 byte orders, truncation at the 8 MiB cap);
   `markdown` (the allow-list, normalisation, hostile input, allowed tags in paragraphs,
@@ -954,14 +960,16 @@ status bar's `rendered in N ms` is where a reader sees it.
   inside a sentence); `watcher`
   (count skips ignored dirs, single file, missing root, a removal followed by a recreate);
   `engines` (all three bundled and always installed, no opt-in); `lib` (arg parsing, unknown
-  flags ignored). An
+  flags ignored); `emphasis` (16: the shapes the CJK widening accepts, the ones it refuses, and the
+  content boundaries it does not cross); `spec` (the conformance gate below); `diag` (log-level
+  parsing, rotation, the crash report's shape); `commands` (the two read commands' edge cases). An
   integration-test target would need `build.rs`'s link-arg repair, which is why the tests
   live in `#[cfg(test)]` modules — do not "move them out" without reading that comment.
 - **`markdown` gets hostile fixtures that are not happy paths** (required by §4): raw
   `<script>`, `<img onerror>`, `<iframe>`, `<a href="javascript:…">`, attribute-carrying
   tags, and the same tags with mixed case or extra whitespace. The assertion is that the
   output contains none of them, and that the allowed tags still survive.
-- **The spec gate** (added 2026-10-08): `src/spec.rs` runs the vendored CommonMark 0.31.2 (652 examples) and
+- **The spec gate** (added 2026-10-08): `src-tauri/src/spec.rs` runs the vendored CommonMark 0.31.2 (652 examples) and
   GFM 0.29 (672) suites against `markdown::render`, folds the differences that are not meaning
   (`<br />` vs `<br>`, whitespace between tags), and compares. `tests/spec/expected-failures.json` is the
   baseline, and the contract is one-way: an example that starts passing while it is listed fails the test,
@@ -1296,16 +1304,17 @@ user's mistake. Four separate blind spots, each verified in the tree:
 | WebView2 renderer dies | tauri 2.12's `WindowEvent` has no render-process-gone variant (`tauri-runtime-2.12.1/src/window.rs:30`), and `wry` exposes no `ProcessFailed` callback. The window stays, the page is dead, and §2's "one Crashpad dump per launch, no error surfaced anywhere" was written from experience |
 | abort / power loss / force-kill | no marker, no `run.end`, nothing |
 
-The three `eprintln!` calls that *do* exist (`lib.rs:119`, `lib.rs:129`, `commands.rs:43` — a fourth,
+The three `eprintln!` calls that *do* exist (`lib.rs:148`, `lib.rs:160`, `commands.rs:49` — a fourth,
 `fs_ops.rs:472`, is test-only) reach no one: the release binary is a windowed process with no console
-attached, so the text is discarded. The watcher additionally drops notify's error stream on the floor
-(`watcher.rs:205`, `Ok(Err(_)) => {}`), which is the most likely silent degradation in the whole app: a
-watcher that stopped working looks exactly like a file that stopped changing.
+attached, so the text is discarded. The watcher used to drop notify's error stream on the floor; since
+2026-10-08 it logs it (`watcher.rs:207`, `diag_warn!`), because a watcher that stopped working looks
+exactly like a file that stopped changing — the most likely silent degradation in the whole app.
 
 ### 13.2 Decision: a hand-rolled `diag.rs`, and no new crates
 
 `log`, `time`, `tracing` and `windows-sys` are already in `Cargo.lock` as transitive dependencies, and none
-of them is needed. `src-tauri/src/diag.rs` is roughly 260 lines including tests, and it keeps the app's
+of them is needed. `src-tauri/src/diag.rs` is roughly 930 lines including tests (the test module starts
+around line 780), and it keeps the app's
 one-dependency-one-justification rule intact (see the `getopts` removal and the `native-tls` note in §12).
 
 `tauri-plugin-log` was the alternative and was rejected on coverage, not taste: it has no unclean-exit
@@ -1393,16 +1402,15 @@ pass-through for `console.error`/`warn`, and ships them to Rust over a new `log_
 batch, a hard limit of 200 lines per minute per module (over that, one `suppressed=n` line), and a flush
 before `relaunchApp()` — a render loop must not be able to fill a disk or to spam the IPC bridge.
 
-**3. WebView2 death.** The data directory is **not** moved (that would be a behaviour change for every
-existing install); it is *located and recorded*. Four candidates are probed in order — `<exe name>.exe.WebView2`
-and `<exe name>.WebView2` next to the executable, then the same two under `%LOCALAPPDATA%` — and the first that
-exists is written into the startup line; `unknown` when none does, which is the honest answer on
-a machine whose runtime never created one. The Crashpad minidumps live under that folder's `EBWebView\Crashpad\`
-(not confirmed on this machine: no profile directory exists beside the dev-build executable here, and the
-release never moved it). Relocation stays available behind `MARKDOWNAURA_WEBVIEW_DATA` via
-`WebviewWindowBuilder::data_directory`, which exists
-(`tauri-2.12.1/src/webview/webview_window.rs:1089`) — an escape hatch in the same spirit as
-`MARKDOWNAURA_BROWSER_ARGS` in §8, not a default.
+**3. WebView2 death.** Nothing is moved and nothing is probed: the data directory stays wherever the
+runtime put it (moving it would be a behaviour change for every existing install), and there is **no**
+`MARKDOWNAURA_WEBVIEW_DATA` and no `data_directory` call on the window builder. `WebviewWindowBuilder` does
+expose `data_directory` (`tauri-2.12.1/src/webview/webview_window.rs:1089`), so relocation remains a knob
+to add *if* a report ever needs it — an escape hatch in the same spirit as `MARKDOWNAURA_BROWSER_ARGS` in
+§8, and not one that exists today. A dead renderer is therefore diagnosed from the outside: the window
+stays, the page stops, and the run marker plus the Crashpad minidumps under the profile's
+`EBWebView\Crashpad\` are what a report has. (The dev-build machine has no such directory beside the
+executable, so the path is the runtime's default, not something this app chose.)
 
 The runtime's version needs no registry read: `navigator.userAgent` carries `Edg/<version>` on Windows and
 the WebKitGTK version on Linux (the front end reports both, §13.7). The v1 limitation is standing: the app
@@ -1436,22 +1444,26 @@ This is why `lib.rs` moves from `builder.run(context)` to `builder.build(context
 
 | where | what is logged |
 |---|---|
-| `lib.rs:62` `run()` | version, pid, argv, OS/arch, exe path, log dir, WebView2 data dir, whether `MARKDOWNAURA_BROWSER_ARGS` is set |
-| `lib.rs:119`, `lib.rs:129`, `commands.rs:43` | the three surviving `eprintln!` sites, re-pointed at the logger (debug builds keep mirroring to stderr) |
-| `watcher.rs:205` | notify's error stream, currently discarded |
+| `lib.rs:62` `run()` | version, pid, argv, OS/arch, exe path, log dir, whether `MARKDOWNAURA_BROWSER_ARGS` is set |
+| `lib.rs:148`, `lib.rs:160`, `commands.rs:49` | the three surviving `eprintln!` sites, re-pointed at the logger (debug builds keep mirroring to stderr) |
+| `watcher.rs:207` | notify's error stream, logged as `warn` (it used to be discarded) |
 | `watcher.rs:100` and every `#[tauri::command]` | already covered by the IPC wrapper in §13.7 — no per-command code |
-| `session::save` failure, engine load/render failure, render over budget | `warn` / `debug` |
+| `session::save` failure, engine load/render failure | `warn` / `debug` |
 | front-end `main.ts:753` (session save swallowed) and `render/engines.ts:134` (d2 preload swallowed) | the two silent real failures; `dom.ts:38`-style clipboard misses are deliberately not logged |
-| every file switch / view-mode switch | one low-frequency breadcrumb, so a report says which document and which mode was on screen |
+
+There is **no** render-over-budget comparison and no per-switch breadcrumb: the log says which document
+was on screen because the startup line carries `argv` and the session line carries the open tabs, not
+because a switch logged anything. Adding either would be new instrumentation, not a description of this
+one.
 
 ### 13.7 Front-end: one wrapper covers every IPC failure
 
 `ipc.ts` is the app's entire Tauri boundary (§2 rule 3), so wrapping `invoke` there logs **every** command
-failure with the command name and the error, and none of the nineteen commands changes. The rule that comes
+failure with the command name and the error, and none of the twenty-four commands changes. The rule that comes
 with it is absolute: **the wrapper logs the command name and the error, never the arguments** — `saveDoc`'s
 arguments include the whole document text.
 
-`src/diag.ts` (≈130 lines) owns the global handlers, the queue, the rate limit, and the environment block
+`src/diag.ts` (≈240 lines) owns the global handlers, the queue, the rate limit, and the environment block
 that is sent once per run: `userAgent` (hence the WebView2/WebKitGTK version), timezone offset, screen size,
 device pixels, UI language, and a best-effort WebGL renderer string. Rust cannot see any of these and a crash
 report is much weaker without them.
@@ -1486,17 +1498,18 @@ compile error).
 - The crash report's header states that it contains local paths, so a reader knows before attaching it.
 - Nothing leaves the machine. The CSP already forbids it (`connect-src 'self' ipc: http://ipc.localhost
   blob: data:`, `tauri.conf.json:15`), the front end makes no request of any kind, and the app's one network
-  call remains the click-driven updater (§10). **Diagnostics adds no server, no endpoint, and no telemetry.**
+  call is the update-manifest fetch — which runs at launch **and** on a click (§10, §12).
+  **Diagnostics adds no server, no endpoint, and no telemetry.**
 
 ### 13.10 Files and size
 
 | file | change | ≈ lines |
 |---|---|---|
-| `src-tauri/src/diag.rs` | new: writer, rotation, panic hook, `run.json`, tail, civil-time helper + tests | 260 |
+| `src-tauri/src/diag.rs` | new: writer, rotation, panic hook, `run.json`, tail, civil-time helper + tests | 930 |
 | `src-tauri/src/lib.rs` | `init`, marker lifecycle, `RunEvent` callback, three `eprintln!` sites | 25 |
 | `src-tauri/src/commands.rs` | five new commands (`log_event`, `set_log_level`, `set_log_dir`, `diag_status`, `open_log_folder`); two more (`diag_report`, `save_diag_report`) were removed on 2026-10-08 with the About row's *export* / *copy* buttons | 60 |
 | `src-tauri/src/{watcher,session,markdown}.rs` | instrumentation | 12 |
-| `src/diag.ts` | new: handlers, queue, rate limit, environment block | 130 |
+| `src/diag.ts` | new: handlers, queue, rate limit, environment block | 240 |
 | `src/ipc.ts` | `invoke` wrapper + five wrappers (two removed on 2026-10-08, with the report commands) | 36 |
 | `src/main.ts` | `diag.install()`, two silent catches, flush before relaunch | 15 |
 | `src/ui/{about,settings}.ts`, `index.html` | the About row and the two settings rows | 75 |
@@ -1559,7 +1572,8 @@ that pinned that shape. The folder the remaining *open* button reveals holds the
 
 ### 13.12 Non-goals and honest limits
 
-- **No automatic upload.** The app makes one network call, on a click (§10). It stays that way.
+- **No automatic upload.** The app's one network call is the update-manifest fetch (at launch and on a
+  click, §10). Nothing else leaves the machine, and that stays true.
 - **Import-time front-end errors are covered only from `main.ts` onwards.** ES module imports are evaluated
   before any statement of the module that imports them, so a throw while a dependency module is being
   evaluated happens before `diag.install()` can run. Closing that would mean a separate entry module that

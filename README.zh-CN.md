@@ -25,7 +25,7 @@
 代码围栏按语言着色（Prism，约 50 种语法；没随包的语言保持纯文本，不会为此报错），脚注收拢成文末一个编号区块、每条都有 `↩` 跳回引用处，公式由 KaTeX 排版——`$…$`、`$$…$$`，含化学式。数学是这里唯一的开关：它默认关闭，因为打开之后 `$` 就不再是普通字符，而一篇在讲价格的文档应该继续讲价格。中日文按读法写强调——`中文**"加粗"**中文` 就是粗体，而 CommonMark 会拒绝这个形态（它的规则把汉字当成拉丁字母）；marktext、Typora 与 VS Code 预览放宽的都是同一个形态，其它一律不动。
 
 **大文件与各种编码都不挡路。**
-单文件读取上限 8 MiB，超出部分明确标注"已截断"而不是悄悄丢内容；UTF-8、UTF-8 BOM、UTF-16LE、UTF-16BE 自动识别，LF / CRLF 也在状态栏标明。
+单文件读取上限 8 MiB，超出部分明确标注"已截断"而不是悄悄丢内容；UTF-8、UTF-8 BOM、UTF-16LE、UTF-16BE 自动识别并显示在状态栏；行尾混用（CRLF 与 LF 都有）的文件宁可拒绝保存，也不静默统一。
 
 **每个标签页记住自己的状态。**
 视图模式、滚动位置、查找词与命中位置按标签页保存，切回来不重新渲染。
@@ -49,7 +49,7 @@
 | 区域 | 能力 |
 |---|---|
 | 资源管理器 | 打开文件夹；宽度可拖（180–640px）；**只列 md** 开关（默认开）；文件名筛选（脚部漏斗按需展开）；目录始终显示；忽略的目录：`.` 开头、`node_modules`、`target`、`dist`；底部显示 `正在监视 N 个文件` |
-| 打开方式 | 应用会把自身注册为 Markdown 文件的打开方式（Windows 安装包与两个 Linux 包都是），文件管理器的"用……打开"会把路径传进来；第二次启动转交给已打开的窗口，而不是再开一个 |
+| 打开方式 | Windows 安装包与 Linux deb 会把本应用注册为 Markdown 文件的打开方式，文件管理器的"用……打开"会把路径传进来——AppImage 在未与桌面集成前没有 desktop 文件，此时它会明说而不是静默失败；第二次启动转交给已打开的窗口，而不是再开一个 |
 | 标签页 | 单击树中文件开"预览标签"（斜体），双击固定；`⋯` 列出全部标签；`ctrl W` 或中键关闭；右键菜单可关闭 / 关闭其它 / 关闭右侧 / 全部关闭、复制路径、在资源管理器中显示 |
 | 视图 | 预览 / 分屏 / 源码；分屏可拖分隔条；分屏两窗格同步滚动，位置按标签页保存 |
 | 渲染 | CommonMark，外加 GFM 的表格、任务清单与删除线——不含 GFM autolink 扩展，所以裸写的 `www.…` 或邮箱仍是文本，而 `<https://…>` 是链接；脚注收拢为文末一个区块，每条都有 `↩` 跳回引用处；**代码围栏按语言着色**（Prism，约 50 种语言，没随包的语言保持纯文本、不打扰）；**数学公式**由 KaTeX 渲染（`$…$`、`$$…$$`，含化学式），这是一项设置，默认关闭 |
@@ -60,9 +60,9 @@
 | 阅读 | 正文字号 12–22px；阅读宽度三档（窄 60ch / 舒适 100ch / 撑满）；浅色 / 深色 / 跟随系统；语言跟随系统（中 / 英）；减少动效 |
 | 沉浸 | `F11` 收掉全部界面 chrome，`esc` 或 `F11` 退出 |
 | 帮助 | `F1` 快捷键表，以及每个引擎一张图语法卡片 |
-| 关于 | 版本、作者、许可证、三个图表引擎与编辑器各自的许可证与体积、数据目录（可直接打开）、日志目录（可直接打开）、项目主页链接，以及 **检查更新** 一行。这一行在启动时也会自行运行：取一份很小的清单（一个版本号与一个下载地址），发现更新的版本时状态栏会长出一枚提示，点它即打开本面板——两种情况都不会发送任何关于你的信息 |
+| 关于 | 版本、作者、许可证、三个图表引擎与编辑器各自的许可证（界面上标出的另有体积）、数据目录（可直接打开）、日志目录（可直接打开）、项目主页链接，以及 **检查更新** 一行。这一行在启动时也会自行运行：取一份很小的清单（一个版本号与一个下载地址），发现更新的版本时状态栏会长出一枚提示，点它即打开本面板——两种情况都不会发送任何关于你的信息 |
 | 设置（覆盖层，非第二个窗口） | 主题 / 语言 / 字号 / 阅读宽度 / 数学公式 / 减少动效 / 默认应用 / 渲染缓存大小与清空 / 日志级别与日志目录 —— 每一行都真的能改 |
-| 数据 | Windows 下是 `%APPDATA%\MarkdownAura\session.json`，Linux 下是 `~/.config/MarkdownAura/session.json`，原子写入（崩溃不丢上一次会话）；渲染缓存按 SVG 字节计，可一键清空；运行日志是 `%LOCALAPPDATA%\MarkdownAura\logs`（Linux 为 `$XDG_STATE_HOME/MarkdownAura/logs`）下 4 MB 的滚动文件，每次异常退出都在 `crash/` 下自动留一份自包含报告，目录本身可配置 |
+| 数据 | Windows 下是 `%APPDATA%\MarkdownAura\session.json`，Linux 下是 `~/.config/MarkdownAura/session.json`，原子写入（崩溃不丢上一次会话）；渲染缓存按 SVG 字节计，可一键清空；运行日志是 `%LOCALAPPDATA%\MarkdownAura\logs`（Linux 为 `$XDG_STATE_HOME/MarkdownAura/logs`）下 1 MB 的滚动文件（`app.log` 加三个轮转，共 4 MB），每次 panic 都在 `crash/` 下留一份自包含报告，目录本身可配置 |
 
 原始 HTML 只放行一小段固定标签（`details`、`summary`、`kbd`、`sub`、`sup`、`br`、`hr`），其余一律丢弃——文档里写什么都不会影响应用界面。
 
@@ -94,6 +94,7 @@
 | 视图 | `ctrl +` `ctrl -` / `ctrl 0` | 缩放 / 重置缩放 |
 | 视图 | `ctrl shift M` | 切换阅读宽度 |
 | 文件 | `ctrl E` / `ctrl S` | 就地编辑本标签页源码 / 保存 |
+| 文件 | `ctrl Z` / `ctrl Y` | 撤销 / 重做（编辑状态下） |
 | 查找 | `ctrl F`，`enter` / `shift enter`，`esc` | 查找、下一处 / 上一处、关闭 |
 
 ---
@@ -102,7 +103,7 @@
 
 - **免安装版（zip，Windows x64）**：`MarkdownAura-<version>-windows-x64-portable.zip` 里是 `markdownaura.exe` 与它需要的 `WebView2Loader.dll`。解压到任意位置双击 exe 即可（只拷 exe 无法启动）。不再提供单文件版——0.1.2 起移除，因为承载它的那个壳等于自带一套升级逻辑，却换不来 zip 做不到的事。
 - **安装版（Windows x64）**：`MarkdownAura_<version>_windows-x64-setup.exe`。安装向导含许可页，并把 `LICENSE` 与 `THIRD-PARTY.md` 放进安装目录。它同时也是升级通道：存在更新版本时状态栏会出现一枚提示，点它打开关于面板，其中的 **检查更新** 会从 GitHub release 下载下一个已签名的安装包并运行。免安装版这样升级后会变成正式安装；想保持免安装，就到 release 页手动下载新的 zip。
-- **Linux（x86-64）**：`MarkdownAura_<version>_linux-amd64.deb` 用 `sudo apt install ./MarkdownAura_<version>_linux-amd64.deb` 安装，依赖会自动带上 WebKitGTK 4.1；`MarkdownAura_<version>_linux-amd64.AppImage` 不需要预装任何东西——工具链装在它自己里面，这也正是两者体积差的来源。两者都会把本应用注册为 Markdown 文件的打开方式。deb 装的那份归包管理器升级，AppImage 则是应用内更新时被替换的那个产物。
+- **Linux（x86-64）**：`MarkdownAura_<version>_linux-amd64.deb` 用 `sudo apt install ./MarkdownAura_<version>_linux-amd64.deb` 安装，依赖会自动带上 WebKitGTK 4.1；`MarkdownAura_<version>_linux-amd64.AppImage` 不需要预装任何东西——工具链装在它自己里面，这也正是两者体积差的来源。deb 会把本应用注册为 Markdown 文件的打开方式；AppImage 需要先与桌面集成。deb 装的那份归包管理器升级，AppImage 则是应用内更新时被替换的那个产物。
 - **系统要求**：Windows 10 / 11（x64）+ WebView2 Runtime（Win11 与装了 Edge 的 Win10 已自带）；Linux（x86-64），deb 需要 WebKitGTK 4.1，AppImage 无需预装。
 - **体积**：免安装 zip 13.3 MB；安装包 13.0 MB；deb 13.8 MB；AppImage 89.1 MB（内含 WebKitGTK）。
 

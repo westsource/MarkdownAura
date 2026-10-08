@@ -482,6 +482,11 @@ async function openFile(path: string, preview: boolean): Promise<void> {
     // Reaching an open file by double click pins it; reaching it by single click leaves the
     // preview flag alone rather than un-pinning something the user pinned on purpose.
     if (!preview) existing.preview = false;
+    // This path activates a tab without going through `activate()`, so the outgoing tab has to be
+    // captured here too — otherwise clicking a file that is already open loses the scroll position of
+    // the tab it leaves, which is the one thing a multi-tab reader must not do (SPEC §5).
+    const leaving = activeTab();
+    if (leaving && leaving !== existing) doc.captureScroll(leaving);
     state.activeTab = state.tabs.indexOf(existing);
     renderChrome();
     await paintActive();

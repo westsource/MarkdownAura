@@ -10,8 +10,8 @@ vanilla JS so it ports without rework; the shipped app is vanilla TypeScript + V
 Scope convention: this document describes the **target** UX. Every section that differs
 from the shipped app carries a **v1 status** note naming three things: what is
 implemented, what is deferred *with its feature*, and what deliberately deviates. The
-notes were last revised on 2026-10-04 against the running build (34 Rust tests, `tsc`
-clean, production asset-protocol render verified, and the same build run on Linux).
+notes were last revised on 2026-10-08 against the running build (83 Rust tests on that date, `tsc`
+clean, production asset-protocol render verified, the same suite run on Linux, and a live UI sweep).
 
 Three terms are used precisely, because the difference between them is the whole point
 of the status notes:
@@ -61,8 +61,8 @@ app opens in.
 (all tabs). The app shell carries `[⋯]` and it is **wired**: it lists every tab as a menu
 with the current one marked, and `ctrl shift A` does the same from the keyboard. The `[+]`
 button exists only in the mockup; the app has no new-tab button because `ctrl T` is not
-bound. The rest of the tab context menu (close others / close to the right / pin / duplicate)
-is still deferred (§5).
+bound. Of the tab context menu, **close others, close to the right, close all, copy path and
+reveal ship**; **pin and duplicate** are still deferred (§5).
 
 Tab overflow scrolls horizontally instead of wrapping, and the active tab is scrolled
 into view on every switch — a jumping title bar is worse than a hidden tab.
@@ -283,7 +283,7 @@ showing — and does not open the viewer; that stays a deliberate click on the c
 ### Status bar
 
 Left: path, word count, encoding. Right: three engine health dots, render time, **the update chip when a
-release is newer** (absent otherwise — it is the only control in this row that comes and goes), **reading
+release is newer** (absent otherwise — the `unsaved` chip is the row's other occasional control), **reading
 width**, zoom. The path is the only unbounded item in the row, so it ellipsises rather than pushing the
 controls off the edge.
 
@@ -529,9 +529,9 @@ The window opens here when no folder is loaded. It is also the drop target.
 | `ctrl F` | find in document | implemented |
 | `enter` / `shift enter` | next / previous match (while the find bar is open) | implemented |
 | `ctrl R` | re-render | implemented |
-| `ctrl E` | edit the source pane (toggle) | **not bound** (§12) |
-| `ctrl S` | save | **not bound** (§12) |
-| `ctrl Z` / `ctrl Y` | undo / redo, while the pane is editable | **not bound** (edit mode, §12) |
+| `ctrl E` | edit the source pane (toggle) | implemented (§12) |
+| `ctrl S` | save | implemented (§12) |
+| `ctrl Z` / `ctrl Y` | undo / redo, while the pane is editable | implemented (the editable pane's own history keymap, §12) |
 | `ctrl ,` | settings | implemented |
 | `ctrl +` / `ctrl -` / `ctrl 0` | zoom in / out / reset | implemented |
 | `ctrl shift M` | cycle reading width | implemented |
@@ -539,8 +539,7 @@ The window opens here when no folder is loaded. It is also the drop target.
 | `F1` | help | implemented |
 | `esc` | dismiss one layer (see below) | implemented |
 
-Keys marked **not bound** are design intent that has no handler in the app yet; they
-exist in the mockup's keymap so the shape is recorded.
+This table is what the app binds; the mockup's extra keys are not listed here.
 
 > **Resolved 2026-10-01.** `ctrl shift O` was bound to both "open folder" and "toggle
 > outline". **Open folder keeps `ctrl shift O`** (VS Code muscle memory, and it is the
@@ -589,7 +588,9 @@ adding a key means editing two files and the help panel can silently go stale.
   because every other horizontal line on the page — table borders, card hairlines, a quote's rule — is
   solid, and the one line that means "the subject changes here" has to look unlike them.
 - **One accent.** Purple `#534ab7` (the "aura"), used for: active tab bar, active tree row,
-  links, focus rings, primary buttons, mermaid badge. Nothing else is saturated.
+  links, focus rings, primary buttons. The three diagram badges are the deliberate exception —
+  each reads its own engine-identity token (`--eng-mermaid` / `--eng-dot` / `--eng-d2`), never
+  the accent. Nothing else is saturated.
 - **Sentence case everywhere** — `open folder`, not `Open Folder`. Lowercase UI reads as
   tool-like rather than corporate.
 - Radii: 6px badges/chips, 8px buttons/inputs/tabs, 12px cards/overlays/window.
@@ -768,8 +769,9 @@ Language is the deliberate exception: it is a set-once choice, so it has no surf
 one later means adding it to this table, not inventing a second source of truth.
 
 **v1 status — two rows short.** The target's `files` row is "ignore list as chips, watch
-debounce". The chips are not shipped because the ignore list is not a setting (§3); only
-the debounce read-out is there. The target's `cache` row also named the session file path;
+debounce". Neither part ships: the chips because the ignore list is not a setting (§3), the
+debounce read-out because it was dropped — the row is the default-app read-out only. The
+target's `cache` row also named the session file path;
 the app shows size and clear only. Both are deviations, not omissions to be re-added
 without a decision.
 
@@ -832,7 +834,7 @@ Deviates; if it returns, it belongs in `immersive.ts set()` next to the filename
 
 ### Help (`F1`)
 
-Two columns: the shortcut table on the left, grouped `file` / `view` / `find`; a diagram-syntax
+Two columns: the shortcut table on the left, grouped `file` / `view` / `find` / `edit`; a diagram-syntax
 card per engine on the right. d2 needs no install note any more: it is bundled like the other two.
 
 **The shortcut table is data, not markup.** `KEYMAP` in `src/ui/help.ts` is a
@@ -906,20 +908,25 @@ facts that were measured rather than assumed.
 - The mode is visible without being loud: the pill changes state and the pane gains a caret. Nothing
   else in the chrome moves — no toolbar row appears, and no new button is added except the three the
   unsaved sheet needs while it is open.
-- **Undo and redo belong to the pane while it is editable.** `ctrl Z` / `ctrl Y` are not in the app's
-  map today, so the mode owns them for as long as it is on, together with the editing keys the platform
-  gives a text field. There is no undo button: the keyboard has this one, and a pair of buttons in the
-  chrome would be the first piece of an editor toolbar — which §1 and this section both rule out.
+- **Undo and redo belong to the pane while it is editable.** They come from the editor's own history
+  keymap (`CodeMirror`'s), so they work exactly as long as the mode is on, together with the editing keys
+  the platform gives a text field. There is no undo button: the keyboard has this one, and a pair of
+  buttons in the chrome would be the first piece of an editor toolbar — which §1 and this section both
+  rule out.
 
 ### What cannot be edited
 
-Five refusals. Four of them exist because the reader only *badges* the condition today (§9 and the
-status bar), and a badge is safe only while nothing can write:
+Five refusals. They exist because the reader surfaces these conditions rather than resolving them — the
+pane carries the blocked state, the status bar carries truncation, the tab strip carries `missing` — and a
+surface is safe only while nothing can write:
 
 - **Truncated** (a file past the 8 MiB cap): the buffer holds the first 8 MiB, so saving would delete
   everything after it.
 - **Lossy decode** (`utf-8-lossy`, invalid UTF-8): the replacement characters are already in the
   buffer, so saving would make them permanent.
+- **Mixed line endings** (the file has both CRLF and lone LF): a write rejoins the buffer with one
+  ending, which would silently rewrite every line that used the other. `Tab.blocked` carries it as
+  `mixed` and the write is refused rather than normalising.
 - **Missing** (the file was deleted or renamed under us, §5): there is nothing to write into.
 - **Not writable** (read-only attribute, permissions, a read-only medium): the OS's refusal is
   surfaced as an error, never swallowed.
@@ -934,10 +941,11 @@ status bar), and a badge is safe only while nothing can write:
   follows, for the same reason: a crash mid-write must not lose what was there.
 - **Byte fidelity is the contract, not a nicety.** The file is written back in the encoding it was
   read in: `utf-8`, `utf-8-bom` (the BOM is restored, since reading strips it), `utf-16le` /
-  `utf-16be` (re-encoded, same endianness). Line endings are preserved **per line**, never
-  normalised: the `eol` value the reader carries is a display heuristic — "CRLF wins if it appears at
-  all" — and trusting it for a write would rewrite every LF in a mixed file. A trailing newline, or
-  its absence, is preserved too.
+  `utf-16be` (re-encoded, same endianness). Line endings are **one value per file, not per line**: the
+  reader carries `lf`, `crlf` or `mixed` (`mixed` when the file has both), a write rejoins the buffer
+  with the single ending the file had, and a `mixed` file is **refused** rather than rewritten — a
+  silent normalisation is a permanent change to the reader's file, so the refusal is the honest answer
+  (it is the sixth entry in the list above). A trailing newline, or its absence, is preserved too.
 - **Dirty is visible in two places**, because a lost buffer is the failure this mode can cause: the
   tab strip (§5's six states gain a seventh, `dirty`) and the status bar. Closing a dirty tab, or
   quitting with any dirty buffer, asks first.
@@ -994,7 +1002,7 @@ This is where the work is; the control itself is the easy part.
 
 - **implemented**: the mode, end to end. `ctrl E` and both pills enter it, `ctrl S` and the status bar's
   mark save, `esc` leaves it through the unsaved sheet, the five refusals hold, and the file goes back with
-  its own encoding and its own line endings. The write path is `save_doc` in Rust (`fs_ops::write_file`:
+  its own encoding and its own line ending — or is refused, when the file mixes them. The write path is `save_doc` in Rust (`fs_ops::write_file`:
   mtime check, atomic replace, the document's permissions carried over), and the live preview is
   `render_text`, because a buffer has no file for `render_doc` to read.
   Verified on a real build, not by reading the code: a UTF-8-BOM + CRLF file edited in the pane and saved
@@ -1040,7 +1048,7 @@ no fenced code never loads it.
   badge, no message, nothing in the status bar. A fence that is never highlighted is still a
   fence a reader can read, and a renderer that complains about a language it does not have is
   a renderer that complains about the reader's document.
-- **The colours are the eight `--code-*` tokens**, not a Prism theme file. A code palette is
+- **The colours are the nine `--code-*` tokens**, not a Prism theme file. A code palette is
   its own system of colours that must work together inside a tinted block, which is exactly
   why it lives beside the rest of the palette in `tokens.css` instead of in a stylesheet the
   theme cannot reach.
@@ -1099,10 +1107,13 @@ The widening is **additive**: it applies only where the neighbour CommonMark ref
 side is punctuation, so a run can only gain an opening or closing it was denied, never lose one it had. A
 Latin neighbour is untouched, whitespace still blocks both directions, and a run the parser already
 accepted never reaches the pass. Deliberately left alone — each keeps CommonMark's answer, which is the
-status quo rather than a regression: runs longer than two characters, a delimiter at the edge of a text run
-(where the neighbouring character is not visible in the same event), and anything across an element
-boundary, footnote references included. Code spans are text, never markup, and are not touched at all: the
-pass rewrites the *event stream*, not the source.
+status quo rather than a regression: runs longer than two characters, and anything across a *content*
+boundary — a code span, inline math, raw HTML, a footnote reference or an image. Inline containers whose
+children *are* rendered (emphasis, strong, strikethrough, a link) are crossed rather than stopped at, so a
+widened span may contain them. Code spans are text, never markup, and are not touched at all: the pass
+rewrites the *event stream*, not the source, and it reads a run's `Text` events **flattened into one
+string** — the parser splits `**` into one event per marker, so that is the only place the neighbours
+exist.
 
 **The mockup carries none of this.** `mockup.js` renders markdown with a stand-in renderer that
 fakes its diagrams and has no code colouring, no math and no note section, so `mockup.html` is not
