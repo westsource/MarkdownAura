@@ -1138,16 +1138,31 @@ be detached in the web UI first. The token (scope `projects`) comes from `GITEE_
 github.com is not. The Gitee repository is private, so its assets need a login to download, and the updater
 endpoint above still points at GitHub: this release is a download mirror, not an update channel.
 
-**"The same artifacts" stops at the Linux AppImage, and that is accepted (2026-10-08).** The repository's
-attachment quota is **1 GB**, and as of 1.3.0 it holds **1015.4 MB across 11 releases** — about 8.6 MB free,
-against a 93 MB AppImage. The AppImage stopped fitting at **1.2.0** (that release's Gitee mirror has 9 files
-and 37.3 MB; the AppImage is not among them) and every older release that does carry one is from before the
-quota filled. So the mirror ships the installer, the portable zip, both `.sig` files, the `.deb`, the two
-manifests and `THIRD-PARTY.md`, and the **Linux AppImage is GitHub-only** — which costs nothing on the update
-path, because the AppImage is fetched from the updater endpoint (GitHub) anyway and Gitee is a download
-mirror. `node var/gitee-quota-audit.mjs` (read-only, `var/`) prints the per-release totals; run it before
-staging, and when it reports the quota full, accept as above or prune old releases' assets by hand — pruning
-is a decision for the product owner, never a script.
+**"The same artifacts" stops at whatever the 1 GB attachment quota allows, and pruning is a release step
+(2026-10-08).** The quota is **1 GB across the repository**, so the mirror fills up as releases accumulate:
+at v1.3.0 it held 1015.4 MB across 11 releases with ~8.6 MB free, and the 93 MB AppImage was refused
+(`HTTP 400 … 超出仓库附件配额`). The product owner's call that day was to prune rather than accept a partial
+mirror, so **`node var/gitee-prune.mjs` is now part of staging**: it reads the release list, prints each
+release's total, and deletes *only* the oldest releases' `MarkdownAura_<v>_linux-amd64.AppImage` + `.sig`
+until a target headroom is reached (`--apply` to act; without it, a dry run). Deleting from Gitee is safe
+for the product: Gitee is a *download mirror* — the updater's endpoint is GitHub, and every release's
+AppImage is still on GitHub — so no client's update path can notice.
+
+Two facts the first attempt at this did not know:
+
+* **The delete endpoint works.** `DELETE /repos/{owner}/{repo}/releases/{release_id}/attach_files/{file_id}`
+  returns **204**, and the attachment id is the `id` field of the list response. The earlier note here said
+  the path was "not documented well enough to trust" — it is worth trusting now, which is what makes a
+  scripted prune possible at all.
+* **A rejected upload and a slow one look the same from the client.** The 93 MB AppImage reliably outlives
+  undici's 300 s response-header timeout, and the script's read-back distinguishes "the server has it" from
+  "it really failed" (`retry … not attached` → send again). After the prune, v1.3.1 uploaded all ten assets:
+  the AppImage timed out once, the retry landed.
+
+**The quota is a release-time budget, not a one-off fix.** v1.3.1 leaves **968.5 MB / 1024 MB used** across 12
+releases, so the next release of comparable size will not fit either. The step is: run the audit
+(`node var/gitee-quota-audit.mjs`), run the prune, then publish — and when the prune would have to delete
+something recent to make room, that is a decision for the product owner, never for the script.
 
 **An 88 MB attachment can outlive undici's 300 s response-header timeout** (the script's comment documents
 this and reads the release back rather than retrying blindly). When the read-back says the file is *not*
