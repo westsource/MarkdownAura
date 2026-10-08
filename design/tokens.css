@@ -162,7 +162,7 @@
   --eng-dot: #9fe1cb;      --eng-dot-bg: rgba(159, 225, 203, .11);
   --eng-d2: #fac775;       --eng-d2-bg: rgba(250, 199, 117, .11);
 
-  /* code token colours — see the light block for why these are their own eight */
+  /* code token colours — see the light block for why these are their own nine */
   --code-tx: #e9e7ec;
   --code-cmt: #8b949e;
   --code-str: #a5d6ff;
