@@ -1131,6 +1131,30 @@ be detached in the web UI first. The token (scope `projects`) comes from `GITEE_
 github.com is not. The Gitee repository is private, so its assets need a login to download, and the updater
 endpoint above still points at GitHub: this release is a download mirror, not an update channel.
 
+**"The same artifacts" stops at the Linux AppImage, and that is accepted (2026-10-08).** The repository's
+attachment quota is **1 GB**, and as of 1.3.0 it holds **1015.4 MB across 11 releases** — about 8.6 MB free,
+against a 93 MB AppImage. The AppImage stopped fitting at **1.2.0** (that release's Gitee mirror has 9 files
+and 37.3 MB; the AppImage is not among them) and every older release that does carry one is from before the
+quota filled. So the mirror ships the installer, the portable zip, both `.sig` files, the `.deb`, the two
+manifests and `THIRD-PARTY.md`, and the **Linux AppImage is GitHub-only** — which costs nothing on the update
+path, because the AppImage is fetched from the updater endpoint (GitHub) anyway and Gitee is a download
+mirror. `node var/gitee-quota-audit.mjs` (read-only, `var/`) prints the per-release totals; run it before
+staging, and when it reports the quota full, accept as above or prune old releases' assets by hand — pruning
+is a decision for the product owner, never a script.
+
+**An 88 MB attachment can outlive undici's 300 s response-header timeout** (the script's comment documents
+this and reads the release back rather than retrying blindly). When the read-back says the file is *not*
+attached either — which is what the quota rejection looks like — upload that one file with `curl`, whose
+default has no such timeout:
+
+```bash
+curl --max-time 3000 -F "access_token=$TOKEN" \
+     -F "file=@var/release/MarkdownAura_<v>_linux-amd64.AppImage" \
+     https://gitee.com/api/v5/repos/westsource/MarkdownAura/releases/<release-id>/attach_files
+```
+
+The response says which it was: `HTTP 201` with the file attached, or `HTTP 400` naming the quota.
+
 **The updater refuses a non-`https` endpoint before anything else runs.** Pointing `plugins.updater.endpoints`
 at a local `http://127.0.0.1:…` fixture does not give you a cheap offline test — the config fails to
 deserialize and the app panics on startup with *"must use a secure protocol like `https`"*. Verify the launch
