@@ -958,8 +958,13 @@ status bar's `rendered in N ms` is where a reader sees it.
   the test never writes it itself. Measured 2026-10-08: `commonmark-0.31.2 578/652`, `gfm-0.29 574/672`,
   with 74 and 98 examples listed, in four classes: raw HTML the allow-list drops (the bulk of both),
   a leading `---` block read as frontmatter (commonmark 96, 98), pulldown nesting same-type emphasis
-  where cmark flattens it (15 examples), and the GFM autolink extension, which `markdown::render` does
-  not enable (gfm 621-636). The tab convention in the fixtures (`→`, restored before running) is undone
+  where cmark flattens it (15 examples), and GFM's autolink extension, which **pulldown-cmark does not
+  implement at all** (gfm 621-631: bare `www.…`, bare schemes and bare emails stay text; `<https://…>`
+  is core CommonMark and does link). The product owner decided on 2026-10-08 to leave that one off and
+  keep it as a follow-up rather than hand-write the extension — a decision to revisit by *writing* it,
+  not by turning on a flag: `Options::ENABLE_GFM` is a different feature (blockquote tags `> [!NOTE]`,
+  which our writer does not read, so switching it on changes nothing at all — measured, both suites
+  identical). The tab convention in the fixtures (`→`, restored before running) is undone
   the way the reference runner does it.
   Fixtures are CC-BY-SA 4.0 test data — `tests/spec/README.md` has the provenance, and none of it ships.
 - **Missing guards** (open item, §11): the `insta` snapshot test and the class-name lint.
