@@ -39,7 +39,7 @@
   --eng-d2: #854f0b;       --eng-d2-bg: #faeeda;
 
   /* code token colours (SPEC §13)
-     A code palette is its own system — eight values that have to work together inside a tinted
+     A code palette is its own system — nine values that have to work together inside a tinted
      block — so these are deliberately separate from the prose tokens above: nothing in the chrome
      should inherit "string green", and re-tuning comments must not touch `--tx-2`. They are here
      rather than in a Prism theme file because *this* file is where every colour in the app lives. */
