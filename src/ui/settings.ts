@@ -32,6 +32,9 @@ export interface SettingsHooks {
   onFontSizeChange: () => void;
   onMeasureChange: () => void;
   onMotionChange: () => void;
+  /** Math changes the *rendered HTML*, not a style, so the app has to re-render what is on screen
+   *  (SPEC §13) — this is not the same hook shape as `onMotionChange`. */
+  onMathChange: () => void;
   onLangChange: () => void;
   /** The log directory moved; the About sheet shows it too, so it has to re-read it. */
   onLogDirChange: () => void;
@@ -173,6 +176,11 @@ function render(): void {
     ) +
     formRow(t("settings.measure"), t("settings.measureSub"), measureSeg) +
     formRow(
+      t("settings.math"),
+      t("settings.mathSub"),
+      `<button class="switch${state.math ? " on" : ""}" data-toggle="math" aria-label="${t("settings.math")}"></button>`,
+    ) +
+    formRow(
       t("settings.reduceMotion"),
       t("settings.reduceMotionSub"),
       `<button class="switch${state.reduceMotion ? " on" : ""}" data-toggle="motion" aria-label="${t("settings.reduceMotion")}"></button>`,
@@ -274,8 +282,20 @@ function wireControls(): void {
   $$("[data-toggle]", body).forEach((button) => {
     button.addEventListener("click", (event) => {
       event.stopPropagation();
-      state.reduceMotion = !state.reduceMotion;
-      hooks?.onMotionChange();
+      // Each row names what it toggles. One switch per row, and no shared handler guessing which
+      // setting was meant — the row added next only has to add a case.
+      switch (button.dataset.toggle) {
+        case "motion":
+          state.reduceMotion = !state.reduceMotion;
+          hooks?.onMotionChange();
+          break;
+        case "math":
+          state.math = !state.math;
+          hooks?.onMathChange();
+          break;
+        default:
+          return;
+      }
       hooks?.onSave();
       render();
     });

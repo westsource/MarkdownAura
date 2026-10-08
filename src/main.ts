@@ -17,6 +17,7 @@ import * as diag from "./diag";
 import * as i18n from "./i18n";
 import * as measure from "./measure";
 import { invalidateEngineThemes } from "./render/engines";
+import { preloadMath } from "./render/math";
 import {
   activeTab,
   applySession,
@@ -207,7 +208,7 @@ async function ensureSource(tab: Tab): Promise<void> {
 
 async function loadTab(tab: Tab): Promise<void> {
   try {
-    const rendered = await ipc.renderDoc(tab.file);
+    const rendered = await ipc.renderDoc(tab.file, state.math);
     tab.doc = rendered;
     tab.words = rendered.words;
     tab.encoding = rendered.encoding || tab.encoding;
@@ -430,7 +431,7 @@ function schedulePreview(tab: Tab): void {
     void (async () => {
       if (!tab.editing || tab.buffer === null) return;
       try {
-        const rendered = await ipc.renderText(tab.buffer, tab.file);
+        const rendered = await ipc.renderText(tab.buffer, tab.file, state.math);
         rendered.encoding = tab.encoding;
         rendered.truncated = false;
         tab.doc = rendered;
@@ -768,6 +769,9 @@ async function restoreSession(): Promise<void> {
   applySession(session);
   state.recent = session.recent.slice();
   state.windowRect = { ...session.window };
+  // The setting is on, so the next document with a formula will want KaTeX: pay for the parse now,
+  // between the reader's actions, rather than in front of the first formula (SPEC §4).
+  if (state.math) preloadMath();
   renderRecent();
   applyTheme();
   applyLayout();
@@ -1057,6 +1061,24 @@ async function boot(): Promise<void> {
     onFontSizeChange: applyLayout,
     onMeasureChange: applyLayout,
     onMotionChange: applyLayout,
+    onMathChange: () => {
+      // The reader just asked for math: start the parse now so the re-render below is not the first
+      // thing that waits for KaTeX.
+      if (state.math) preloadMath();
+      // Math is a render *input*, so every open document's HTML is now stale: drop them all and
+      // re-render the one on screen. The others re-render when they are activated, which is what
+      // `activate` already does for a tab whose `doc` is null.
+      const tab = activeTab();
+      for (const open of state.tabs) open.doc = null;
+      if (!tab) return;
+      // A buffer is not in the file yet, so the file is the wrong thing to re-render (SPEC §12).
+      if (tab.editing && tab.buffer !== null) {
+        schedulePreview(tab);
+        return;
+      }
+      if (!tab.missing) void loadTab(tab);
+      else void paintActive();
+    },
     onLangChange: applyLang,
     onLogDirChange: about.refreshLogPath,
     onSave: scheduleSave,

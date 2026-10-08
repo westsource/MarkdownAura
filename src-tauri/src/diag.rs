@@ -38,7 +38,6 @@ const ROTATE_KEEP: usize = 3;
 const MAX_LINE: usize = 4096;
 const HEARTBEAT: Duration = Duration::from_secs(300);
 const CRASH_KEEP: usize = 10;
-const TAIL_LINES: usize = 200;
 
 const LEVEL_OFF: u8 = 0;
 const LEVEL_ERROR: u8 = 1;
@@ -251,76 +250,6 @@ pub fn status() -> DiagStatus {
         log_bytes: std::fs::metadata(dir.join(APP_LOG)).map(|m| m.len()).unwrap_or(0),
         previous_unclean: previous_unclean(),
     }
-}
-
-/// Markdown, for the clipboard. Not truncated: the last 200 lines are the whole tail, and a
-/// clipboard is not a size budget. The caller reveals a saved report; this only builds the text.
-pub fn report() -> String {
-    report_in(&dir(), previous_unclean().as_ref())
-}
-
-/// The body, with the directory and the previous run injected — the same shape as
-/// `previous_unclean_in`, so the text a reader is handed can be asserted without touching the
-/// process-wide sink.
-fn report_in(dir: &Path, previous: Option<&PreviousRun>) -> String {
-    let exe = std::env::current_exe()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| "unknown".to_string());
-    let webview = webview_data_dir()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|| "unknown".to_string());
-    let browser_args = if std::env::var_os("MARKDOWNAURA_BROWSER_ARGS").is_some() {
-        "set"
-    } else {
-        "unset"
-    };
-
-    let mut out = String::new();
-    out.push_str("# MarkdownAura diagnostics\n\n");
-    out.push_str("> This report contains local paths (your user name, install and log locations).\n");
-    out.push_str("> Review it before sharing.\n\n");
-    out.push_str(&format!("- version: {}\n", env!("CARGO_PKG_VERSION")));
-    out.push_str(&format!("- run: {}\n", new_run()));
-    out.push_str(&format!("- os: {} / {}\n", std::env::consts::OS, std::env::consts::ARCH));
-    out.push_str(&format!("- exe: {exe}\n"));
-    out.push_str(&format!("- log dir: {}\n", dir.display()));
-    out.push_str(&format!("- webview2 data dir: {webview}\n"));
-    out.push_str(&format!("- MARKDOWNAURA_BROWSER_ARGS: {browser_args}\n"));
-    match previous {
-        Some(previous) => out.push_str(&format!(
-            "- previous run: unclean (run {}, started {})\n",
-            previous.run, previous.started
-        )),
-        None => out.push_str("- previous run: clean\n"),
-    }
-
-    out.push_str("\n## environment\n\n");
-    match environment_block_in(dir) {
-        Some(line) => {
-            out.push_str(&line);
-            out.push('\n');
-        }
-        None => out.push_str("no environment entry\n"),
-    }
-
-    out.push_str(&format!("\n## last {TAIL_LINES} lines\n\n```\n"));
-    for line in read_tail(&dir.join(APP_LOG), TAIL_LINES) {
-        out.push_str(&line);
-        out.push('\n');
-    }
-    out.push_str("```\n");
-    out
-}
-
-/// Writes the full report to `logs/report-<ts>.md`. Returning the path rather than revealing it
-/// keeps this module free of the window and the platform's file manager — the command's caller
-/// does the reveal (IMPL.md §13.8).
-pub fn save_report() -> io::Result<PathBuf> {
-    let dir = dir();
-    std::fs::create_dir_all(&dir)?;
-    let path = dir.join(format!("report-{}.md", file_stamp_now()));
-    std::fs::write(&path, report())?;
-    Ok(path)
 }
 
 /// The unclean run `mark_running` found at startup, if any (§13.5.4). Read from memory, not from
@@ -621,33 +550,6 @@ fn platform_default_dir() -> PathBuf {
         }
     }
     PathBuf::from("logs")
-}
-
-/// WebView2's own default is `<exe folder>\<exe name>.<ext>.WebView2`, so the file *name* is tried
-/// first and the stem second (a folder named without the `.exe` is what some hosts create); then the
-/// same two names under `%LOCALAPPDATA%`, which is where WebView2 falls back when the exe's folder is
-/// not writable. The data directory is located and recorded, never moved (IMPL.md §13.5) — this is
-/// diagnostics, not a behaviour change for existing installs. `None` is an honest "not found".
-fn webview_data_dir() -> Option<PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    let stem = exe.file_stem()?.to_string_lossy().to_string();
-    let full = exe.file_name()?.to_string_lossy().to_string();
-    let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
-    for name in [format!("{full}.WebView2"), format!("{stem}.WebView2")] {
-        if let Some(parent) = exe.parent() {
-            let beside = parent.join(&name);
-            if beside.exists() {
-                return Some(beside);
-            }
-        }
-        if let Some(local) = local.as_ref() {
-            let candidate = local.join(&name);
-            if candidate.exists() {
-                return Some(candidate);
-            }
-        }
-    }
-    None
 }
 
 // ---------------------------------------------------------------- run marker
@@ -981,41 +883,6 @@ mod tests {
         assert_eq!(read_tail(&path, 2), vec!["4", "5"]);
         assert_eq!(read_tail(&path, 50), vec!["1", "2", "3", "4", "5"]);
         assert!(read_tail(&dir.join("missing.log"), 3).is_empty());
-    }
-
-    /// The report is the artifact a reader sends, so its shape is pinned: the sharing warning, the
-    /// facts, the environment entry *even after the tail has scrolled past it*, and the tail itself.
-    #[test]
-    fn the_report_carries_the_facts_the_environment_and_the_tail() {
-        let dir = temp_dir("report");
-        let mut log = String::from(
-            "{\"ts\":\"t\",\"lvl\":\"info\",\"run\":\"aaaaaa\",\"mod\":\"env\",\"msg\":\"environment\",\"d\":{\"ua\":\"UA\"}}\n",
-        );
-        for i in 0..(TAIL_LINES + 5) {
-            log.push_str(&format!(
-                "{{\"ts\":\"t\",\"lvl\":\"info\",\"run\":\"aaaaaa\",\"mod\":\"app\",\"msg\":\"line {i}\"}}\n"
-            ));
-        }
-        std::fs::write(dir.join(APP_LOG), &log).unwrap();
-
-        let body = report_in(&dir, None);
-        assert!(body.contains("contains local paths"), "the sharing warning is missing");
-        assert!(body.contains(&format!("- log dir: {}", dir.display())));
-        assert!(body.contains("- previous run: clean"));
-        assert!(
-            body.contains("\"d\":{\"ua\":\"UA\"}"),
-            "the env entry was not scanned out of the whole file"
-        );
-        assert!(body.contains(&format!("line {}", TAIL_LINES + 4)), "the newest line is missing");
-        assert!(!body.contains("line 0\"}"), "the tail kept lines older than its window");
-
-        // The other branch: what the About row is built from when the last run never said goodbye.
-        let crashed = PreviousRun {
-            run: "abc123".to_string(),
-            started: "2026-10-06T08:00:00.000Z".to_string(),
-        };
-        let body = report_in(&dir, Some(&crashed));
-        assert!(body.contains("previous run: unclean (run abc123"), "the unclean branch is lost");
     }
 
     #[test]

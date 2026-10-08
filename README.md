@@ -8,6 +8,7 @@
 
 - Three views — preview / split / source — one click apart, with a draggable split
 - Diagrams render **locally**: mermaid, graphviz (dot) and d2 all ship inside the app — drawing a diagram needs no network, and no telemetry is collected
+- Code fences are highlighted (~50 languages), footnotes collect into one section at the end, and math typesets through KaTeX — off by default, one switch away
 - Close it and open it again: tabs, scroll positions, folder, window size and every setting come back
 
 ---
@@ -19,6 +20,9 @@ The source view opens read-only — no caret, no undo, no save, and no unsaved-c
 
 **All three diagram engines ship inside the app, so drawing a diagram needs no network. The one thing the app does fetch by itself is the update manifest at launch** — a version number and a download URL, and nothing about you (the About sheet says the same).
 `mermaid`, `dot` / `graphviz` and `d2` render locally: there is no remote service to call and no engine to install first. When an engine fails, the error lands inside the diagram card with the source line number — it never blanks the page.
+
+**The rendering details are the ones a reader expects.**
+Fenced code is highlighted per language (Prism, ~50 grammars; a language it does not have stays plain text instead of growing a warning), footnotes become one numbered section at the end with a `↩` back to every citation, and math typesets through KaTeX — `$…$`, `$$…$$`, chemistry included. Math is the one switch here: it is off by default because turning it on takes `$` away from ordinary text, and a document that talks about prices should keep talking about prices.
 
 **Big files and odd encodings do not get in the way.**
 A single file is read up to 8 MiB, and anything past that is marked "truncated" rather than quietly dropped. UTF-8, UTF-8 BOM, UTF-16LE and UTF-16BE are detected, and LF / CRLF is reported in the status bar.
@@ -48,16 +52,17 @@ The installer carries the WebView2 loader. It only fetches the WebView2 Runtime 
 | Open with | the app registers itself as the handler for Markdown files — the Windows installer and both Linux packages — so a file manager's *open with* passes the path in; a second launch hands it to the window that is already open instead of opening another |
 | Tabs | a single click in the tree opens a *preview tab* (italic), a double click pins it; `⋯` lists every tab; `ctrl W` closes one |
 | Views | preview / split / source; the splitter drags; the split panes scroll in sync, and the position is kept per tab |
+| Markdown | CommonMark plus GFM (tables, task lists, strikethrough); footnotes collect into one section at the end, each with an `↩` back to the citation; fenced code is **highlighted** with Prism (~50 languages, and a fence naming a language nothing ships stays plain text, quietly); **math** renders through KaTeX (`$…$`, `$$…$$`, chemistry included) and is a setting, off by default |
 | Editing | `ctrl E` (or the `read-only` pill) puts a caret in the source pane of that tab, per tab and never restored; in split view the preview follows what you type; `ctrl S` saves — back in the file's own encoding and line endings, atomically, with its permissions — and the status bar's `unsaved` mark is also the save button; a file that changed on disk, is read-only, has mixed line endings, or is not valid UTF-8 is refused rather than damaged. CodeMirror 6 loads on demand |
-| Diagrams | mermaid / dot / d2 cards with an engine badge, the first source line as a title and the source line number; `zoom` opens the viewer (wheel to zoom, drag to pan, copy SVG, copy source, `esc` to close) |
+| Diagrams | mermaid / dot / d2 cards with an engine badge, the first source line as a title and the source line number; the card appears where the fence is and fills in when the engine answers, and one that fails keeps its place, its badge and its anchors — the outline, the viewer's target and split-view sync still find it — losing only its `zoom` button; `zoom` opens the viewer (wheel to zoom, drag to pan, copy SVG, copy source, `esc` to close) |
 | Find | `ctrl F`, match case, a hit counter, next / previous |
 | Outline | headings (levels 1–4) and diagrams, click to jump, draggable width |
 | Reading | body size 12–22px; three reading widths (narrow 60ch / comfortable 100ch / full); light / dark / follow the system; UI language follows the system (Chinese / English); reduce motion |
 | Immersive | `F11` hides every piece of chrome; `esc` or `F11` leaves |
 | Help | `F1` — the keyboard map plus a diagram-syntax card for each engine |
-| About | version, author, licence, the three diagram engines plus the editor, each with its licence and (where the UI shows one) its size, the data folder (openable from there), the log folder with *export* and *copy*, a link to the project, and a **check for updates** row. That row also runs by itself at launch: it fetches one small manifest (a version and a download URL) and, when something is newer, the status bar grows a chip that opens this sheet — nothing about you is sent either way |
-| Settings (an overlay, not a second window) | theme / language / font size / reading width / reduce motion / default app / render-cache size and clear / log level and log directory — every row changes something |
-| Data | `%APPDATA%\MarkdownAura\session.json` on Windows, `~/.config/MarkdownAura/session.json` on Linux, written atomically (a crash cannot lose the previous session); the render cache is measured in SVG bytes and clears in one click; runtime logs are a 4 MB rolling file in `%LOCALAPPDATA%\MarkdownAura\logs` (`$XDG_STATE_HOME/MarkdownAura/logs` on Linux), with a self-contained report for every run that ends abnormally — About's *export* writes one, and the directory is configurable |
+| About | version, author, licence, the three diagram engines plus the editor, each with its licence and (where the UI shows one) its size, the data folder (openable from there), the log folder (openable from there — the files in it are the report), a link to the project, and a **check for updates** row. That row also runs by itself at launch: it fetches one small manifest (a version and a download URL) and, when something is newer, the status bar grows a chip that opens this sheet — nothing about you is sent either way |
+| Settings (an overlay, not a second window) | theme / language / font size / reading width / math / reduce motion / default app / render-cache size and clear / log level and log directory — every row changes something |
+| Data | `%APPDATA%\MarkdownAura\session.json` on Windows, `~/.config/MarkdownAura/session.json` on Linux, written atomically (a crash cannot lose the previous session); the render cache is measured in SVG bytes and clears in one click; runtime logs are a 4 MB rolling file in `%LOCALAPPDATA%\MarkdownAura\logs` (`$XDG_STATE_HOME/MarkdownAura/logs` on Linux), with a self-contained report written automatically for every run that ends abnormally, and the directory is configurable |
 
 Raw HTML: only a short fixed list of tags is allowed through (`details`, `summary`, `kbd`, `sub`, `sup`, `br`, `hr`) and everything else is dropped — what a document contains cannot touch the app's own interface.
 
@@ -99,7 +104,7 @@ All three run inside the application, so no document needs a network connection.
 - **Installer (Windows x64)**: `MarkdownAura_<version>_windows-x64-setup.exe`. The wizard shows the licence page and puts `LICENSE` and `THIRD-PARTY.md` in the install directory. This is also the update path: when a newer release exists the status bar shows a chip, and clicking it opens the About sheet, whose **check for updates** row downloads the next signed installer from the GitHub release and runs it. A portable copy that updates this way becomes a proper installation; staying portable means downloading the new zip by hand.
 - **Linux (x86-64)**: `MarkdownAura_<version>_linux-amd64.deb` installs with `sudo apt install ./MarkdownAura_<version>_linux-amd64.deb` and pulls WebKitGTK 4.1 in as a dependency; `MarkdownAura_<version>_linux-amd64.AppImage` needs nothing installed, because it carries the toolkit inside itself — which is the whole of the size difference between them. Both register the app as a handler for Markdown files. The deb is the package manager's to update; the AppImage is what the in-app updater replaces.
 - **Requirements**: Windows 10 / 11 (x64) with the WebView2 Runtime (already present on Windows 11 and on Windows 10 with Edge); Linux (x86-64), where the deb needs WebKitGTK 4.1 and the AppImage needs nothing.
-- **Sizes**: portable zip ≈ 12.3 MB; installer 12.0 MB; deb ≈ 12.8 MB; AppImage ≈ 88 MB (it bundles WebKitGTK).
+- **Sizes**: portable zip 13.3 MB; installer 13.0 MB; the two Linux packages (deb / AppImage) are staged from that platform — as of 1.2.0 they were 12.8 MB / 88 MB.
 
 ---
 

@@ -188,8 +188,6 @@ pub fn run() {
             commands::set_log_level,
             commands::set_log_dir,
             commands::diag_status,
-            commands::diag_report,
-            commands::save_diag_report,
             commands::open_log_folder,
         ])
         .build(tauri::generate_context!())

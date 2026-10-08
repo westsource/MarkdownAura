@@ -189,13 +189,16 @@ path).
 //    Widens the scope like `open_folder`: this command adopts a folder too.
 
 #[tauri::command] async fn read_file(path: PathBuf) -> Result<FilePayload>;
-#[tauri::command] async fn render_doc(app: AppHandle, path: PathBuf) -> Result<RenderedDoc>;
+#[tauri::command] async fn render_doc(app: AppHandle, path: PathBuf, math: bool) -> Result<RenderedDoc>;
 // -> rendering happens in Rust (§4); the frontend never sees raw markdown for the preview
 //    view. `encoding` is carried on the render result so the status bar can badge a lossy
 //    read without a second round trip for the same file.
 //    Widens the scope to the *document's* folder, whatever the tree shows: a document reached
 //    from the dialog, the recent list or "Open with" lives wherever it lives, and its images
 //    have to load. The app handle is what the scope and `convert_file_src` are reached through.
+//    `math` is passed per call rather than read from the stored session (SPEC §13): it is a render
+//    *input*, so the same file has two different HTML outputs and turning the setting on re-renders
+//    the open documents instead of mutating something the next render silently picks up.
 #[tauri::command] async fn reveal_in_explorer(path: PathBuf) -> Result<()>;
 // -> the write half (SPEC §12). `save_doc` takes the buffer, the encoding and the EOL the file was
 //    read in, and the mtime that load reported; it returns the *new* mtime, which becomes the next
@@ -207,7 +210,7 @@ path).
 //    `RenderedDoc` shape; `encoding` and `truncated` come back empty because a buffer is neither
 //    decoded nor cut, and the caller already holds both facts on the tab. `path` is the document
 //    the buffer belongs to: the text is unsaved, but its images are still the file's images.
-#[tauri::command] async fn render_text(app: AppHandle, text: String, path: Option<PathBuf>)
+#[tauri::command] async fn render_text(app: AppHandle, text: String, path: Option<PathBuf>, math: bool)
                                        -> Result<RenderedDoc>;
 // -> implemented for Windows (`explorer /select,<path>`) and other platforms (`xdg-open`), but
 //    nothing in the UI calls it: the tab menu that would is deferred (SPEC §5).
@@ -386,9 +389,18 @@ pulldown_cmark::Options::ENABLE_TABLES
   byte-for-byte as parsed: a `data:` URI or a remote URL is the CSP's business, not the renderer's.
 - UTF-8 that will not decode is rendered lossily and the encoding rides back on the render
   result. An unreadable file must not blank the window.
-- One `push_html` over the whole event stream, never one call per event: the writer carries
-  footnote state across events and per-event calls shred footnote sections. There is a test
-  for exactly this.
+- One `push_html` over the whole event stream, never one call per event: the writer carries state
+  (table alignment, tight/loose lists) across events and per-event calls would shred it. Footnote
+  *definitions* are the one exception, and a deliberate one: each note's buffered events go through
+  their own writer while the end section is assembled, because by then a note is a fragment with its
+  own numbering. There is a test for the section's shape.
+- **Footnotes and math are rewritten in the same walk, and both need the whole document** (SPEC §13).
+  A reference becomes a slot in the event stream (`Event::Html("")`) that is filled after the walk,
+  because a reference can appear before its definition and one with no definition has to revert to the
+  `[^id]` the author typed; the numbered section is appended as the last event. Math's
+  display-versus-inline decision is patched when the paragraph closes, since "is this formula alone in
+  its paragraph" is only knowable then. Both follow the heading-id rule: one parse produces the
+  preview *and* the data the UI needs.
 - The whole body is truncated at 8 MiB (`fs_ops::MAX_FILE_BYTES`) before parsing.
 
 Rule to carry over from the mockup: an engine failure renders **inline, in the card, with the line
@@ -441,10 +453,20 @@ either side**. This is the weakest seam in the whole architecture.
 
 - Rust unit tests in `markdown.rs` cover the allow-list, normalisation, hostile input, allowed
   tags inside paragraphs, stable heading ids/lines, diagram placeholders, the `graphviz` alias,
-  ordinary fences, frontmatter, unterminated rules, footnote state and the line index.
+  ordinary fences, frontmatter, unterminated rules, the footnote section (shape, numbering order,
+  undefined reference, unreferenced definition) and the math rules (off by default, prices stay
+  prices, display demoted inside a sentence).
 - `npm run check:rawhtml` asserts the same allow-list holds in the mockup, so the
   two renderers cannot quietly disagree.
-- `src/render/pipeline.ts` copies mockup.js's card markup verbatim; review keeps it so.
+- `src/render/pipeline.ts` copies mockup.js's card markup verbatim; review keeps it so. **One state
+  is app-only**: the mockup draws its diagrams synchronously, so it has no `diagram-pending` body
+  and no `rendering…` string. A class that exists only in the app is the one place this rule cannot
+  be honoured symmetrically — the mockup is the spec for the card, and the pending state is the
+  app's answer to "the engine has not answered yet".
+- **The card is opened before its engine answers** and its body is filled afterwards
+  (`openCard` → `showDiagram`/`showFailure`), so the head, the `zoom`/`copy` buttons and the
+  `data-diagram`/`data-source` anchors exist for the whole render, and `figure.isConnected` is what
+  tells a slow render that a newer paint owns the DOM now (SPEC §4).
 
 **The seam has bitten.** The card head holds two `<svg>` **icons** (zoom, copy), so anything that wants
 the diagram itself must select `.diagram-body svg`: a bare `querySelector("svg")` returns the first
@@ -522,6 +544,7 @@ type WindowState = {
   zoom: number;                  // 50…200, multiplied with fontSize by prose.css
   fontSize: number;              // 12…22, written to `--doc-size`
   reduceMotion: boolean;
+  math: boolean;                 // `$…$` becomes math; a render input, default false (SPEC §13)
   lang: "system" | "en" | "zh-CN";  // SPEC §10; `system` is resolved inside i18n.ts
   measure: Measure;              // reading-width preset -> `--measure` (SPEC §8)
   sidebar: { open: boolean; width: number };   // width -> `--w-sidebar`
@@ -634,6 +657,7 @@ that matters, the fix is a `getCurrentWindow().onCloseRequested()` that flushes 
   "version": 1,
   "window": { "w": 1216, "h": 809, "x": 680, "y": 116, "maximized": false },
   "theme": "system", "zoom": 100, "fontSize": 15, "reduceMotion": false,
+  "math": false,
   "lang": "system", "measure": "comfortable",
   "sidebar": { "open": true, "width": 343 }, "outlineOpen": true, "outlineWidth": 259,
   "mdOnly": true,
@@ -648,9 +672,11 @@ that matters, the fix is a `getCurrentWindow().onCloseRequested()` that flushes 
 
 - `version` is checked on load. Unknown version → ignore the file and start empty; never migrate
   destructively. Missing/unreadable/corrupt → `None`, which is not an error.
-- `fontSize`, `reduceMotion`, `lang`, `measure`, `outlineWidth` and `mdOnly` were each added after the
-  first session format; all six carry a default, so an older file still loads. Keep that
+- `fontSize`, `reduceMotion`, `math`, `lang`, `measure`, `outlineWidth` and `mdOnly` were each added
+  after the first session format; all of them carry a default, so an older file still loads. Keep that
   property on any new field — the version stays 1 and a missing field must never mean "start clean".
+  (`math` is the newest, and its default is the shipped one: a session written before the setting
+  existed must keep rendering prices as prices.)
   `mdOnly` is the one whose default is `true`, so it uses a named function rather than a bare
   `#[serde(default)]` (which would mean `false` and silently list every file in the explorer); the
   test `a_session_without_the_toggle_opens_with_it_on` is what keeps that honest, and `round_trips`
@@ -724,6 +750,17 @@ reached from the dialog, the recent list or "Open with" is not necessarily under
 
 d2 is in the installer like every other engine, which is what makes the app's "no network at
 runtime" claim unconditional. `IMPL.md` §9 carries the resulting sizes.
+
+### The two post-passes: Prism and KaTeX (SPEC §13)
+
+Neither is an engine (no card, no `EngineState`, nothing in the status bar) but both follow the same
+loading rule, and both are lazy for the same reason: a document that has neither a code fence nor a
+formula must not pay for either.
+
+| pass | package | load | notes |
+|---|---|---|---|
+| code highlighting | `prismjs` | `await import("prismjs")` then `await import("./prism-languages")` | The grammar list is **one chunk of ~50 grammars** (`src/render/prism-languages.ts`), and its import order is a dependency order: `cpp` needs `c`, `tsx` needs `jsx`+`typescript`, `git` needs `diff`, `php` needs `markup-templating`. Per-language `import()` would need either `import.meta.glob` over all 599 shipped components (599 chunks) or its own dependency table — the same list, spread out. Aliases come from `prismjs/components.js` (7.5 KB) instead of a hand-written table. `Prism.highlight(text, grammar, language)` takes the *text*: nothing here re-highlights existing DOM. A grammar that is not loaded, or a language nothing ships, leaves the fence alone. Results are memoised (`language:hash(source)`, 128 entries) because `paint()` runs on every debounced keystroke of the live preview. |
+| math | `katex` + `katex/dist/contrib/mhchem.mjs` | `await import("katex")` | `renderToString(tex, { displayMode, throwOnError: false })`, where the TeX is the span's `textContent` and `displayMode` is the class the Rust side chose. `throwOnError: false` renders a parse failure in KaTeX's own red instead of throwing, and the pass adds `.math-error` for the sheet; a failure never moves the text. mhchem is a side-effect import in one place, so `\ce{…}` works. **Its CSS is imported statically** (`katex/dist/katex.min.css`, 23 KB minified) so there is no unstyled flash when the first formula arrives — the JS, the fonts and the whole grammar chunk stay lazy. `preloadMath()` starts the import when the setting is switched on. |
 
 ## 8. Shell details
 
@@ -850,6 +887,15 @@ install-time bytes — nothing is fetched at runtime (SPEC §4). On Linux the sa
 the trade AppImage exists for (it runs on a distribution with no WebKitGTK installed); the deb depends on
 the system's copy instead.
 
+**Code highlighting and math, measured 2026-10-07 (`npm run build`).** `prism-languages` is
+`120.31 kB` raw / **`41.73 kB` gzipped**, loaded on the first code fence. The app's own entry chunk did
+not grow. KaTeX is **`260.01 kB` raw / `77.34 kB` gzipped** (a second, identically sized chunk has
+been in the graph since mermaid started using KaTeX, so the *incremental* cost is the one chunk), plus
+**19 `woff2` font files** and `23.3 kB` of CSS. The CSS is in the main stylesheet on purpose (no
+unstyled flash); the fonts are fetched by the browser only when a formula actually renders. All of it
+is install-time bytes and nothing is fetched at runtime, same as the engines. `dist/` is 20 MB after
+this change.
+
 **d2's first card is the slow one, measured 2026-10-03** on `var/typecheck/diagrams.md`: the first d2
 block reported 3837 ms (parsing the 11 MB module) and a re-render of the same document reported 19 ms.
 The document's own text is painted before any card is resolved, so the wait is one card, not the page.
@@ -858,12 +904,15 @@ status bar's `rendered in N ms` is where a reader sees it.
 
 ## 10. Testing
 
-- **Rust: 34 unit tests, in-module** (`cargo test --lib`) — `session` (round-trip, unknown
+- **Rust: 67 unit tests, in-module** (`cargo test --lib`) — `session` (round-trip, unknown
   version, corrupt file, missing file, no temp file left, recent cap/dedupe/order);
   `fs_ops` (ignore rules, BOM detection, UTF-16 byte orders, truncation at the 8 MiB cap);
   `markdown` (the allow-list, normalisation, hostile input, allowed tags in paragraphs,
   heading ids/lines, heading text with inline code, diagram placeholders, `graphviz` alias,
-  ordinary fences, frontmatter, unterminated rule, footnote state, line index); `watcher`
+  ordinary fences, frontmatter, unterminated rule, line index; and since 2026-10-07 the
+  footnote section's shape, numbering by first reference, an undefined reference, an
+  unreferenced definition, math off by default, prices staying prices, and a `$$…$$` demoted
+  inside a sentence); `watcher`
   (count skips ignored dirs, single file, missing root, a removal followed by a recreate);
   `engines` (all three bundled and always installed, no opt-in); `lib` (arg parsing, unknown
   flags ignored). An
@@ -919,6 +968,16 @@ status bar's `rendered in N ms` is where a reader sees it.
   verify chain must run in one turn.
 - The three states worth a screenshot on every change: empty state, a document with all three
   engines, and a document with a deliberately broken block.
+- **A frontend-only change can be verified without the shell** (added 2026-10-07, used for
+  SPEC §13). A throwaway page under `var/` imports the real modules through the dev server
+  (`@/render/highlight`, `@/render/math`, `@/render/pipeline`) and the real stylesheets, gets the
+  parser's actual HTML (printed from a temporary Rust test), drives the modules, and prints a JSON
+  report plus a screenshot. It caught nothing, which is the point — it confirmed what the Rust tests
+  cannot see: Prism's token classes on a real `js` fence, an unknown language left alone, KaTeX
+  rendering `\ce{}`, a bad formula keeping its place, the pending card, the derived `viewBox`, and
+  the error card keeping `data-diagram`. `var/` is gitignored, so the page is deleted with the batch;
+  the alternative (booting the Tauri shell and driving it over CDP) costs minutes per iteration and
+  cannot inspect a module in isolation.
 
 ## 11. Open items
 
@@ -934,10 +993,13 @@ status bar's `rendered in N ms` is where a reader sees it.
   keys. `role="separator"` without a keyboard path is incomplete accessibility; fixing one
   without the other would make the two handles behave differently, so fix both together.
 - **Unchanged from the original draft**, each still needing its own decision:
-  `catppuccin`-style syntax highlighting for non-diagram code fences is not designed; export
-  (SVG/PNG/PDF) is out of scope for v1 (SPEC §11); raw HTML — the allow-list is deliberately
+  export (SVG/PNG/PDF) is out of scope for v1 (SPEC §11); raw HTML — the allow-list is deliberately
   short, revisit only if real documents need a tag that is missing, and add it as an
   exact-match entry, never as a parsing rule.
+  (*Syntax* highlighting for non-diagram code fences left this list on 2026-10-07: it is now
+  designed and shipped in SPEC §13, and its Prism setup is IMPL §7. Its *theme* — what a
+  `catppuccin`-style code palette would look like as a second theme — is still undesigned; the
+  colours are the eight `--code-*` tokens, and a light/dark pair is all there is.)
 - **The editable source pane ships; this is what its control was chosen on.** SPEC §1 was rewritten for it
   on 2026-10-04 (product owner's call) — it had been a rule ("a reader, not an editor") that several
   shipped decisions were justified by: the `read-only` pill, a `<pre>` rather than a `<textarea>`, no
@@ -1222,7 +1284,7 @@ before `relaunchApp()` — a render loop must not be able to fill a disk or to s
 **3. WebView2 death.** The data directory is **not** moved (that would be a behaviour change for every
 existing install); it is *located and recorded*. Four candidates are probed in order — `<exe name>.exe.WebView2`
 and `<exe name>.WebView2` next to the executable, then the same two under `%LOCALAPPDATA%` — and the first that
-exists is written into the startup line and the report; `unknown` when none does, which is the honest answer on
+exists is written into the startup line; `unknown` when none does, which is the honest answer on
 a machine whose runtime never created one. The Crashpad minidumps live under that folder's `EBWebView\Crashpad\`
 (not confirmed on this machine: no profile directory exists beside the dev-build executable here, and the
 release never moved it). Relocation stays available behind `MARKDOWNAURA_WEBVIEW_DATA` via
@@ -1286,11 +1348,12 @@ report is much weaker without them.
 
 No new window, no new overlay — the existing sheet shell (§10) and the existing rows:
 
-- **About**: a diagnostics row next to the existing data row — the log directory with *open*, *export*
-  (written to `logs/report-<ts>.md` and revealed in the file manager, so it can be attached to an issue) and
-  *copy* (the same text to the clipboard, for pasting inline). The report is Markdown: version, run
-  id, OS/arch, user agent, install/log paths, the WebView2 data directory, and the last 200 lines. When the
-  previous run was unclean, the row says so with its run id.
+- **About**: a diagnostics row next to the existing data row — the log directory with *open*. The row
+  carried *export* (a `report-<ts>.md` written into that directory and revealed) and *copy* (the same
+  Markdown to the clipboard) until 2026-10-08, when the product owner cut both: opening the folder is
+  enough, because the files in it *are* the report, and the crash report a panic writes
+  (`crash/<ts>-<run>.md`) never went through them. When the previous run was unclean, the row says so
+  with its run id.
 - **Settings**: two diagnostics rows. *Log level* (`off` / `error` / `warn` / `info` / `debug`, persisted as
   `Session.logLevel` with `#[serde(default)]` so existing session files load unchanged and
   `SESSION_VERSION` stays 1; `MARKDOWNAURA_LOG` overrides it for a reproduction run), and *log directory*
@@ -1308,7 +1371,7 @@ compile error).
 - No IPC arguments (§13.7) — that is the one place a document could leak in by accident.
 - Front-end messages are `Error.message`, truncated to 200 characters. Diagram sources are never attached:
   mermaid's parse errors echo the offending line of the document, which may be private.
-- The report header states that it contains local paths, so a reader knows before pasting it into an issue.
+- The crash report's header states that it contains local paths, so a reader knows before attaching it.
 - Nothing leaves the machine. The CSP already forbids it (`connect-src 'self' ipc: http://ipc.localhost
   blob: data:`, `tauri.conf.json:15`), the front end makes no request of any kind, and the app's one network
   call remains the click-driven updater (§10). **Diagnostics adds no server, no endpoint, and no telemetry.**
@@ -1317,12 +1380,12 @@ compile error).
 
 | file | change | ≈ lines |
 |---|---|---|
-| `src-tauri/src/diag.rs` | new: writer, rotation, panic hook, `run.json`, report, tail, civil-time helper + tests | 260 |
+| `src-tauri/src/diag.rs` | new: writer, rotation, panic hook, `run.json`, tail, civil-time helper + tests | 260 |
 | `src-tauri/src/lib.rs` | `init`, marker lifecycle, `RunEvent` callback, three `eprintln!` sites | 25 |
-| `src-tauri/src/commands.rs` | seven new commands (`log_event`, `set_log_level`, `set_log_dir`, `diag_status`, `diag_report`, `save_diag_report`, `open_log_folder`) | 70 |
+| `src-tauri/src/commands.rs` | five new commands (`log_event`, `set_log_level`, `set_log_dir`, `diag_status`, `open_log_folder`); two more (`diag_report`, `save_diag_report`) were removed on 2026-10-08 with the About row's *export* / *copy* buttons | 60 |
 | `src-tauri/src/{watcher,session,markdown}.rs` | instrumentation | 12 |
 | `src/diag.ts` | new: handlers, queue, rate limit, environment block | 130 |
-| `src/ipc.ts` | `invoke` wrapper + seven wrappers | 40 |
+| `src/ipc.ts` | `invoke` wrapper + five wrappers (two removed on 2026-10-08, with the report commands) | 36 |
 | `src/main.ts` | `diag.install()`, two silent catches, flush before relaunch | 15 |
 | `src/ui/{about,settings}.ts`, `index.html` | the About row and the two settings rows | 75 |
 | `src/i18n.ts`, `session.rs`, `state.ts` | copy and the two new setting fields | 45 |
@@ -1341,7 +1404,7 @@ Unchanged: `tauri.conf.json` (no plugin, no CSP edit), `Cargo.toml` (no dependen
    section**: three crashes that the old build reported as nothing must each produce a readable report.
 3. **Front end.** Throw from the devtools console, reject a promise, break an engine load; confirm the lines
    carry the run id.
-4. **UI.** Copy a report, switch the level, and (with a `run.json` left behind on purpose) see the About row
+4. **UI.** Open the log folder, switch the level, and (with a `run.json` left behind on purpose) see the About row
    report the unclean exit.
 5. **Docs.** SPEC §10 (the two rows), README's data row, release notes — see §13.14.
 
@@ -1369,13 +1432,18 @@ found the two defects the unit tests could not:
    startup (§13.5.4); the seeded-marker CDP run now shows `上次运行没有正常退出（运行 deadbe）`.
 2. **The copy toast lied.** `dom.ts`'s `copyText` swallowed the clipboard promise, and About toasted
    "copied" regardless — and WebView2 *does* refuse the write (Chromium puts up a permission dialog). It now
-   returns whether the write landed, and the toast follows it.
+   returns whether the write landed, and the toast follows it. (The About row that exposed it is gone —
+   2026-10-08 — but `copyText` still backs the viewer's and the cards' copy buttons, so the fix and the
+   lesson stay.)
 
-Same run, positively: the About sheet renders the `logs` fact row with the effective path, `export`
-writes `report-<ts>.md` (header, sharing warning, `previous run: unclean (run deadbe, …)`, the `env` entry
-scanned out of the whole file, the last 200 lines) and reveals it, and the Settings level control is wired to
-both halves of the filter — with the level at `off` a `console.error` produced **no** line, and after
-switching back to `info` the same call produced exactly one.
+Same run, positively: the About sheet renders the `logs` fact row with the effective path, the Settings level
+control is wired to both halves of the filter — with the level at `off` a `console.error` produced **no** line,
+and after switching back to `info` the same call produced exactly one. That run also exported the report
+(`report-<ts>.md`: header, sharing warning, `previous run: unclean (run deadbe, …)`, the `env` entry scanned out
+of the whole file, the last 200 lines) and revealed it — **removed 2026-10-08** with the row's *export* / *copy*
+buttons (SPEC §10), along with `diag::report`/`report_in`/`save_report`, their commands, and the `report_in` test
+that pinned that shape. The folder the remaining *open* button reveals holds the same evidence: `app.log` plus
+`crash/<ts>-<run>.md` for a death.
 
 ### 13.12 Non-goals and honest limits
 
@@ -1403,10 +1471,13 @@ switching back to `info` the same call produced exactly one.
    pass**: `MARKDOWNAURA_LOG_DIR`, a `Session.logDir` setting and a directory picker in Settings. The
    override is not a nicety — it is the only zero-server way for a log from a second machine to reach the
    person who has to read it.
-3. **Clipboard *and* a saved file**: *export* writes `logs/report-<ts>.md` and reveals it (so it can be
-   dragged into an issue), *copy* puts the same text on the clipboard for pasting inline. No
-   pre-filled-issue button: it would cost a new entry in the `opener` allow-list
-   (`capabilities/default.json:24`) and cannot carry the full log through a URL.
+3. **~~Clipboard *and* a saved file.~~ Reversed 2026-10-08 (product owner): the About row's `logs` fact
+   keeps only *open*.** The original decision was *export* writing `logs/report-<ts>.md` and revealing it (so
+   it can be dragged into an issue) plus *copy* putting the same text on the clipboard for pasting inline.
+   Opening the folder is enough: the files in it are the report, and the panic hook's crash report never went
+   through either button. The reasoning about *no pre-filled-issue button* still holds for any future
+   affordance: it would cost a new entry in the `opener` allow-list (`capabilities/default.json:24`) and cannot
+   carry a log through a URL.
 
 ### 13.14 Docs
 

@@ -697,6 +697,20 @@ button.readonly-pill[aria-disabled="true"]:hover { color: var(--tx-3); border-co
 .diagram-body { padding: var(--sp-3); display: flex; justify-content: center; overflow: auto; }
 .diagram-body svg { max-width: 100%; height: auto; }
 
+/* A card is opened before its engine has answered (`render/pipeline.ts`), so the body starts in
+   this state. It reserves height so a diagram landing a moment later does not push the rest of the
+   document down; it is a floor, not a promise — the SVG's real height is unknowable until it
+   exists (marktext does not solve this either, and caching means a card the reader has seen
+   before never shows this state at all: the cached SVG is written in the same task). */
+.diagram-pending {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  font-size: var(--fs-xs);
+  color: var(--tx-3);
+}
+
 /* The viewer's stage mirrors `.diagram-body`'s sizing on purpose: d2's SVG carries no width of its own,
    so it needs a parent with a definite width or it resolves to nothing — the diagram was in the DOM at
    0×0 in the overlay while the card showed it fine, because the card's body is a block child and the

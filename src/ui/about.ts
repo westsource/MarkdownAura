@@ -18,13 +18,11 @@
  */
 import {
   dataDirectory,
-  diagReport,
   diagStatus,
   openExternal,
   openLogFolder,
   relaunchApp,
   revealInExplorer,
-  saveDiagReport,
   updateCheck,
   updateDownload,
   updateInstall,
@@ -32,7 +30,7 @@ import {
 } from "../ipc";
 import { t } from "../i18n";
 import * as diag from "../diag";
-import { $, copyText, toast } from "./dom";
+import { $, toast } from "./dom";
 import * as status from "./statusbar";
 
 /** The only external URL in the app, and the only one the capability allows. */
@@ -170,30 +168,10 @@ export function wire(): void {
   });
 
   // The log folder, not a path inside it: the sheet shows a directory and this opens that directory.
+  // Those files are the whole story a reader needs to hand over — an exported report and a clipboard
+  // summary were two more ways to reach the same bytes, and both are gone.
   $("#aboutLogOpen").addEventListener("click", () => {
     openLogFolder().catch(() => toast(t("toast.logOpenFailed"), "warn"));
-  });
-
-  // Export writes the full report, then reveals the file and says where. Revealing is best-effort:
-  // a written report is still worth the toast even if the shell cannot select it.
-  $("#aboutExportReport").addEventListener("click", () => {
-    void saveDiagReport()
-      .then(async (saved) => {
-        await revealInExplorer(saved).catch(() => {});
-        toast(t("toast.reportSaved", { path: saved }), "ok");
-      })
-      .catch(() => toast(t("toast.reportFailed"), "warn"));
-  });
-
-  $("#aboutCopySummary").addEventListener("click", () => {
-    void diagReport()
-      .then(async (report) => {
-        // The toast follows the write, not the click: WebView2 can refuse the clipboard (it asks, and a
-        // refusal is silent), and a reader who is told "copied" has to be able to paste.
-        const copied = await copyText(report);
-        toast(copied ? t("toast.reportCopied") : t("toast.reportCopyFailed"), copied ? "ok" : "warn");
-      })
-      .catch(() => toast(t("toast.reportFailed"), "warn"));
   });
 
   $("#aboutUpdateCheck").addEventListener("click", () => void runUpdateCheck());

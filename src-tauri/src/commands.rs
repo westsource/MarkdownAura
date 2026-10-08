@@ -226,21 +226,25 @@ pub async fn save_doc(
 ///
 /// `path` is the document the buffer belongs to, and it is not optional by accident: the buffer is
 /// unsaved text, but its images are still the file's images, resolved against the file's folder.
+///
+/// `math` is the reader's setting (SPEC §10), passed per call rather than stored here: the render is
+/// a pure function of its inputs, and the setting can change between two renders of one document.
 #[tauri::command]
 pub async fn render_text(
     app: AppHandle,
     text: String,
     path: Option<PathBuf>,
+    math: bool,
 ) -> Result<markdown::RenderedDoc> {
     blocking(move || {
         let doc = match (app.get_webview_window("main"), path.as_deref().and_then(Path::parent)) {
             (Some(webview), Some(dir)) => {
                 allow_folder(&app, dir);
-                markdown::render_with(&text, &image_resolver(&webview, dir))
+                markdown::render_with(&text, &image_resolver(&webview, dir), math)
             }
             // No file behind the text: nothing to resolve a relative image against, so the
             // destinations stay as they were written.
-            _ => markdown::render(&text),
+            _ => markdown::render_with(&text, &|_| None, math),
         };
         Ok(doc)
     })
@@ -253,7 +257,7 @@ pub async fn render_text(
 /// `html` dominates the response (2–3x the source size); see IMPL.md §4 "Payload" before
 /// changing this signature or reaching for the raw byte channel.
 #[tauri::command]
-pub async fn render_doc(app: AppHandle, path: PathBuf) -> Result<markdown::RenderedDoc> {
+pub async fn render_doc(app: AppHandle, path: PathBuf, math: bool) -> Result<markdown::RenderedDoc> {
     blocking(move || {
         let payload = fs_ops::read_file(&path)?;
         // The document's own folder becomes readable here, not only when a folder is opened: a
@@ -263,9 +267,9 @@ pub async fn render_doc(app: AppHandle, path: PathBuf) -> Result<markdown::Rende
             Some(webview) => {
                 let dir = path.parent().unwrap_or(Path::new(""));
                 allow_folder(&app, dir);
-                markdown::render_with(&payload.text, &image_resolver(&webview, dir))
+                markdown::render_with(&payload.text, &image_resolver(&webview, dir), math)
             }
-            None => markdown::render(&payload.text),
+            None => markdown::render_with(&payload.text, &|_| None, math),
         };
         // The decode result rides with the render so the status bar can badge a lossy read
         // without the frontend making a second trip for the same file. Truncation does too:
@@ -439,22 +443,6 @@ pub async fn set_log_dir(dir: String) -> String {
 #[tauri::command]
 pub async fn diag_status() -> Result<crate::diag::DiagStatus> {
     blocking(|| Ok(crate::diag::status())).await
-}
-
-#[tauri::command]
-pub async fn diag_report() -> Result<String> {
-    blocking(|| Ok(crate::diag::report())).await
-}
-
-#[tauri::command]
-pub async fn save_diag_report() -> Result<String> {
-    blocking(|| {
-        let dir = crate::diag::dir();
-        crate::diag::save_report()
-            .map(|path| path.display().to_string())
-            .map_err(|err| ApiError::io(&dir, err))
-    })
-    .await
 }
 
 /// Opens the log directory itself. `reveal_in_explorer` selects a file, and there is no file to

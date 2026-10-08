@@ -64,9 +64,11 @@
 .prose li { margin-block: 2px; }
 .prose li::marker { color: var(--tx-2); }
 .prose li > ul, .prose li > ol { margin-block: 2px; }
-/* GFM task lists */
-.prose li.task { list-style: none; margin-left: -18px; }
-.prose li.task input { margin-right: 7px; accent-color: var(--ac); pointer-events: none; }
+/* GFM task lists. The item carries no class of its own — `pulldown-cmark` emits a bare `<li>` with
+   a disabled `<input>` in it — so the check is structural. This rule used to read `li.task`, which
+   matched nothing the renderer has ever produced: the checkbox kept its bullet marker. */
+.prose li:has(> input[type="checkbox"]) { list-style: none; margin-left: -18px; }
+.prose li > input[type="checkbox"] { margin-right: 7px; accent-color: var(--ac); pointer-events: none; }
 
 .prose blockquote {
   margin-block: 0 var(--sp-3);
@@ -102,13 +104,44 @@
   padding: 0;
   font-size: .833em;   /* 12.5px at the default base; inline code is .88em */
   line-height: 1.65;
-  color: var(--tx);
+  color: var(--code-tx);
 }
+
+/* Prism's token classes (SPEC §13). `render/highlight.ts` writes them; the colours are the eight
+   code tokens in tokens.css, so a theme switch re-tunes the code block with everything else. An
+   unknown language is never highlighted, so a fence with no grammar simply has no `.token` spans. */
+.prose .token.comment, .prose .token.prolog, .prose .token.doctype, .prose .token.cdata { color: var(--code-cmt); font-style: italic; }
+.prose .token.string, .prose .token.char, .prose .token.attr-value,
+.prose .token.selector, .prose .token.inserted { color: var(--code-str); }
+.prose .token.keyword { color: var(--code-kw); }
+.prose .token.number, .prose .token.boolean, .prose .token.constant,
+.prose .token.symbol, .prose .token.regex { color: var(--code-num); }
+.prose .token.function, .prose .token.class-name, .prose .token.atrule { color: var(--code-fn); }
+.prose .token.tag, .prose .token.property, .prose .token.builtin,
+.prose .token.attr-name, .prose .token.deleted { color: var(--code-type); }
+.prose .token.punctuation { color: var(--code-punct); }
+.prose .token.operator, .prose .token.entity, .prose .token.url,
+.prose .token.variable, .prose .token.namespace { color: var(--code-op); }
+
+/* ---------- math (SPEC §13) ---------- */
+
+/* KaTeX fills the spans `pulldown-cmark` emits; these two rules only place them. `math-display` is
+   a block of its own — the Rust side demotes a `$$…$$` that shares its paragraph with text, so a
+   centred formula never lands in the middle of a sentence. */
+.prose .math-display { display: block; margin-block: var(--sp-3); overflow-x: auto; }
+.prose .math-display > .katex-display { margin: 0; }
+.prose .math-error .katex-error { color: var(--err); }
 
 /* ---------- tables ---------- */
 
 .prose table {
-  width: 100%;
+  /* `max-content` + `max-width`, not `width: 100%`: the element is `display: block` so the grid
+     inside it is an anonymous table box, and `width: 100%` never reaches that box — measured, a
+     two-column table's grid stayed 67px wide inside a 700px element while its `scrollWidth` was
+     700. `max-content` states what actually happens (the grid hugs its content, and a wide one
+     scrolls) and keeps the zebra stripes and header tint the width of the grid. */
+  width: max-content;
+  max-width: 100%;
   margin-block: 0 var(--sp-3);
   border-collapse: collapse;
   font-size: .9em;   /* 13.5px at the default base */
@@ -149,8 +182,22 @@
 
 /* ---------- footnotes ---------- */
 
+/* The reference in the text, and the section every note is collected into at the end of the
+   document (`markdown.rs`; the shape GFM and pandoc agree on). The selector used to be
+   `.prose .footnotes`, which existed here long before anything produced that class — the notes
+   rendered inline, unstyled, with no way back. */
 .prose sup a { text-decoration: none; padding: 0 1px; }
-.prose .footnotes { margin-top: var(--sp-6); padding-top: var(--sp-3); border-top: 0.5px solid var(--line); font-size: .87em; color: var(--tx-2); }   /* 13px at the default base */
+.prose .footnotes {
+  margin-top: var(--sp-6);
+  padding-top: var(--sp-3);
+  border-top: 0.5px solid var(--line);
+  font-size: .87em;   /* 13px at the default base */
+  color: var(--tx-2);
+}
+.prose .footnotes ol { padding-left: 20px; }
+.prose .footnotes li { margin-block: 4px; }
+.prose .footnotes li > :last-child { margin-bottom: 0; }
+.prose .footnote-backref { text-decoration: none; }
 
 /* ---------- allow-listed raw HTML ----------
    Only the tags on IMPL §4's allow-list can reach here; everything else a source document

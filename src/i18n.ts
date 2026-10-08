@@ -80,6 +80,9 @@ const en = {
   "viewer.hints": "scroll to zoom · drag to pan · esc to close",
   "viewer.noOutput": "this diagram has no rendered output yet",
 
+  // ---- diagram cards ----
+  "diagram.loading": "rendering…",
+
   // ---- overlays ----
   "settings.title": "settings",
   "settings.closeTitle": "close (esc)",
@@ -94,7 +97,7 @@ const en = {
   "about.title": "about",
   "about.closeTitle": "close (esc)",
   "about.close": "close about",
-  "about.intro": "A fast, minimal Markdown reader: typesetting and diagrams are produced on this machine, and nothing about you is sent anywhere. The only request it makes on its own is the update manifest — a version number and a download URL. Capabilities: preview · split · source　edit in place on request, saved with the file's own encoding and line endings　mermaid · dot · d2 rendered locally　width presets · font size · zoom　outline · find · immersive reading　session restore · live reload　bilingual · light and dark",
+  "about.intro": "A fast, minimal Markdown reader: typesetting and diagrams are produced on this machine, and nothing about you is sent anywhere. The only request it makes on its own is the update manifest — a version number and a download URL. Capabilities: preview · split · source　edit in place on request, saved with the file's own encoding and line endings　mermaid · dot · d2 · math · code colouring rendered locally　width presets · font size · zoom　outline · find · immersive reading　session restore · live reload　bilingual · light and dark",
   "about.k.author": "author",
   // The author's name as he writes it — deliberately not transliterated.
   "about.author": "道荣（黄超）",
@@ -117,8 +120,6 @@ const en = {
   "about.notices": "shipped with the app: LICENSE · THIRD-PARTY.md",
   "about.k.logs": "logs",
   "about.openLogs": "open",
-  "about.exportReport": "export",
-  "about.copySummary": "copy",
   // "logs" is the effective directory; the unclean one names the run that died so a report can be matched to it.
   "about.unclean": "the previous run did not shut down cleanly (run {run})",
 
@@ -168,10 +169,6 @@ const en = {
   "toast.noRecent": "no recent files yet",
   "toast.noTabs": "no tabs open",
   "toast.cacheCleared": "render cache cleared",
-  "toast.reportSaved": "report saved to {path}",
-  "toast.reportCopied": "report copied to clipboard",
-  "toast.reportCopyFailed": "could not copy — use export instead",
-  "toast.reportFailed": "could not write the report",
   "toast.logOpenFailed": "could not open the log folder",
   "toast.logDirChanged": "logs now go to {path}",
   "toast.logDirFailed": "could not change the log directory",
@@ -234,6 +231,8 @@ const en = {
   "settings.larger": "larger",
   "settings.reduceMotion": "reduce motion",
   "settings.reduceMotionSub": "also respects the OS setting",
+  "settings.math": "math",
+  "settings.mathSub": "renders $…$ and $$…$$ · off by default, so prices stay prices",
   "settings.language": "language",
   "settings.languageSub": "applies immediately, persisted with the session",
   "settings.cacheSvg": "rendered svg",
@@ -347,6 +346,9 @@ const zh: Record<Key, string> = {
   "viewer.hints": "滚轮缩放 · 拖拽平移 · esc 关闭",
   "viewer.noOutput": "该图表尚未渲染出结果",
 
+  // ---- diagram cards ----
+  "diagram.loading": "渲染中…",
+
   "settings.title": "设置",
   "settings.closeTitle": "关闭 (esc)",
   "settings.close": "关闭设置",
@@ -359,7 +361,7 @@ const zh: Record<Key, string> = {
   "about.title": "关于",
   "about.closeTitle": "关闭 (esc)",
   "about.close": "关闭关于",
-  "about.intro": "极速极简的 Markdown 阅读器：排版和图表都在本机完成，不向任何地方发送关于你的信息。它唯一会自行发起的请求是更新清单——一个版本号与一个下载地址。能力：预览 · 分栏 · 源码　按需就地编辑 · 按原编码与行尾写回　mermaid · dot · d2 本地渲染　行宽档位 · 字号 · 缩放　大纲 · 查找 · 沉浸阅读　会话恢复 · 变更自动刷新　中英双语 · 深浅主题",
+  "about.intro": "极速极简的 Markdown 阅读器：排版和图表都在本机完成，不向任何地方发送关于你的信息。它唯一会自行发起的请求是更新清单——一个版本号与一个下载地址。能力：预览 · 分栏 · 源码　按需就地编辑 · 按原编码与行尾写回　mermaid · dot · d2 · 数学 · 代码着色 本地渲染　行宽档位 · 字号 · 缩放　大纲 · 查找 · 沉浸阅读　会话恢复 · 变更自动刷新　中英双语 · 深浅主题",
   "about.k.author": "作者",
   "about.author": "道荣（黄超）",
   "about.k.engines": "引擎",
@@ -381,8 +383,6 @@ const zh: Record<Key, string> = {
   "about.notices": "随程序分发：LICENSE · THIRD-PARTY.md",
   "about.k.logs": "日志",
   "about.openLogs": "打开",
-  "about.exportReport": "导出",
-  "about.copySummary": "复制",
   "about.unclean": "上次运行没有正常退出（运行 {run}）",
 
   "outline.label": "大纲",
@@ -425,10 +425,6 @@ const zh: Record<Key, string> = {
   "toast.noRecent": "暂无最近文件",
   "toast.noTabs": "没有打开的标签页",
   "toast.cacheCleared": "渲染缓存已清空",
-  "toast.reportSaved": "报告已保存到 {path}",
-  "toast.reportCopied": "报告已复制到剪贴板",
-  "toast.reportCopyFailed": "复制失败——请改用「导出」",
-  "toast.reportFailed": "无法写入报告",
   "toast.logOpenFailed": "无法打开日志文件夹",
   "toast.logDirChanged": "日志现在写入 {path}",
   "toast.logDirFailed": "无法更改日志目录",
@@ -488,6 +484,8 @@ const zh: Record<Key, string> = {
   "settings.larger": "增大",
   "settings.reduceMotion": "减少动效",
   "settings.reduceMotionSub": "同时遵循系统设置",
+  "settings.math": "数学公式",
+  "settings.mathSub": "渲染 $…$ 与 $$…$$ · 默认关闭，价格数字不会被当成公式",
   "settings.language": "语言",
   "settings.languageSub": "立即生效，随会话保存",
   "settings.cacheSvg": "已渲染 SVG",

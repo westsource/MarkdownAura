@@ -22,7 +22,7 @@ const entries = new Map<string, Entry>();
 let totalBytes = 0;
 
 export function cacheKey(engine: EngineId, source: string): string {
-  return `${engine}:${fnv1a(source)}`;
+  return `${engine}:${hash(source)}`;
 }
 
 export function get(key: string): string | undefined {
@@ -62,12 +62,16 @@ export function stats(): { entries: number; bytes: number } {
   return { entries: entries.size, bytes: totalBytes };
 }
 
-/** FNV-1a. Not cryptographic — it only has to make two different sources collide rarely. */
-function fnv1a(input: string): string {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < input.length; i++) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
+/** FNV-1a. Not cryptographic — it only has to make two different sources collide rarely.
+ *
+ *  Exported because it is the same fingerprint question in two places: this cache, and the code
+ *  highlighter's memo (`render/highlight.ts`). Two hash functions would be two things to keep right.
+ */
+export function hash(source: string): string {
+  let fingerprint = 0x811c9dc5;
+  for (let i = 0; i < source.length; i++) {
+    fingerprint ^= source.charCodeAt(i);
+    fingerprint = Math.imul(fingerprint, 0x01000193);
   }
-  return (hash >>> 0).toString(36);
+  return (fingerprint >>> 0).toString(36);
 }

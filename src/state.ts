@@ -56,6 +56,9 @@ export interface WindowState {
   /** Reading size in px, written to `--doc-size`. Multiplies with `zoom`, never overrides it. */
   fontSize: number;
   reduceMotion: boolean;
+  /** Render `$…$` / `$$…$$` as math, off by default (SPEC §13). It is a render *input*, not a CSS
+   *  switch: turning it on changes the HTML, so `main.ts` re-renders the open documents. */
+  math: boolean;
   /** UI language; `system` resolves against the OS and is persisted as-is. */
   lang: Lang;
   /** Reading-width preset, written to `--measure` (SPEC §8). */
@@ -120,6 +123,7 @@ export const state: WindowState = {
   zoom: 100,
   fontSize: 15,
   reduceMotion: false,
+  math: false,
   lang: "system",
   measure: DEFAULT_MEASURE,
   sidebar: { open: true, width: 224 },
@@ -196,6 +200,7 @@ export function toSession(windowRect: WindowRect): Session {
     zoom: state.zoom,
     fontSize: state.fontSize,
     reduceMotion: state.reduceMotion,
+    math: state.math,
     lang: state.lang,
     measure: state.measure,
     sidebar: { open: state.sidebar.open, width: state.sidebar.width },
@@ -218,6 +223,8 @@ export function applySession(session: Session): void {
   state.zoom = session.zoom;
   state.fontSize = session.fontSize ?? 15;
   state.reduceMotion = session.reduceMotion ?? false;
+  // Off for a session written before the setting existed, which is also the shipped default.
+  state.math = session.math ?? false;
   state.lang = session.lang ?? "system";
   // A hand-edited or older session may name a preset that no longer exists; fall back rather than
   // writing an invalid value into the token.

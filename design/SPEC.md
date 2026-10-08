@@ -325,6 +325,24 @@ write it as often, and the badge should name the engine either way.
 - **Failures render inline** as a red band with the line number and the offending engine
   message. A broken block must never blank the page or throw away the rest of the
   document. This is the one rule that must not regress.
+- **A card keeps its identity whatever happens to it** (amended 2026-10-07). `data-diagram` and
+  `data-source` survive a failed render, because they are the only anchors the outline, the viewer
+  and split-view scroll sync have: an error card without them is a card nothing can jump to, open or
+  follow. Its head stays too — the engine badge, the caption and `[copy]` still work; only `[zoom]`
+  goes, since there is nothing to show. Before this, a document whose only diagram failed lost that
+  diagram from all three affordances at once.
+- **A card is opened before its engine answers**, with `rendering…` in the body and a `120px` floor
+  under it, so the head is visible immediately and the rest of the page is moved once rather than
+  twice. A card served from the render cache never shows this state: the cached SVG is written in
+  the same task. The floor is a floor, not a promise — an SVG's real height is unknowable until it
+  exists, and `marktext` does not solve this either.
+- **An SVG that has pixels and no `viewBox` gets one** (`0 0 w h`) before it is inserted. Without it
+  `max-width: 100%` shrinks the element but not its contents: a 900×120 SVG inside a 698px body
+  measured 674 wide with its inner `<rect>` still 900 — clipped, not scaled. Measured in a browser,
+  not assumed.
+- **A rendered card is an image to assistive tech**: `role="img"` and an `aria-label` taken from the
+  SVG's own `aria-label`, else its `<title>`/`<desc>`, else the card's caption. The boilerplate
+  description Raphael-based renderers stamp on every diagram is ignored.
 - Viewer overlay: `− / % / +` zoom (the `%` resets to 100% and re-centres), wheel zoom,
   drag to pan, `copy svg`, `copy source`, `esc` to close. The SVG is **cloned from the
   card**, never re-rendered — re-rendering a large graph to open a viewer would be a
@@ -581,7 +599,8 @@ See `tokens.css` for the complete palette — it is the only place colours may b
 | `IMPL.md` | the build contract: repo layout, IPC surface, state shape, persistence, engine packaging |
 
 `prose.css` is kept separate because it is the one stylesheet that styles rendered content, and
-it is scoped under `.prose` so it cannot reach the chrome.
+it is scoped under `.prose` so it cannot reach the chrome. What it styles beyond CommonMark — code
+highlighting, math, the footnote section — is §13.
 
 Raw HTML in a source document is **not** passed through. Only a short exact-match allow-list
 survives, and the tags on it — `<details>`, `<summary>`, `<kbd>`, `<sub>`, `<sup>`, `<br>`,
@@ -633,8 +652,15 @@ which carry colour because they carry identity.
 | brand line | logo · `MarkdownAura` · the version (mono) · `MIT` · `github.com/westsource/MarkdownAura ↗`, set off by a hairline. The version is `__APP_VERSION__`, injected at build time from `package.json`, and written every time the sheet opens — never a literal in the markup: one lived there and showed `0.1.0` through two releases to anyone reading the unopened DOM |
 | update | its own area below the facts block, after a hairline, and nothing else: `check for updates` (ghost) → `v1.2.0 is available` + `download and install` (primary), with the state beside the button. The note that used to sit under it — claiming this was the app's only network call — is gone: the launch check exists now, so that sentence stopped being true |
 | what it is | **one** paragraph: what the app is, then the seven capabilities after a `capabilities:` lead-in, the editing one directly after the views because it is the thing this release changed — same size, same colour, no separate block |
-| facts | hanging labels (`author` / `engines` / `editor` / `data` / `logs`): 道荣（黄超） · the three engine badges with their licence (and a version where the UI shows one) · the editor badge with CodeMirror's licence and its measured size, loaded on demand · the data path in mono with an `open` button · the log directory in mono with `open` / `export` / `copy`, and — only when the previous run did not exit cleanly — a line naming its run id |
+| facts | hanging labels (`author` / `engines` / `editor` / `data` / `logs`): 道荣（黄超） · the three engine badges with their licence (and a version where the UI shows one) · the editor badge with CodeMirror's licence and its measured size, loaded on demand · the data path in mono with an `open` button · the log directory in mono with an `open` button, and — only when the previous run did not exit cleanly — a line naming its run id |
 | foot | `LICENSE · THIRD-PARTY.md` (both ship next to the executable) |
+
+**v1 status — the logs row has one button (amended 2026-10-08, product owner's call).** The row
+carried `open` / `export` / `copy`: export wrote a `report-<ts>.md` into the log directory and
+revealed it, copy put the same Markdown on the clipboard. Opening the folder is enough — the files
+there *are* the report, and the crash report a panic writes (`crash/<ts>-<run>.md`, IMPL.md §13.5)
+never went through those two buttons. Both buttons and everything behind them are gone; the row is
+the path in mono plus `open`. Deviates from the target text above only in that sentence.
 
 Decisions inside that shape, each of which was made deliberately:
 
@@ -695,7 +721,7 @@ health dots in the status bar, and §4 here — and the debounce keeps its one h
 
 | section | rows (shipped) |
 |---|---|
-| reading | theme (`system` / `light` / `dark`, segmented), language (`system` / `English` / `简体中文`, segmented), document font size (stepper, 12–22px, the `--doc-size` token), reading width (3 presets — 60ch / 100ch / full, the `--measure` token), reduce motion |
+| reading | theme (`system` / `light` / `dark`, segmented), language (`system` / `English` / `简体中文`, segmented), document font size (stepper, 12–22px, the `--doc-size` token), reading width (3 presets — 60ch / 100ch / full, the `--measure` token), math (a switch, **off** by default — it changes the HTML, so flipping it re-renders the open documents; §13), reduce motion |
 | files | default app — a read-out of what opens `.md` now, plus the one action this platform allows: `xdg-mime` on Linux, and on Windows the *Open with* dialog (or the Default Apps page when no document is open), because the choice is the user's and no process may set it |
 | cache | rendered-SVG size + clear (the in-memory cap is 6 MB, `IMPL.md` §5) |
 | diagnostics | log level (`off` / `error` / `warn` / `info` / `debug`, default `info`) and the log directory with a `change…` picker and a `reset` to the platform default — the row that lets the logs live somewhere a second machine can reach; what the log is for is `IMPL.md` §13 |
@@ -819,8 +845,10 @@ Tab-related deferrals are not here — they live in §5, already designed and wa
   decided (§10) as an overlay rather than a window; the folder case is still open.
 - PDF / image export of a rendered document
 - Windows high-contrast and forced-colors modes
-- Syntax highlighting for ordinary (non-diagram) code fences. The source view's 5-role
-  highlighting (§9) covers the source pane; a rendered code block is monochrome today.
+
+> Amended 2026-10-07: **syntax highlighting for rendered code fences** was on this list and is now
+> designed and shipped — see §13, which also covers math and footnotes. Nothing else on the list
+> changed.
 
 ## 12. Editing
 
@@ -972,3 +1000,74 @@ This is where the work is; the control itself is the easy part.
   there was no pointer path into it at all. And a toolbar-style control must not take focus on click
   (`mousedown` → `preventDefault`): the browser focuses the clicked button after the handler runs, which
   left the caret unfocused and the next keystrokes going nowhere.
+
+
+## 13. Rendered markdown beyond CommonMark
+
+Amended 2026-10-07 (product owner's call). This section is the one §11 pointed at: three
+things a reader sees in the preview that CommonMark and GFM do not give us, plus the rule
+that decides how a `$` is read. All three were checked against `marktext`'s implementation
+before being designed — the reasons below are mostly its reasons.
+
+### Code fences are highlighted — on, with no switch
+
+Prism, loaded per document rather than at boot: the core `7.3 KB` plus a curated set of
+grammars in one lazy chunk (measured: `120.31 kB` raw, `41.73 kB` gzipped). A document with
+no fenced code never loads it.
+
+- **An unknown language is not an error.** ```` ```foo ```` stays plain monospace text — no
+  badge, no message, nothing in the status bar. A fence that is never highlighted is still a
+  fence a reader can read, and a renderer that complains about a language it does not have is
+  a renderer that complains about the reader's document.
+- **The colours are the eight `--code-*` tokens**, not a Prism theme file. A code palette is
+  its own system of colours that must work together inside a tinted block, which is exactly
+  why it lives beside the rest of the palette in `tokens.css` instead of in a stylesheet the
+  theme cannot reach.
+- This was listed in §11 as "not designed". It is on by default because the alternative — a
+  monochrome block next to a coloured source pane in split view — reads as a bug.
+
+### Footnotes collect into one section at the end
+
+`text[^1]` becomes a numbered reference in place; every note becomes a `<li>` in one
+`<section class="footnotes">` after the document, each with an `↩` link back to the reference
+that cited it. Numbering follows the **first reference**, not the definition order, and a note
+cited twice gets a link back from each citation (`↩`, `↩2`).
+
+Two consequences worth stating because they decide what a reader sees:
+
+- A reference with **no definition** goes back to the literal `[^1]` the author typed. A dead
+  link is worse than visible source text.
+- A definition **nothing refers to** is not printed. That is what pandoc and GFM do, and it is
+  the only way "collect the notes at the end" can be true.
+- A reference inside a note body does not resolve: pandoc has no nested notes.
+
+`prose.css` carried a `.footnotes` rule for a long time while nothing produced that class — the
+notes rendered where they were written, unstyled, with no way back. The section shape is why
+the rule finally matches something.
+
+### Math is a setting, off by default
+
+`$…$` and `$$…$$` render through KaTeX (with `mhchem`, so `\ce{…}` works). The setting exists
+because turning it on **takes `$` away from ordinary text**: `Revenue rose from $13B to $24B.`
+must stay a sentence about money, and that sentence is the reason a reader would otherwise
+find their document rewritten by a setting they never asked for. `pulldown-cmark` already
+refuses the two adjacent-`$` forms that produce the classic false positives; it is the
+remaining freedom that the switch is for.
+
+- **`$$` is display math only when it has its paragraph to itself.** `text $$a=1$$ text` renders
+  inline instead: `.katex-display` is a centred block, and a centred block in the middle of a
+  sentence breaks the paragraph around it (pandoc's rule; `marktext` demotes the same way). The
+  decision is made in Rust, where the paragraph's other events are visible.
+- **A formula that fails to parse keeps its place**: the source stays on the line with KaTeX's
+  own error marker and the reason in `title`. Replacing an inline formula with a block-level
+  error card would break the line it sits in.
+- **Turning the setting on re-renders the open documents**, because the setting is a render
+  input, not a style: the same file genuinely has two different HTML outputs. KaTeX's import is
+  started when the setting goes on, so the first formula does not pay for it. Off by default
+  also means most sessions never load its ~260 KB of JS, its CSS or its fonts.
+
+**The mockup carries none of this.** `mockup.js` renders markdown with a stand-in renderer that
+fakes its diagrams and has no code colouring, no math and no note section, so `mockup.html` is not
+where these three are reviewed — §13 is. The card is the exception: the pending body is the one card
+state the mockup has no markup for (it draws its diagrams synchronously), and `IMPL.md` §4 says so
+where it says the class names match in three places.

@@ -81,6 +81,11 @@ pub struct Session {
     pub font_size: f64,
     #[serde(default)]
     pub reduce_motion: bool,
+    /// `$…$` / `$$…$$` are rendered as math (SPEC §10). Off by default and defaulted here for the
+    /// same reason as `log_level`: enabling it takes `$` away from ordinary text, so a session file
+    /// written before the setting existed must keep rendering prices as prices.
+    #[serde(default)]
+    pub math: bool,
     /// UI language: `system`, `en` or `zh-CN` (SPEC §10). Defaulted so session files written
     /// before i18n existed still load; the frontend resolves `system` itself.
     #[serde(default = "default_lang")]
@@ -155,6 +160,7 @@ impl Default for Session {
             zoom: 100.0,
             font_size: default_font_size(),
             reduce_motion: false,
+            math: false,
             lang: default_lang(),
             measure: default_measure(),
             log_level: default_log_level(),
@@ -250,6 +256,7 @@ mod tests {
         // Away from the default, so a field the round trip quietly drops fails this test. `true` would
         // compare equal to the default and hide exactly that bug.
         session.md_only = false;
+        session.math = true;
         session.log_level = "debug".into();
         session.log_dir = "E:\\logs".into();
         session.tabs.push(TabState {

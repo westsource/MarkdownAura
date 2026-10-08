@@ -4,7 +4,8 @@
 //!
 //! 1. **One parse produces everything.** The outline and the preview must never disagree, so
 //!    headings and diagram blocks fall out of the same walk that produces the HTML. Do not
-//!    "optimise" this into two parses.
+//!    "optimise" this into two parses. Footnotes and math are the same story: a reference becomes a
+//!    numbered end-note section, and a `$$…$$` inside a sentence becomes inline math (SPEC §13).
 //! 2. **Raw HTML is an exact-match allow-list, not a sanitiser.** A tag on the list is emitted
 //!    in its canonical form; any other tag is dropped whole. There is no attribute stripping,
 //!    no entity decoding, no partial rewriting — those are where the bugs live, and not
@@ -13,6 +14,7 @@
 //! The HTML *shape* is a contract shared with `design/prose.css` and `design/components.css`,
 //! and no compiler checks it. The tests at the bottom of this module are the guard.
 
+use std::collections::HashMap;
 use std::ops::Range;
 
 use pulldown_cmark::{html, CodeBlockKind, CowStr, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
@@ -93,11 +95,21 @@ fn canonical_tag(raw: &str) -> Option<&'static str> {
 /// mapping.
 pub type ImageResolver<'a> = &'a dyn Fn(&str) -> Option<String>;
 
-fn options() -> Options {
-    Options::ENABLE_TABLES
+/// The parse options.
+///
+/// `math` is the one option that is not always on, and it is off by default on purpose: enabling it
+/// takes `$` away from ordinary text, so a document that quotes prices renders differently. It is a
+/// setting (SPEC §10), not a constant.
+fn options(math: bool) -> Options {
+    let base = Options::ENABLE_TABLES
         | Options::ENABLE_TASKLISTS
         | Options::ENABLE_FOOTNOTES
-        | Options::ENABLE_STRIKETHROUGH
+        | Options::ENABLE_STRIKETHROUGH;
+    if math {
+        base | Options::ENABLE_MATH
+    } else {
+        base
+    }
 }
 
 fn heading_level_u8(level: HeadingLevel) -> u8 {
@@ -219,16 +231,160 @@ fn split_frontmatter(src: &str) -> (Vec<FrontmatterField>, usize) {
     (Vec::new(), 0)
 }
 
-/// Renders without touching image destinations — the shape every caller with no file behind the
-/// text wants: the tests below, and a buffer whose tab has no path.
+/// Footnote bookkeeping, and the two rewrites that go with it (SPEC §13).
+///
+/// A definition is never emitted where the author wrote it: its events are buffered and rendered
+/// into one `<section class="footnotes">` at the end of the document, because that is where a
+/// reader looks for a note and where GFM/pandoc put it. Two things are only knowable once the whole
+/// document has been read, which is why references are emitted as empty slots that `finish` fills:
+///
+/// * a reference can appear **before** its definition, so the numbers cannot be assigned while
+///   walking (numbering follows first reference, as pandoc and GFM do);
+/// * a reference with no definition must go back to the literal `[^id]` the author typed, and a
+///   definition nothing refers to is dropped rather than printed.
+#[derive(Default)]
+struct Footnotes<'a> {
+    /// The label of the definition being buffered.
+    label: Option<String>,
+    /// Its events, while it is being read.
+    body: Option<Vec<Event<'a>>>,
+    /// Every definition, in source order.
+    definitions: Vec<(String, Vec<Event<'a>>)>,
+    /// (label, index into the emitted events) for each reference, in document order.
+    slots: Vec<(String, usize)>,
+}
+
+impl<'a> Footnotes<'a> {
+    fn is_buffering(&self) -> bool {
+        self.body.is_some()
+    }
+
+    fn open_definition(&mut self, label: String) {
+        self.label = Some(label);
+        self.body = Some(Vec::new());
+    }
+
+    fn push_body(&mut self, event: Event<'a>) {
+        if let Some(body) = self.body.as_mut() {
+            body.push(event);
+        }
+    }
+
+    fn close_definition(&mut self) {
+        if let (Some(label), Some(body)) = (self.label.take(), self.body.take()) {
+            self.definitions.push((label, body));
+        }
+    }
+
+    fn reference(&mut self, label: &str, out: &mut Vec<Event<'a>>) {
+        self.slots.push((label.to_string(), out.len()));
+        // A slot, not the final markup: its content depends on facts that arrive later.
+        out.push(Event::Html(CowStr::from("")));
+    }
+
+    fn defines(&self, label: &str) -> bool {
+        self.definitions.iter().any(|(name, _)| name == label)
+    }
+
+    /// Fills every reference slot and returns the end section (empty when there is nothing to show).
+    fn finish(self, out: &mut Vec<Event<'a>>) -> String {
+        let mut numbers: HashMap<String, usize> = HashMap::new();
+        for (label, _) in &self.slots {
+            if !numbers.contains_key(label) && self.defines(label) {
+                let next = numbers.len() + 1;
+                numbers.insert(label.clone(), next);
+            }
+        }
+        if numbers.is_empty() {
+            return String::new();
+        }
+
+        let mut seen: HashMap<String, usize> = HashMap::new();
+        for (label, index) in &self.slots {
+            let Some(&number) = numbers.get(label) else {
+                // No definition: hand the author's text back rather than a dead link.
+                out[*index] = Event::Text(CowStr::from(format!("[^{label}]")));
+                continue;
+            };
+            let occurrence = seen.entry(label.clone()).or_insert(0);
+            *occurrence += 1;
+            let anchor = reference_anchor(number, *occurrence);
+            out[*index] = Event::Html(CowStr::from(format!(
+                "<sup class=\"footnote-ref\"><a href=\"#fn-{number}\" id=\"{anchor}\">{number}</a></sup>"
+            )));
+        }
+
+        let mut ordered: Vec<(&String, usize)> = numbers.iter().map(|(l, n)| (l, *n)).collect();
+        ordered.sort_by_key(|(_, number)| *number);
+
+        let mut items = String::new();
+        for (label, number) in ordered {
+            let Some((_, events)) = self.definitions.iter().find(|(name, _)| name == label) else {
+                continue;
+            };
+            let mut body = String::new();
+            html::push_html(&mut body, events.iter().cloned());
+            let references = *seen.get(label).unwrap_or(&1);
+            items.push_str(&format!(
+                "<li id=\"fn-{number}\">{}</li>\n",
+                with_backrefs(&body, number, references)
+            ));
+        }
+
+        format!("\n<section class=\"footnotes\">\n<ol>\n{items}</ol>\n</section>\n")
+    }
+}
+
+/// `fnref-1`, then `fnref-1-2` … : an `id` has to be unique, and a note referenced twice needs a
+/// way back to *each* reference (GFM numbers them the same way).
+fn reference_anchor(number: usize, occurrence: usize) -> String {
+    if occurrence == 1 {
+        format!("fnref-{number}")
+    } else {
+        format!("fnref-{number}-{occurrence}")
+    }
+}
+
+/// Appends one `↩` per reference, inside the note's last paragraph so the arrows sit next to the
+/// last word — the shape pandoc produces. A note that does not end in a paragraph (rare: one ending
+/// in a list) gets them after the block instead.
+fn with_backrefs(html: &str, number: usize, references: usize) -> String {
+    let mut backrefs = String::new();
+    for occurrence in 1..=references {
+        let anchor = reference_anchor(number, occurrence);
+        let label = if occurrence == 1 {
+            "↩".to_string()
+        } else {
+            format!("↩{occurrence}")
+        };
+        backrefs.push_str(&format!(
+            " <a class=\"footnote-backref\" href=\"#{anchor}\">{label}</a>"
+        ));
+    }
+
+    match html.rfind("</p>") {
+        Some(at) => format!("{}{}{}", &html[..at], backrefs, &html[at..]),
+        None => format!("{html}{backrefs}"),
+    }
+}
+
+/// Renders without touching image destinations and with math off — the shape every caller with no
+/// file behind the text wants.
+///
+/// It is the tests' shorthand, and only the tests': every shipping caller passes a resolver and the
+/// reader's math setting (`render_doc`/`render_text` in `commands.rs`), so this stays out of the
+/// binary rather than being a second entry point nobody uses.
+#[cfg(test)]
 pub fn render(src: &str) -> RenderedDoc {
-    render_with(src, &|_| None)
+    render_with(src, &|_| None, false)
 }
 
 /// `image` is called once per markdown image with the destination as the author wrote it. `None`
 /// leaves the destination byte-for-byte as parsed, which is the only safe default: a `data:` URI or
 /// a remote URL must not be rewritten into a local path.
-pub fn render_with(src: &str, image: ImageResolver<'_>) -> RenderedDoc {
+///
+/// `math` enables `$…$` / `$$…$$` (SPEC §10). See `options` for why it is a parameter.
+pub fn render_with(src: &str, image: ImageResolver<'_>, math: bool) -> RenderedDoc {
     let (frontmatter, body_start) = split_frontmatter(src);
     let body = src.get(body_start..).unwrap_or("");
     let lines = LineIndex::new(src);
@@ -242,7 +398,17 @@ pub fn render_with(src: &str, image: ImageResolver<'_>) -> RenderedDoc {
     // (id, lang, source, line) while inside a fenced diagram block.
     let mut capture: Option<(String, &'static str, String, usize)> = None;
 
-    for (event, range) in Parser::new_ext(body, options()).into_offset_iter() {
+    // Footnotes are collected and re-emitted as one section at the end (SPEC §13), which is what
+    // makes a reference at the top of a long document clickable to a note at the bottom.
+    let mut footnotes = Footnotes::default();
+
+    // `$$…$$` is a display formula only when its paragraph holds nothing else, or the centred block
+    // lands in the middle of a sentence (pandoc's rule; marktext does the same). The candidates are
+    // patched in `Footnotes`-independent `out` indices when the paragraph closes.
+    let mut paragraph_has_other_content = false;
+    let mut display_math_candidates: Vec<usize> = Vec::new();
+
+    for (event, range) in Parser::new_ext(body, options(math)).into_offset_iter() {
         let at = |r: &Range<usize>| lines.line_of(body_start + r.start);
 
         // Only `source` is written here; the rest of the tuple is read when the block closes.
@@ -264,6 +430,20 @@ pub fn render_with(src: &str, image: ImageResolver<'_>) -> RenderedDoc {
             continue;
         }
 
+        // Inside a footnote definition: the body is buffered and rendered into the end section
+        // instead of in place. A reference inside a note body does not resolve — pandoc has no
+        // nested notes — so it reverts to the text the author typed.
+        if footnotes.is_buffering() {
+            match event {
+                Event::End(TagEnd::FootnoteDefinition) => footnotes.close_definition(),
+                Event::FootnoteReference(name) => {
+                    footnotes.push_body(Event::Text(CowStr::from(format!("[^{name}]"))))
+                }
+                other => footnotes.push_body(other),
+            }
+            continue;
+        }
+
         // Heading text is read through a borrow so `event` can still be moved below. Inline code
         // in a heading arrives as `Code`, not `Text`; without it the outline would drop it.
         if let Some(i) = current_heading {
@@ -271,6 +451,20 @@ pub fn render_with(src: &str, image: ImageResolver<'_>) -> RenderedDoc {
                 Event::Text(text) | Event::Code(text) => headings[i].text.push_str(text),
                 _ => {}
             }
+        }
+
+        // "Does this paragraph hold anything besides the formula": text that is not whitespace, and
+        // any inline construct. Soft and hard breaks do not count — a formula alone on its line is
+        // still alone (marktext draws the same line), and neither does another formula.
+        match &event {
+            Event::Text(text) => paragraph_has_other_content |= !text.trim().is_empty(),
+            Event::Code(_) | Event::Html(_) | Event::InlineHtml(_) | Event::TaskListMarker(_) => {
+                paragraph_has_other_content = true
+            }
+            Event::Start(tag) if !matches!(tag, Tag::Paragraph | Tag::Emphasis | Tag::Strong | Tag::Link { .. }) => {
+                paragraph_has_other_content = true
+            }
+            _ => {}
         }
 
         match event {
@@ -298,6 +492,32 @@ pub fn render_with(src: &str, image: ImageResolver<'_>) -> RenderedDoc {
                 current_heading = None;
                 out.push(event);
             }
+            // Math. A `$$…$$` that shares its paragraph with anything else is demoted to inline:
+            // `.math-display` is a centred block, and a centred block inside a sentence is a
+            // broken paragraph (pandoc and marktext agree).
+            Event::DisplayMath(_) => {
+                display_math_candidates.push(out.len());
+                out.push(event);
+            }
+            Event::InlineMath(_) => out.push(event),
+            Event::End(TagEnd::Paragraph) => {
+                if paragraph_has_other_content {
+                    for index in display_math_candidates.drain(..) {
+                        if let Event::DisplayMath(text) = &out[index] {
+                            out[index] = Event::InlineMath(text.clone());
+                        }
+                    }
+                }
+                display_math_candidates.clear();
+                paragraph_has_other_content = false;
+                out.push(event);
+            }
+            Event::Start(Tag::FootnoteDefinition(label)) => {
+                footnotes.open_definition(label.to_string())
+            }
+            // Its matching `End` never arrives here: a definition body is buffered above.
+            Event::End(TagEnd::FootnoteDefinition) => {}
+            Event::FootnoteReference(label) => footnotes.reference(&label, &mut out),
             Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(info))) => {
                 match diagram_lang(&info) {
                     Some(lang) => {
@@ -344,8 +564,15 @@ pub fn render_with(src: &str, image: ImageResolver<'_>) -> RenderedDoc {
         }
     }
 
+    footnotes.close_definition();
+    let footnotes_html = footnotes.finish(&mut out);
+    if !footnotes_html.is_empty() {
+        out.push(Event::Html(CowStr::from(footnotes_html)));
+    }
+
     // One `push_html` over the whole transformed stream, never one call per event — the writer
-    // carries footnote state across events, and per-event calls would shred footnote sections.
+    // carries state (table alignment, tight/loose lists) across events, and per-event calls would
+    // shred it.
     let mut html_out = String::with_capacity(body.len() * 3 / 2);
     html::push_html(&mut html_out, out.into_iter());
 
@@ -495,12 +722,92 @@ mod tests {
     }
 
     #[test]
-    fn footnotes_survive_the_single_push_html_pass() {
-        // Guards the reason `render` collects events instead of calling push_html per event:
-        // the writer carries footnote state across the whole stream.
-        let doc = render("Text[^1]\n\n[^1]: The note.\n");
-        assert!(doc.html.contains("footnote"), "{}", doc.html);
-        assert!(doc.html.contains("The note."), "{}", doc.html);
+    fn footnotes_become_an_end_section_with_backrefs() {
+        // SPEC §13: the reference is numbered inline, the note itself moves to a section at the end,
+        // and every reference gets its own way back.
+        let doc = render("Text[^1] and again[^1].\n\n[^1]: The note.\n");
+        assert!(
+            doc.html.contains(
+                "<sup class=\"footnote-ref\"><a href=\"#fn-1\" id=\"fnref-1\">1</a></sup>"
+            ),
+            "{}",
+            doc.html
+        );
+        assert!(doc.html.contains("id=\"fnref-1-2\""), "{}", doc.html);
+        assert!(doc.html.contains("<section class=\"footnotes\">"), "{}", doc.html);
+        assert!(doc.html.contains("<li id=\"fn-1\">"), "{}", doc.html);
+        assert!(
+            doc.html.contains("class=\"footnote-backref\" href=\"#fnref-1\""),
+            "{}",
+            doc.html
+        );
+        // The definition is not rendered where it was written any more.
+        assert!(!doc.html.contains("footnote-definition"), "{}", doc.html);
+        // …and the section follows the paragraph that references it.
+        let reference = doc.html.find("<sup class=\"footnote-ref\"").expect("reference");
+        let section = doc.html.find("<section class=\"footnotes\">").expect("section");
+        assert!(reference < section, "{}", doc.html);
+    }
+
+    #[test]
+    fn footnote_numbers_follow_the_first_reference_not_the_definition_order() {
+        // pandoc/GFM both number in reading order; the definition list here is deliberately reversed.
+        let doc = render("a[^b] c[^a]\n\n[^a]: A note.\n[^b]: B note.\n");
+        let b = doc.html.find("href=\"#fn-1\"").expect("note b is first");
+        let a = doc.html.find("href=\"#fn-2\"").expect("note a is second");
+        assert!(b < a, "{}", doc.html);
+        let section = &doc.html[doc.html.find("<section class=\"footnotes\">").expect("section")..];
+        let b_note = section.find("B note.").expect("b body");
+        let a_note = section.find("A note.").expect("a body");
+        assert!(b_note < a_note, "{section}");
+    }
+
+    #[test]
+    fn a_reference_without_a_definition_goes_back_to_literal_text() {
+        let doc = render("text[^nope] more\n");
+        assert!(doc.html.contains("[^nope]"), "{}", doc.html);
+        assert!(!doc.html.contains("<section class=\"footnotes\">"), "{}", doc.html);
+    }
+
+    #[test]
+    fn a_definition_nothing_refers_to_is_not_printed() {
+        let doc = render("body\n\n[^unused]: nobody points here\n");
+        assert!(doc.html.contains("body"), "{}", doc.html);
+        assert!(!doc.html.contains("nobody points here"), "{}", doc.html);
+        assert!(!doc.html.contains("<section class=\"footnotes\">"), "{}", doc.html);
+    }
+
+    #[test]
+    fn math_is_off_unless_it_is_asked_for() {
+        // The whole reason the flag exists: `$` stays an ordinary character.
+        let doc = render("inline $x^2$ here\n");
+        assert!(doc.html.contains("$x^2$"), "{}", doc.html);
+        assert!(!doc.html.contains("class=\"math"), "{}", doc.html);
+
+        let doc = render_with("inline $x^2$ here\n", &|_| None, true);
+        assert!(
+            doc.html.contains("<span class=\"math math-inline\">x^2</span>"),
+            "{}",
+            doc.html
+        );
+    }
+
+    #[test]
+    fn prices_are_not_math() {
+        let doc = render_with("Revenue rose from $13B to $24B.\n", &|_| None, true);
+        assert!(doc.html.contains("$13B to $24B"), "{}", doc.html);
+        assert!(!doc.html.contains("class=\"math"), "{}", doc.html);
+    }
+
+    #[test]
+    fn display_math_alone_stays_display_and_a_sentence_demotes_it() {
+        let alone = render_with("$$\na = 1\n$$\n", &|_| None, true);
+        assert!(alone.html.contains("math math-display"), "{}", alone.html);
+
+        // A centred block inside a sentence is a broken paragraph, so it renders inline instead.
+        let sentence = render_with("text $$a = 1$$ text\n", &|_| None, true);
+        assert!(sentence.html.contains("math math-inline"), "{}", sentence.html);
+        assert!(!sentence.html.contains("math-display"), "{}", sentence.html);
     }
 
     #[test]
@@ -526,6 +833,7 @@ mod tests {
         let doc = render_with(
             "![local](images/a.png)\n\n![remote](https://evil/x.png)\n\n![inline](data:image/png;base64,AA)\n",
             &resolve,
+            false,
         );
         assert!(doc.html.contains("src=\"asset://localhost/images/a.png\""), "{}", doc.html);
         assert!(doc.html.contains("src=\"https://evil/x.png\""), "{}", doc.html);

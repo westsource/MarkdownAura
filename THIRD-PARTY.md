@@ -38,7 +38,9 @@ licence text is `node_modules/@d2lang/d2/LICENSE.txt` in the source tree.
 | `@tauri-apps/plugin-opener` | 2.7.0 | MIT OR Apache-2.0 | — |
 | `@tauri-apps/plugin-process` | 2.4.0 | MIT OR Apache-2.0 | — |
 | `@tauri-apps/plugin-updater` | 2.13.1 | MIT OR Apache-2.0 | — |
+| `katex` | 0.17.0 | MIT | Copyright (c) 2013-2020 Khan Academy and other contributors |
 | `mermaid` | 12.0.0 | MIT | Copyright (c) 2014 - 2022 Knut Sveidqvist |
+| `prismjs` | 1.30.0 | MIT | Copyright (c) 2012 Lea Verou |
 
 ## Rust crates
 

@@ -176,6 +176,9 @@ export interface Session {
   zoom: number;
   fontSize?: number;
   reduceMotion?: boolean;
+  /** Render `$…$` / `$$…$$` as math (SPEC §13). Optional so a session from before the setting
+   *  existed still loads; the loader treats absence as `false`, which is the shipped default. */
+  math?: boolean;
   lang?: Lang;
   measure?: Measure;
   sidebar: { open: boolean; width: number };
@@ -253,7 +256,12 @@ export const readDir = (path: string) => call<TreeEntry[]>("read_dir", { path })
 export const resolveTarget = (path: string) => call<FolderView>("resolve_target", { path });
 
 export const readFile = (path: string) => call<FilePayload>("read_file", { path });
-export const renderDoc = (path: string) => call<RenderedDoc>("render_doc", { path });
+
+/** `math` is passed per call rather than read from the session in Rust: it is the reader's current
+ *  setting (SPEC §13), and the render is a pure function of its inputs — toggling it re-renders the
+ *  open documents instead of mutating a global the next render would silently pick up. */
+export const renderDoc = (path: string, math: boolean) =>
+  call<RenderedDoc>("render_doc", { path, math });
 
 /** Renders a buffer that has no file behind it yet, so the split view can show what is being typed
  *  (SPEC §12). `encoding` and `truncated` come back empty/false — the caller overrides them from the
@@ -261,8 +269,8 @@ export const renderDoc = (path: string) => call<RenderedDoc>("render_doc", { pat
  *
  *  `path` is still the document's: the text is unsaved, but its relative images are not, and they
  *  resolve against the folder the file lives in (null for text with no file behind it). */
-export const renderText = (text: string, path: string | null) =>
-  call<RenderedDoc>("render_text", { text, path });
+export const renderText = (text: string, path: string | null, math: boolean) =>
+  call<RenderedDoc>("render_text", { text, path, math });
 
 /** Writes an edited buffer back (SPEC §12), and returns the file's new mtime — that becomes the
  *  next save's baseline. The Rust side refuses a mixed-ending file, a lossy decode, and any write
@@ -339,8 +347,6 @@ export const setLogLevel = (level: LogLevel) => call<string>("set_log_level", { 
 export const setLogDir = (dir: string) => call<string>("set_log_dir", { dir });
 
 export const diagStatus = () => call<DiagStatus>("diag_status");
-export const diagReport = () => call<string>("diag_report");
-export const saveDiagReport = () => call<string>("save_diag_report");
 export const openLogFolder = () => call<void>("open_log_folder");
 
 /** The two file dialogs, behind this boundary like every other plugin call (IMPL.md §2 rule 3).
