@@ -744,9 +744,22 @@ that matters, the fix is a `getCurrentWindow().onCloseRequested()` that flushes 
 - Panel widths are written on **pointer-up only** (a save per pointermove would rewrite the
   session file ~60×/s while dragging) and are clamped to the `--w-*-min`/`-max` tokens at drag
   time, so a corrupt or absurd stored value is corrected on the next drag, not on load.
-- `window` is read from the live window at save time in **physical** units (`outerSize` /
-  `outerPosition` / `isMaximized`), because that is what rounds-trip; restore uses
-  `setSize`/`setPosition`/`maximize`. `x`/`y` null means "let the OS place it".
+- `window` is read from the live window at save time in **physical** units, and the *inner* size is what
+  is stored: `innerSize` / `outerPosition` / `isMaximized` at save, `setSize` / `setPosition` /
+  `maximize` at restore. `setSize` sets the inner box, so storing the outer one grew the window by its
+  frame on every launch — measured 1000×700 → 1016×709 → 1032×718, one frame per restart. The position
+  stays the outer one, because that is what `setPosition` sets and what a reader sees. `x`/`y` null means
+  "let the OS place it".
+- **A saved geometry is honoured only while it still describes a window** (added 2026-10-09, from a
+  reader's report: "it starts minimised and cannot be restored"). The session held
+  `{ "w": 272, "h": 91, "x": -32000, "y": -32000 }` — the *iconic* rect Windows reports for a
+  minimised window — so the next launch built a 272×91 window 32000px to the left of the desktop.
+  Saving now keeps the last good rect while the window is minimised (`isMinimized`), and restoring
+  ignores a rect smaller than the window's own floor (720×480, `lib.rs`) or one that overlaps no
+  monitor that exists *now* — an undocked laptop has no screen where the second one was, and that is
+  the same symptom by the same route. An ignored rect leaves the window as `lib.rs` built it:
+  1200×800, centred, and the next save writes what the window actually has.
+  Cost: two read-only `core:window` permissions (`allow-is-minimized`, `allow-available-monitors`).
 - A path that no longer exists is restored as a `missing` tab, not dropped. Losing someone's tab
   because a file was temporarily renamed is worse than showing a struck-through tab.
 - `recent` is capped at 10 and feeds both the empty state (top 3) and `ctrl shift P` (top 8 as a

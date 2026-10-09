@@ -77,6 +77,10 @@ fixes it, and that flag must never be a shipped default, so it is opt-in through
 built in code. Settings: 1200×800, min 720×480, centred, `decorations: false`, drag-drop
 enabled. `transparent` is left at its default (false).
 
+The geometry a session remembers is honoured only while it still fits the desktop: a size below that
+720×480 floor, or a position that overlaps no monitor which exists now, opens the default window centred
+instead — and a minimised window never overwrites the remembered rect in the first place (IMPL §6).
+
 Everything inside the title bar except the drag surface needs
 `-webkit-app-region: no-drag` (already in `components.css`). Three chrome heights are
 tokens (`--h-title`, `--h-toolbar`, `--h-status`) and must never grow.

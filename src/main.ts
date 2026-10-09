@@ -9,7 +9,7 @@ import "@design/tokens.css";
 import "@design/components.css";
 import "@design/prose.css";
 
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { availableMonitors, getCurrentWindow } from "@tauri-apps/api/window";
 import { PhysicalPosition, PhysicalSize } from "@tauri-apps/api/dpi";
 
 import * as ipc from "./ipc";
@@ -780,27 +780,81 @@ function showMeasureMenu(anchor: HTMLElement = $("#stMeasure")): void {
 
 // ---------------------------------------------------------------- session
 
+/** The window's own default size and floor, as `lib.rs` builds it (SPEC §2). A saved geometry that
+ *  is smaller than the floor is not a place this window can be. */
+const WINDOW_DEFAULT = { w: 1200, h: 800 };
+const WINDOW_MIN = { w: 720, h: 480 };
+
 /** The window rect is part of the session (IMPL §6), so it is read at save time rather than
- *  assumed. Physical units, because that is what `outerSize` reports and what `setSize` takes
- *  back — round-tripping through logical would drift on fractional display scales. */
+ *  assumed. Physical units, because that is what `innerSize`/`outerPosition` report and what
+ *  `setSize`/`setPosition` take back — round-tripping through logical would drift on fractional
+ *  display scales.
+ *
+ *  **Inner** size, not outer: `setSize` sets the inner box, so storing the outer one grew the window
+ *  by its frame on every launch — measured 1000×700 → 1016×709 → 1032×718, one frame per restart,
+ *  which is the classic bug this pairing exists to avoid. The position stays the outer one, which is
+ *  what `setPosition` sets and what a reader recognises as "where the window is". */
 async function currentWindowRect(): Promise<WindowRect> {
   const win = getCurrentWindow();
+  // A minimised window answers with its *iconic* rect — 272×91 at (-32000, -32000) on Windows — so
+  // saving it stores a window that is off screen at icon size, and the next launch puts it there:
+  // the window exists, 32000px to the left of everything, and no gesture brings it back (this is
+  // what a reader reported as "it starts minimised and cannot be restored"). The last good rect is
+  // kept instead.
+  if (await win.isMinimized()) return state.windowRect;
+
   const [size, position, maximized] = await Promise.all([
-    win.outerSize(),
+    win.innerSize(),
     win.outerPosition(),
     win.isMaximized(),
   ]);
-  return {
+  const rect: WindowRect = {
     w: size.width,
     h: size.height,
     x: position.x,
     y: position.y,
     maximized,
   };
+  // Remember it as the last good one: the branch above hands this back whenever the window is
+  // minimised, so a session saved then keeps the geometry the reader last had rather than the one the
+  // window booted with (a move or a resize since boot would otherwise be forgotten).
+  state.windowRect = rect;
+  return rect;
+}
+
+/** Whether a saved rect still describes somewhere a window can be: no smaller than the window's own
+ *  minimum, and overlapping a monitor that exists **now** — a laptop undocked since the session was
+ *  written has no screen where the second one used to be, and honouring that rect puts the window
+ *  out of reach just as surely as the icon rect does. */
+async function rectIsUsable(rect: WindowRect): Promise<boolean> {
+  if (rect.w < WINDOW_MIN.w || rect.h < WINDOW_MIN.h) return false;
+  if (rect.x === null || rect.y === null) return true; // "let the OS place it" — a first run
+  try {
+    const monitors = await availableMonitors();
+    return monitors.some((monitor) => {
+      const left = monitor.position.x;
+      const top = monitor.position.y;
+      const right = left + monitor.size.width;
+      const bottom = top + monitor.size.height;
+      return rect.x! < right && rect.x! + rect.w > left && rect.y! < bottom && rect.y! + rect.h > top;
+    });
+  } catch {
+    // Unanswerable is not a reason to trust it: the default is centred and on screen either way.
+    return false;
+  }
 }
 
 async function restoreWindowRect(rect: WindowRect): Promise<void> {
   const win = getCurrentWindow();
+
+  // An unusable rect means the window keeps what `lib.rs` built for it: the default size, centred
+  // (SPEC §2). Nothing is applied and nothing is wrong — the next save writes what the window
+  // actually has.
+  if (!(await rectIsUsable(rect))) {
+    state.windowRect = { ...WINDOW_DEFAULT, x: null, y: null, maximized: false };
+    return;
+  }
+
   if (rect.maximized) {
     await win.maximize();
     return;
