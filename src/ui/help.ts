@@ -4,9 +4,9 @@
  * list lives. Labels are *keys* into the i18n catalogue, not strings, so a language change only
  * needs a re-render (SPEC §7).
  *
- * The right column shows one snippet per engine; the d2 card carries the install note because
- * that is the one engine a reader might reasonably expect to work out of the box and find
- * missing.
+ * The right column shows one snippet per engine; each card's note is a `help.note.*` key — a syntax
+ * summary for mermaid and dot, and the bundled size for d2, which is the one engine a reader might
+ * reasonably expect to have to install.
  */
 import type { Key } from "../i18n";
 import { t } from "../i18n";

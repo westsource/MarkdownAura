@@ -12,6 +12,12 @@ fields, CSP, window creation and engine APIs below are what the code does, not w
 earlier draft expected it to do. Where the code does not yet do what this contract says,
 the gap is marked **not implemented** rather than described as if it existed.
 
+Re-checked against the code again on 2026-10-11: that pass corrected the command list (the
+five diagnostics commands of §13 were missing), the repo tree, the `Tab`/`WindowState`
+fields, the pulldown-cmark dependency count, the window-permission count, the unit-test
+count and a set of stale `file:line` citations — the source, not a build, is what it was
+read against.
+
 ---
 
 ## 1. Build and stack
@@ -75,6 +81,7 @@ MarkdownAura/
 │  ├─ build.rs                 # tauri-build + the test-target link-arg repair
 │  ├─ tauri.conf.json          # CSP, asset protocol, bundle; `windows: []` on purpose (§8)
 │  ├─ capabilities/default.json
+│  ├─ tests/spec/              # the CommonMark/GFM fixtures + the locked failure baseline (§10)
 │  └─ src/
 │     ├─ main.rs               # entry; keeps the console in debug builds
 │     ├─ lib.rs                # CLI parse, single-instance, window build, state, handler wiring
@@ -82,26 +89,35 @@ MarkdownAura/
 │     ├─ error.rs              # ApiError, the tagged enum that crosses the boundary
 │     ├─ fs_ops.rs             # tree walk, read, encoding, ignore rules
 │     ├─ markdown.rs           # pulldown-cmark -> html + headings + diagram blocks (§4)
+│     ├─ emphasis.rs           # the CJK emphasis widening pass (§4)
 │     ├─ watcher.rs            # notify -> coalesced 120 ms batches
 │     ├─ session.rs            # persistence (§6)
-│     └─ engines.rs            # engine availability for the status bar dots (§7)
+│     ├─ engines.rs            # engine availability for the status bar dots (§7)
+│     ├─ defaultapp.rs         # the `.md` handler read-out; `xdg-mime` / the Open-with dialog (§10)
+│     ├─ diag.rs               # the NDJSON log, its rotation, the panic report and the run marker (§13)
+│     └─ spec.rs               # the CommonMark/GFM conformance gate — `#[cfg(test)]`, runs nothing
 ├─ src/                        # frontend
 │  ├─ main.ts                  # boot, theming, layout, keyboard, session
 │  ├─ i18n.ts                  # en + zh-CN catalogues, t(), data-i18n scanner
 │  ├─ env.d.ts                 # build-time constants declared once (__APP_VERSION__)
 │  ├─ measure.ts               # reading-width presets (record + guard + token writer)
+│  ├─ diag.ts                  # the WebView's half of the log: window errors, rejected promises, IPC failures (§13)
 │  ├─ ipc.ts                   # typed wrappers over invoke/listen (the only place invoke appears)
 │  ├─ state.ts                 # tab record + window state (§5)
 │  ├─ ui/
 │  │  ├─ dom.ts                # $, maybe$, esc, toast, menus, shared icons
 │  │  ├─ document.ts           # the three views, splitter, source highlight, scroll spy
 │  │  ├─ panels.ts             # side-panel resize handles -> --w-sidebar / --w-outline
+│  │  ├─ editor.ts             # the editable pane: CodeMirror 6, lazy (§12)
 │  │  ├─ tabs.ts  tree.ts  outline.ts  statusbar.ts
 │  │  └─ find.ts  viewer.ts  settings.ts  help.ts  about.ts  immersive.ts
 │  └─ render/
 │     ├─ types.ts              # EngineId + isEngineId
 │     ├─ pipeline.ts           # markdown html -> DOM -> cards -> engines
 │     ├─ engines.ts            # registry: state machine + lazy import
+│     ├─ highlight.ts          # the Prism pass over rendered code fences (§13)
+│     ├─ prism-languages.ts    # the grammars that pass ships, in dependency order (§13)
+│     ├─ math.ts               # the KaTeX pass; runs only when the math setting is on (§13)
 │     └─ cache.ts              # (engine, source hash) -> svg, capped in bytes
 └─ var/                        # local verification scratch (gitignored): fixtures, CDP probes, shots
 ```
@@ -115,7 +131,8 @@ list as a menu rather than a picker. The settings panel used to have a second on
 button that reported the unimplemented download — and that row is gone now that d2 is bundled. The
 `index.html` shell carries the markup for all six.
 
-Three things in `src-tauri/` are repairs for this machine and must not be "cleaned up":
+Three repairs for this machine must not be "cleaned up" (two of them live under `tools/`, one in
+`src-tauri/`):
 
 - `tools/unpack-binutils.mjs` — the GNU Rust toolchain on Windows is a linker-only shim
   with no assembler, and `dlltool` cannot run without one. Not part of the build. Its
@@ -257,6 +274,24 @@ path).
 //    protected — so it opens the *Open with* dialog on `path`, or the Default Apps page when there is
 //    no document, and answers "dialog" / "settings". The frontend labels its button from `action`
 
+// --- diagnostics (§13) — the five commands the logger, its two settings rows and the About sheet need ---
+#[tauri::command] async fn log_event(level: String, module: String, message: String,
+                                     data: Option<serde_json::Value>) -> Result<()>;
+// -> the front end's only reporter (§13.7). Enforcement is here, not in TS: an unknown level becomes
+//    `info`, `module`/`message` are clipped, and the whole call is a no-op at level `off`. Never the
+//    arguments — one of them could be a buffer.
+#[tauri::command] fn set_log_level(level: String) -> String;
+// -> pure in-memory set, so it does not hop threads; answers with the level actually in force
+#[tauri::command] async fn set_log_dir(dir: String) -> String;
+// -> re-opens the logger at `dir` (`""` = the platform default) and answers with the path now in
+//    effect: a directory that cannot be created leaves the logger where it was, and the caller still
+//    gets a usable path rather than an error it can do nothing with
+#[tauri::command] async fn diag_status() -> Result<DiagStatus>;
+// -> { level, run, logDir, previousUnclean } — what the About sheet's log row prints
+#[tauri::command] async fn open_log_folder() -> Result<()>;
+// -> opens the *directory*, not a file: `reveal_in_explorer` selects a file, and the report is the
+//    whole folder (§13.8)
+
 **Not implemented, and no longer wanted:** `engine_install(id)` and `engine_remove(id)` were
 specified in the first draft for the opt-in d2 download. d2 is bundled (SPEC §4), so there is nothing
 to install and the only engine command is `engine_status`.
@@ -342,8 +377,9 @@ a removal, so a save-by-rewrite does not flicker a tab into `missing`.
 
 ## 4. Markdown pipeline — **decided 2026-10-01**
 
-**Render in Rust with `pulldown-cmark` 0.13.4** (MIT, three light dependencies: `bitflags`,
-`memchr`, `unicase`; built with `default-features = false, features = ["html"]`).
+**Render in Rust with `pulldown-cmark` 0.13.4** (MIT, four light dependencies: `bitflags`,
+`memchr`, `pulldown-cmark-escape`, `unicase`; built with `default-features = false,
+features = ["html"]`).
 
 The mockup's `renderMarkdown()` (`design/mockup.js`) hand-rolls a parser in the browser. That was
 right for a mockup and wrong for the app — but note what is actually the contract there: **the
@@ -445,7 +481,7 @@ drop   — everything else, including every tag that carries an attribute
   which already validates and percent-encodes the URL.
 - **Why not `ammonia`.** It is the right crate for sanitising untrusted HTML, but it pulls
   `html5ever` + `cssparser` + `url` — a complete HTML5 parser — to solve a problem we can avoid by
-  not accepting the input. `pulldown-cmark` stays at three light dependencies. If a later version
+  not accepting the input. `pulldown-cmark` stays at four light dependencies. If a later version
   genuinely needs to sanitise arbitrary HTML, add `ammonia` then; do not grow one by hand.
 - The allowed tags are the ones READMEs actually use, and dropping them would be *visible*. They
   do need styles or they fall back to UA defaults — `prose.css` carries them. Note that
@@ -469,13 +505,18 @@ either side**. This is the weakest seam in the whole architecture.
   prices, display demoted inside a sentence).
 - `npm run check:rawhtml` asserts the same allow-list holds in the mockup, so the
   two renderers cannot quietly disagree.
-- `src/render/pipeline.ts` copies mockup.js's card markup verbatim; review keeps it so. **Three states
+- `src/render/pipeline.ts` copies mockup.js's card markup verbatim; review keeps it so. **Five places
   are app-only**: the mockup draws its diagrams synchronously, so it has no `diagram-pending` body and
   no `rendering…` string; it has no code caption row (`figure.code` + `.code-head` + `[data-act="copy-code"]`),
-  which is the app's affordance rather than the document's; and its images have no `data-loading` or
-  `.failed` state, since the stand-in renderer never fetches one. A class that exists only in the app is
-  the one place this rule cannot be honoured symmetrically — the mockup is the spec for what the document
-  produces, and these three are the app's answer to "the bytes have not arrived yet".
+  which is the app's affordance rather than the document's; it has no `data-loading` or `.failed` state
+  on an image, since the stand-in renderer never fetches one; the viewer's `.ov-stage` wrapper — with the
+  transform-based pan/zoom it carries — is ours, because the mockup drops the SVG straight into `#ovBody`
+  and zooms by setting its width; and the editor panes are the app's `.cm-host` (CodeMirror, §12) where
+  the mockup's same ids hold a `<textarea>` in `.editor` / `.editor-back` / `.editor-input`, so the
+  `.cm-*` rules in `components.css` are exercised by the app alone. A class that exists only in the app
+  is the one place this rule cannot be honoured symmetrically — the mockup is the spec for what the
+  document produces, and these five are the app's answer to "the bytes have not arrived yet" and to the
+  two surfaces it only stands in for.
 - **The card is opened before its engine answers** and its body is filled afterwards
   (`openCard` → `showDiagram`/`showFailure`), so the head, the `zoom`/`copy` buttons and the
   `data-diagram`/`data-source` anchors exist for the whole render, and `figure.isConnected` is what
@@ -496,9 +537,10 @@ on screen. `.ov-stage` now mirrors `.diagram-body`'s sizing. A new engine is a n
 SVG size itself?", and the card is the thing to check it against.
 
 **What does not exist yet, and should:** `insta` is a dev-dependency but there is no
-snapshot test and no `src-tauri/tests/` directory, and there is no class-name lint that
+snapshot test, and there is no class-name lint that
 extracts `class="…"` from the rendered HTML and asserts each name appears in a
-`design/*.css` file. The failure mode they exist for is the real one — rename
+`design/*.css` file. (`src-tauri/tests/spec/` does exist — it is the conformance gate's
+fixture directory, §10, not a test target.) The failure mode they exist for is the real one — rename
 `.diagram-head` in CSS, keep emitting the old name, and nothing fails at build time; it
 just looks like a styling bug later. Landing both is an open item (§11). Do not describe
 them as existing guards until they do.
@@ -538,7 +580,7 @@ type Tab = {
   doc: RenderedDoc | null;
   source: string | null;         // lazily fetched; only split/source need it
   encoding: string;
-  eol: "lf" | "crlf";
+  eol: "lf" | "crlf" | "mixed";
   words: number;
   bytes: number;
   renderMs: number;
@@ -564,6 +606,8 @@ type WindowState = {
   outlineOpen: boolean;
   outlineWidth: number;          // -> `--w-outline`
   mdOnly: boolean;               // explorer lists markdown files only; default true (SPEC §3)
+  logLevel: LogLevel;            // diagnostics filter; default "info" (SPEC §10, §13.8)
+  logDir: string;                // log directory override; "" = the platform default
   activeTab: number;
   tabs: Tab[];
   recent: string[];
@@ -701,10 +745,12 @@ Invariants worth stating because they are the bugs:
 ## 6. Session persistence
 
 `%APPDATA%/MarkdownAura/session.json` (fallback `~/.config/MarkdownAura`), written on a
-500 ms debounce that every mutating action schedules, and read once at boot. There is **no
-save-on-exit hook**: a change followed by a close inside the debounce window is lost. If
-that matters, the fix is a `getCurrentWindow().onCloseRequested()` that flushes the timer
-— noted so the omission is a decision, not a surprise.
+500 ms debounce that every mutating action schedules, and read once at boot. There is **no save on
+exit**: a change followed by a close inside the debounce window is lost. The window's
+`onCloseRequested` handler that would be the place for it exists, but it is the unsaved-*buffer*
+guard — it asks before a dirty editor buffer goes, and it does not touch `saveTimer` — so the hole in
+the session debounce is still open. Closing it is one line in that handler; noted so the omission is
+a decision, not a surprise.
 
 ```json
 {
@@ -715,6 +761,7 @@ that matters, the fix is a `getCurrentWindow().onCloseRequested()` that flushes 
   "lang": "system", "measure": "comfortable",
   "sidebar": { "open": true, "width": 343 }, "outlineOpen": true, "outlineWidth": 259,
   "mdOnly": true,
+  "logLevel": "info", "logDir": "",
   "activeTab": 1,
   "tabs": [
     { "file": "E:\\notes\\README.md", "view": "preview", "scroll": 0, "preview": false,
@@ -726,10 +773,13 @@ that matters, the fix is a `getCurrentWindow().onCloseRequested()` that flushes 
 
 - `version` is checked on load. Unknown version → ignore the file and start empty; never migrate
   destructively. Missing/unreadable/corrupt → `None`, which is not an error.
-- `fontSize`, `reduceMotion`, `math`, `lang`, `measure`, `outlineWidth` and `mdOnly` were each added
+- `fontSize`, `reduceMotion`, `math`, `lang`, `measure`, `outlineWidth`, `mdOnly`, `logLevel` and
+  `logDir` were each added
   after the first session format; all of them carry a default, so an older file still loads. Keep that
   property on any new field — the version stays 1 and a missing field must never mean "start clean".
-  (`math` is the newest, and its default is the shipped one: a session written before the setting
+  (`logLevel` / `logDir` are the newest, §13.8: a session written before the diagnostics settings
+  existed must keep the shipped level, `info`, and the platform's own log directory.)
+  (`math`'s default is the shipped one, for the same reason: a session written before the setting
   existed must keep rendering prices as prices.)
   `mdOnly` is the one whose default is `true`, so it uses a named function rather than a bare
   `#[serde(default)]` (which would mean `false` and silently list every file in the explorer); the
@@ -863,9 +913,9 @@ centred, `decorations: false`, `drag_and_drop(true)`. `transparent` is not set.
   `version.dll` because this toolchain has no `libversion.a`). "One file to double-click" is not worth a
   second updater of the app's own, so the crate, its build script and the `build:portable` script are gone.
   Portable means the zip: `markdownaura.exe` plus the loader, which is also what the installer unpacks.
-`capabilities/default.json` is the app's whole permission surface: `core:default`, the eleven window
+`capabilities/default.json` is the app's whole permission surface: `core:default`, the thirteen window
 permissions the custom titlebar, the session's window rect and the confirmed quit need (`allow-destroy`
-is the last of them: a close request that has already been answered once cannot be answered again, so
+among them: a close request that has already been answered once cannot be answered again, so
 the quit goes through `destroy()` rather than re-emitting the event), `core:event:allow-listen` /
   `allow-unlisten` for the `fs://` and `app://` events, `dialog:allow-open`, the updater pair
   (`updater:default`, `process:allow-restart`) that the About sheet's check-for-updates path uses,
@@ -972,7 +1022,7 @@ status bar's `rendered in N ms` is where a reader sees it.
 
 ## 10. Testing
 
-- **Rust: 83 unit tests, in-module** (`cargo test --lib`; 83 on 2026-10-08, and the count moves as
+- **Rust: 84 unit tests, in-module** (`cargo test --lib`; 84 on 2026-10-11, and the count moves as
   tests are added) — `session` (round-trip, unknown
   version, corrupt file, missing file, no temp file left, recent cap/dedupe/order);
   `fs_ops` (ignore rules, BOM detection, UTF-16 byte orders, truncation at the 8 MiB cap);
@@ -986,7 +1036,7 @@ status bar's `rendered in N ms` is where a reader sees it.
   `engines` (all three bundled and always installed, no opt-in); `lib` (arg parsing, unknown
   flags ignored); `emphasis` (16: the shapes the CJK widening accepts, the ones it refuses, and the
   content boundaries it does not cross); `spec` (the conformance gate below); `diag` (log-level
-  parsing, rotation, the crash report's shape); `commands` (the two read commands' edge cases). An
+  parsing, rotation, the unclean-run marker and the tail read); `commands` (the two read commands' edge cases). An
   integration-test target would need `build.rs`'s link-arg repair, which is why the tests
   live in `#[cfg(test)]` modules — do not "move them out" without reading that comment.
 - **`markdown` gets hostile fixtures that are not happy paths** (required by §4): raw
@@ -1117,8 +1167,9 @@ status bar's `rendered in N ms` is where a reader sees it.
   imported it explicitly — and it themes through its own classes instead of CSS custom properties. The
   recommendation is **CodeMirror 6 with an explicit extension list**: modular ESM with no runtime fetches,
   `EditorState.readOnly` as a first-class facet, and theming from `design/tokens.css` exactly the way
-  `engines.ts` themes mermaid. Size alone does not decide it — the app's initial chunk is already 11.2 MB
-  with d2's wasm inlined — and Ace's smaller gzip does not buy back its loading and theming model.
+  `engines.ts` themes mermaid. Size alone does not decide it — the app already carries an 11.0 MB
+  code-split chunk with d2's wasm inlined (§9) — and Ace's smaller gzip does not buy back its loading
+  and theming model.
   **Shipped, the editor is a lazy chunk and not a line in the first paint.** Entering the mode in a real
   build loads five chunks plus one stylesheet — 483.5 KB minified / 167.2 KB gzip in total, the largest
   single chunk being 214.9 KB — and nothing before that, which is the whole point of the four-state
@@ -1128,23 +1179,24 @@ status bar's `rendered in N ms` is where a reader sees it.
   driven over CDP on 2026-10-04):
   - The reading column can be imposed on the editor from *outside*: `#host .cm-content { max-width:
     var(--measure) }` resolved `60ch` to 527 px against the mono font, with no JS. Today `--measure` reaches
-    only `.prose > *` (`prose.css:228`), so the source pane has no reading column at all. If the editable
-    pane gets one, note that `measure.ts`'s `chToPx` probes `#out-preview` (`measure.ts:48-51`) — a *sans*
-    element — so the same preset would mean a different number of columns in a *mono* pane.
+    only `.prose > *` (`prose.css:313`), so the source pane has no reading column at all. If the editable
+    pane gets one, note that `measure.ts`'s `chToPx` resolves against the first *laid out* `.prose`
+    (`measure.ts:59`) — a *sans* element, and in split view the compacted one — so the same preset
+    would mean a different number of columns in a *mono* pane.
   - Geometry lags CSS by exactly one measure pass. Changing the font size 15 px → 22 px applied the CSS
     synchronously (`font-size: 22px`) while `view.contentHeight` still read 155; only after
     `requestMeasure({ read })` did it report 224 with a 30.8 px line. Anything that writes `--zoom` /
     `--doc-size` and then reads geometry in the same tick — scroll sync, the scroll spy, the measure
     readout — gets the previous numbers.
   - The editor brings its own metrics: CM6 defaults to `line-height: 1.4`, while the pane it would replace is
-    set at `1.8` (`components.css:497-504`) and `.prose` uses `--lh-body`, which is `1.7`
-    (`tokens.css:61`). Without an explicit override, toggling read-only ↔ editable changes the leading.
+    set at `1.8` (`components.css:511`) and `.prose` uses `--lh-body`, which is `1.7`
+    (`tokens.css:87`). Without an explicit override, toggling read-only ↔ editable changes the leading.
   - Read-only is a *runtime* state, so it has to be a `Compartment`: `EditorState.readOnly` is a facet and
     cannot be reconfigured in place. Verified by typing real keys into a read-only editor (refused) and again
     after the reconfigure (accepted). Composition events do not throw, but real IME behaviour still has to be
     tried by hand on Windows with the actual input method.
 - **The unsaved-buffer conflict policy is decided: an external change reloads silently.** That is what the
-  watcher already does (`main.ts:814-831` drops `tab.source`/`tab.doc` and re-reads through Rust), so it needs
+  watcher already does (`main.ts:1391-1397` drops `tab.source`/`tab.doc` and re-reads through Rust), so it needs
   no new code — and its accepted cost is that an unsaved buffer is lost when something else writes the file.
   Recorded as the product owner's call on 2026-10-04, so that it is not later mistaken for an oversight.
   Whatever does the saving still has to refuse the two states the reader merely *badges*: a truncated file
@@ -1154,6 +1206,12 @@ status bar's `rendered in N ms` is where a reader sees it.
 
 Two things ship together: the installer (which is also the update artifact) and the manifest the updater
 reads.
+
+**Where the scripts live, and why that matters.** Most of the commands below name a script under `var/`
+(`publish-release.sh`, `publish-gitee-release.mjs`, `gitee-prune.mjs`, `gitee-quota-audit.mjs`,
+`bump-version.mjs`). `var/` is gitignored local scratch, so those steps reproduce from this machine, not
+from a clone: only `tools/*` (the manifest, the notices, the icons, the two Windows shims) is tracked.
+Carrying a release to another machine means carrying the `var/` scripts with it.
 
 **The signing key is the one secret in this project.** `npx tauri signer generate -w var/updater/markdownaura.key`
 writes a private key (gitignored, under `var/`) and a public one. The **public** key is pasted into
@@ -1257,8 +1315,10 @@ for the script.
 learned the hard way on 2026-10-08: the loop compared the constant against the bytes *it had freed in this
 run* rather than against the free space the header describes, so after deleting 88 MB (less than the 150 it
 was set to) it went on to delete the **current** release's AppImage — precisely the cross the header warned
-about, and the reason the constant is now 100 (chosen so the run stops at the oldest AppImage, which the
-owner had approved in advance) with the loop measuring `QUOTA_MB - total + freed`. The cost of the tight
+about. The loop now measures `QUOTA_MB - total + freed`, and the constant is **150**: it was raised on
+2026-10-08, with the owner's explicit call, because one AppImage's worth of headroom no longer pays for a
+release — so a run reaches the *second* AppImage too (`var/gitee-prune.mjs`'s own comment carries that
+history). The cost of the tight
 target is real and accepted: once the old AppImages are gone, the next release needs a *product* decision
 about which newer asset to drop, because 89 MB of AppImage per release does not leave room for long.
 
@@ -1328,10 +1388,10 @@ user's mistake. Four separate blind spots, each verified in the tree:
 | WebView2 renderer dies | tauri 2.12's `WindowEvent` has no render-process-gone variant (`tauri-runtime-2.12.1/src/window.rs:30`), and `wry` exposes no `ProcessFailed` callback. The window stays, the page is dead, and §2's "one Crashpad dump per launch, no error surfaced anywhere" was written from experience |
 | abort / power loss / force-kill | no marker, no `run.end`, nothing |
 
-The three `eprintln!` calls that *do* exist (`lib.rs:148`, `lib.rs:160`, `commands.rs:49` — a fourth,
-`fs_ops.rs:472`, is test-only) reach no one: the release binary is a windowed process with no console
+The three `eprintln!` calls that *do* exist (`lib.rs:152`, `lib.rs:164`, `commands.rs:49` — a fourth,
+`fs_ops.rs:485`, is test-only) reach no one: the release binary is a windowed process with no console
 attached, so the text is discarded. The watcher used to drop notify's error stream on the floor; since
-2026-10-08 it logs it (`watcher.rs:207`, `diag_warn!`), because a watcher that stopped working looks
+2026-10-08 it logs it (`watcher.rs:208`, `diag_warn!`), because a watcher that stopped working looks
 exactly like a file that stopped changing — the most likely silent degradation in the whole app.
 
 ### 13.2 Decision: a hand-rolled `diag.rs`, and no new crates
@@ -1352,7 +1412,7 @@ Two hard constraints on the module:
 - **`diag::init()` is the first statement of `run()`**, before `tauri::Builder::default()`. A panic inside
   plugin init or `window.build()` has to be loggable, so nothing here may depend on a Tauri `AppHandle`.
 - **Directory resolution is pure `std` + env**, in the same shape as `session::data_dir()`
-  (`session.rs:161`). Tauri's path API needs a `Manager`, which does not exist that early.
+  (`session.rs:184`). Tauri's path API needs a `Manager`, which does not exist that early.
 
 Timestamps: epoch seconds to ISO-8601 UTC via a hand-written civil-date conversion (Hinnant's algorithm,
 ~15 lines, unit-tested against known instants). The machine's timezone offset is not computed in Rust — it
@@ -1468,12 +1528,12 @@ This is why `lib.rs` moves from `builder.run(context)` to `builder.build(context
 
 | where | what is logged |
 |---|---|
-| `lib.rs:62` `run()` | version, pid, argv, OS/arch, exe path, log dir, whether `MARKDOWNAURA_BROWSER_ARGS` is set |
-| `lib.rs:148`, `lib.rs:160`, `commands.rs:49` | the three surviving `eprintln!` sites, re-pointed at the logger (debug builds keep mirroring to stderr) |
-| `watcher.rs:207` | notify's error stream, logged as `warn` (it used to be discarded) |
-| `watcher.rs:100` and every `#[tauri::command]` | already covered by the IPC wrapper in §13.7 — no per-command code |
+| `lib.rs:71` `run()` | version, pid, argv, OS/arch, exe path, log dir, whether `MARKDOWNAURA_BROWSER_ARGS` is set |
+| `lib.rs:152`, `lib.rs:164`, `commands.rs:49` | the three surviving `eprintln!` sites, re-pointed at the logger (debug builds keep mirroring to stderr) |
+| `watcher.rs:208` | notify's error stream, logged as `warn` (it used to be discarded) |
+| every `#[tauri::command]` | already covered by the IPC wrapper in §13.7 — no per-command code |
 | `session::save` failure, engine load/render failure | `warn` / `debug` |
-| front-end `main.ts:753` (session save swallowed) and `render/engines.ts:134` (d2 preload swallowed) | the two silent real failures; `dom.ts:38`-style clipboard misses are deliberately not logged |
+| front-end `main.ts:894` (session save swallowed) and `render/engines.ts:164` (d2 preload swallowed) | the two silent real failures; `dom.ts`'s `copyText` misses are deliberately not logged |
 
 There is **no** render-over-budget comparison and no per-switch breadcrumb: the log says which document
 was on screen because the startup line carries `argv` and the session line carries the open tabs, not
@@ -1565,7 +1625,7 @@ version string apart.
 
 | case | observed |
 |---|---|
-| `MARKDOWNAURA_SELFTEST=panic` | exit `0xC0000409`, `run.json` left behind, one `crash/*.md` with `location: src\lib.rs:220`, thread `markdownaura-selftest`, the run id, the last 50 lines and the `env` entry |
+| `MARKDOWNAURA_SELFTEST=panic` | exit `0xC0000409`, `run.json` left behind, one `crash/*.md` with `location: src\lib.rs:228` (the `panic!` site in `spawn_selftest`), thread `markdownaura-selftest`, the run id, the last 50 lines and the `env` entry |
 | the launch after it | `previous run did not exit cleanly` naming that run id, then a clean close writes `app.exit` and removes `run.json` |
 | `=abort` | exit `0xC0000409`, `run.json` left behind, **no** crash report — nothing can hook an abort |
 | `=jserror` | the process survives and the file gets `{"mod":"ui","msg":"Uncaught Error: MARKDOWNAURA_SELFTEST"}` with source/line/col |
@@ -1626,7 +1686,7 @@ that pinned that shape. The folder the remaining *open* button reveals holds the
    it can be dragged into an issue) plus *copy* putting the same text on the clipboard for pasting inline.
    Opening the folder is enough: the files in it are the report, and the panic hook's crash report never went
    through either button. The reasoning about *no pre-filled-issue button* still holds for any future
-   affordance: it would cost a new entry in the `opener` allow-list (`capabilities/default.json:24`) and cannot
+   affordance: it would cost a new entry in the `opener` allow-list (`capabilities/default.json:27`) and cannot
    carry a log through a URL.
 
 ### 13.14 Docs

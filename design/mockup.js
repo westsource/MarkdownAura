@@ -1104,7 +1104,7 @@ Errors render inline with the line number instead of blanking the page.`
   const SYNTAX = [
     { lang: "mermaid", note: "", code: "flowchart LR\n  A --> B" },
     { lang: "dot", note: "", code: "digraph {\n  a -> b\n}" },
-    { lang: "d2", note: "not installed — install from settings", code: "direction: right\nx -> y" },
+    { lang: "d2", note: "bundled (~11.5 MB)", code: "direction: right\nx -> y" },
   ];
 
   function renderHelp() {

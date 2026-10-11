@@ -112,7 +112,7 @@
   color: var(--code-tx);
 }
 
-/* Prism's token classes (SPEC §13). `render/highlight.ts` writes them; the colours are the eight
+/* Prism's token classes (SPEC §13). `render/highlight.ts` writes them; the colours are the nine
    code tokens in tokens.css, so a theme switch re-tunes the code block with everything else. An
    unknown language is never highlighted, so a fence with no grammar simply has no `.token` spans. */
 .prose .token.comment, .prose .token.prolog, .prose .token.doctype, .prose .token.cdata { color: var(--code-cmt); font-style: italic; }
@@ -209,8 +209,8 @@
 /* ---------- frontmatter ----------
    rendered as a row of pills above h1, never as a table */
 
-.frontmatter { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--sp-3); }
-.frontmatter .pill {
+.prose .frontmatter { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--sp-3); }
+.prose .frontmatter .pill {
   font-size: .73em;   /* 11px, relative so it tracks the reading size */
   color: var(--tx-2);
   background: var(--side);

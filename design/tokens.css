@@ -92,7 +92,7 @@
   --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;
 
   /* radii */
-  --r-sm: 6px;   /* badges, chips, menu items */
+  --r-sm: 6px;   /* rows, menu items, small buttons — badges are 5px, chips/pills 99px */
   --r-md: 8px;   /* buttons, inputs, tab top corners */
   --r-lg: 12px;  /* cards, overlays, window */
 

@@ -12,6 +12,10 @@ from the shipped app carries a **v1 status** note naming three things: what is
 implemented, what is deferred *with its feature*, and what deliberately deviates. The
 notes were last revised on 2026-10-08 against the running build (83 Rust tests on that date, `tsc`
 clean, production asset-protocol render verified, the same suite run on Linux, and a live UI sweep).
+A documentation/code pass on 2026-10-11 corrected the notes that had drifted since — a card render
+time and an update check that were described wrongly, the badge radii, the icon stroke range, the
+mockup's reading-section row count, the editor chunk figures and two cross-references; the suite is
+84 tests as of that pass.
 
 Three terms are used precisely, because the difference between them is the whole point
 of the status notes:
@@ -353,8 +357,9 @@ write it as often, and the badge should name the engine either way.
   visible stall. The footer names the engine and repeats the interaction hints.
 
 **v1 status — viewer footer.** The target footer carried the engine's render time. The app
-shows the engine name plus `scroll to zoom · drag to pan · esc to close`; the card's render
-time is on the card and in the status bar, not duplicated here. Deviates (harmless).
+shows the engine name plus `scroll to zoom · drag to pan · esc to close`; the render time stays
+in the status bar, and it is the *document's* (`rendered in N ms`), never a per-card one —
+no card carries a time of its own. Deviates (harmless).
 
 ### Engine loading — measured, not assumed
 
@@ -394,9 +399,11 @@ Consequences, in order:
    generate the texts (e.g. `cargo about`) and ship those too.
 
 Nothing is fetched while you read — every engine's wasm is inlined in the bundle, which is what makes
-"no network calls" literally true. The two exceptions are both explicit and neither happens on its own:
-the installer's WebView2 bootstrapper, on a machine with no WebView2 Runtime (`IMPL.md` §8), and the
-update check in the About sheet, which runs when it is clicked (§10).
+"no network calls" literally true. The two exceptions are both explicit: the installer's WebView2
+bootstrapper, on a machine with no WebView2 Runtime (`IMPL.md` §8), and the update check — the same
+small `latest.json` is fetched **quietly once at launch**, its answer appearing as the status-bar chip
+(§10), and again when the About sheet's `check for updates` row is clicked. Nothing about the reader
+travels with either.
 
 **v1 status — d2 ships.** It was the one opt-in download, and the download was never built; it is a
 bundled engine now, so `engine_status` reports `installed: true` for all three and there is no install
@@ -597,8 +604,13 @@ adding a key means editing two files and the help panel can silently go stale.
   the accent. Nothing else is saturated.
 - **Sentence case everywhere** — `open folder`, not `Open Folder`. Lowercase UI reads as
   tool-like rather than corporate.
-- Radii: 6px badges/chips, 8px buttons/inputs/tabs, 12px cards/overlays/window.
-- Icons are inline SVG, 1.1–1.3px strokes, no icon font, no emoji.
+- Radii come from the three tokens, not from the element: 6px (`--r-sm`) rows, menu items and the small
+  buttons — tree rows, outline rows, `tab-close`, the status and immersive bars; 8px (`--r-md`) buttons,
+  inputs, tabs, the segmented control, menus, toasts, the find bar; 12px (`--r-lg`) cards, overlays, the
+  window. Badges are 5px and chips/frontmatter pills are full pills (99px), so neither is a step on that
+  scale.
+- Icons are inline SVG, 1.1–1.6px strokes — most 1.1–1.3, 1.4 on the find controls and two 10px status
+  glyphs, 1.5 on the tree chevrons, 1.6 on the tab close's ✕ — no icon font, no emoji.
 - Motion is 90ms/140ms `ease-out`. Reduce-motion is honoured twice: the OS query in
   `tokens.css` zeroes the motion tokens, and the settings toggle stamps
   `[data-motion="reduce"]` which does the same — the in-app control exists because the OS
@@ -638,6 +650,15 @@ The mockup hand-draws its diagram SVGs. The real app calls the engines — the c
 overlay and error markup in `mockup.js` (`renderMarkdown`) is what was ported, and
 `src/render/pipeline.ts` keeps the class names byte-identical so the two share one
 stylesheet.
+
+**Scope note — what the mockup does not mirror.** It stays the clickable design reference, not a
+copy of the app, and four surfaces have drifted apart: the status bar has no truncation cluster
+(`#stTrunc`), the About sheet has neither the lede paragraph nor the `logs` row and its
+unclean-run line, the settings sheet still draws the pre-2026-10-06 row set (an `engines` section,
+the ignore chips, the watch-debounce read-out) and lacks the shipped math switch, default-app row
+and diagnostics section, and the two editor panes are a `<textarea>` stand-in for CodeMirror. The
+app-only classes that follow from this — and from a state the mockup's synchronous renderer has no
+answer for — are listed in `IMPL.md` §4.
 
 ## 10. Settings, immersive, help
 
@@ -809,8 +830,8 @@ and the diagram source. Translating them would make the UI harder to search, not
 
 **Scope note.** The mockup carries the language row (layout parity) but stays English: two
 catalogues in the reference implementation would drift from `src/i18n.ts`, which is the app's only
-catalogue. The mockup's row exists so the four-row reading section can be reviewed at the right
-height.
+catalogue. The mockup's row exists so the five-row reading section it draws can be reviewed at the right
+height (the app's is six — it adds the math switch; the row table above is the shipped order).
 
 ### Immersive (`F11`) — what survives
 
@@ -879,10 +900,12 @@ Tab-related deferrals are not here — they live in §5, already designed and wa
 
 ## 12. Editing
 
-**Status: designed, nothing built.** §1 was amended for this section on 2026-10-04 (product owner's
-call). The control is chosen and measured in `IMPL.md` §11 — CodeMirror 6 with an explicit extension
-list, 498.8 KB minified / 173.4 KB gzip as its own lazy chunk — together with the four integration
-facts that were measured rather than assumed.
+**Status: implemented** — the v1 status note at the end of this section is what shipped. §1 was
+amended for this section on 2026-10-04 (product owner's call). The control is chosen and measured in
+`IMPL.md` §11 — CodeMirror 6 with an explicit extension list; shipped, entering the mode loads five
+chunks plus one stylesheet, 483.5 KB minified / 167.2 KB gzip in total, the largest chunk 214.9 KB
+(the single-entry probe that chose the control measured 498.8 KB / 173.4 KB, which is the worst case)
+— together with the four integration facts that were measured rather than assumed.
 
 ### The stance
 
@@ -949,7 +972,7 @@ surface is safe only while nothing can write:
   reader carries `lf`, `crlf` or `mixed` (`mixed` when the file has both), a write rejoins the buffer
   with the single ending the file had, and a `mixed` file is **refused** rather than rewritten — a
   silent normalisation is a permanent change to the reader's file, so the refusal is the honest answer
-  (it is the sixth entry in the list above). A trailing newline, or its absence, is preserved too.
+  (it is the third entry in the list above). A trailing newline, or its absence, is preserved too.
 - **Dirty is visible in two places**, because a lost buffer is the failure this mode can cause: the
   tab strip (§5's six states gain a seventh, `dirty`) and the status bar. Closing a dirty tab, or
   quitting with any dirty buffer, asks first.
