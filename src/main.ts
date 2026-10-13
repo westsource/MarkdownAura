@@ -519,6 +519,49 @@ async function openFile(path: string, preview: boolean): Promise<void> {
   await loadTab(tab);
 }
 
+/**
+ * A click on a link inside a rendered document (SPEC §13): a URL belongs to the browser, a markdown
+ * file is another tab of this window, any other local file is the file manager's, and `#id` is a
+ * scroll in the document already open.
+ *
+ * Nothing here lets the webview navigate — CSP would refuse the navigation rather than open a
+ * browser, which is the dead click this replaces — so the caller has already called `preventDefault`.
+ * Classification is Rust's (`link_target`); the one decision taken here is markdown-or-not, through
+ * `isMarkdownPath`, which is the only definition of that in the app.
+ */
+async function followLink(href: string, tab: Tab): Promise<void> {
+  let target: ipc.LinkTarget | null = null;
+  try {
+    target = await ipc.linkTarget(href, tab.file);
+  } catch (err) {
+    const { message, silent } = ipc.describeError(err);
+    if (!silent) toast(message, "err");
+    return;
+  }
+  if (!target) return;
+
+  switch (target.kind) {
+    case "anchor":
+      // Footnotes, and their `↩` back-refs, are what a document really links itself with. An
+      // author's `#heading` names an id the renderer never assigns, so it lands nowhere — which is
+      // the truth about that link.
+      doc.jumpTo(target.id);
+      return;
+    case "external":
+      // A refused scheme (anything but http, https, mailto) is not silent: the capability says no,
+      // and the URL is then what the reader gets, so they can act on it themselves.
+      void ipc.openExternal(target.url).catch(() => toast(target.url, "warn"));
+      return;
+    case "local":
+      if (!target.exists) {
+        toast(i18n.t("toast.linkMissing", { path: target.path }), "warn");
+        return;
+      }
+      if (ipc.isMarkdownPath(target.path)) await openFile(target.path, false);
+      else await ipc.revealInExplorer(target.path).catch(() => toast(i18n.t("toast.revealFailed"), "err"));
+  }
+}
+
 async function activate(index: number): Promise<void> {
   if (index === state.activeTab) return;
   const leaving = activeTab();
@@ -1242,7 +1285,17 @@ async function boot(): Promise<void> {
   for (const container of ["#out-preview", "#out-split"]) {
     document.querySelector<HTMLElement>(container)?.addEventListener("click", (event) => {
       const button = (event.target as HTMLElement).closest<HTMLElement>("[data-act]");
-      if (!button) return;
+      if (!button) {
+        // A link in the document (SPEC §13). `preventDefault` on every one of them, not only the
+        // ones this app acts on: an `<a href>` left to the webview makes it navigate away from the
+        // app, which is the one thing a click on a link must never do.
+        const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>("a[href]");
+        if (!anchor) return;
+        event.preventDefault();
+        const tab = activeTab();
+        if (tab) void followLink(anchor.getAttribute("href") ?? "", tab);
+        return;
+      }
 
       const card = button.closest<HTMLElement>("figure.diagram");
       if (card) {

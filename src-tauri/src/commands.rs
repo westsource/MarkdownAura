@@ -4,6 +4,7 @@
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
+use serde::Serialize;
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 use crate::error::{ApiError, Result};
@@ -155,6 +156,122 @@ fn image_resolver<'a, R: tauri::Runtime>(
 ) -> impl Fn(&str) -> Option<String> + 'a {
     let dir = dir.to_path_buf();
     move |dest: &str| webview.convert_file_src(local_image_path(dest, &dir)?, None).ok()
+}
+
+// ---------------------------------------------------------------- links
+
+/// What a link in a rendered document points at (SPEC §13).
+///
+/// This is the one place that decision is made: a URL with a scheme is the browser's, `#id` is a
+/// scroll inside the document being read, and everything else is a path on this machine. *Whether* a
+/// path is markdown — and so a tab of this window rather than a file in the file manager — is
+/// deliberately not answered here: `MD_EXTENSIONS` in `src/ipc.ts` is the one definition of that, and
+/// Rust keeps no second copy of it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum LinkTarget {
+    /// A URL with a scheme (`http:`, `https:`, `mailto:`) — the default application's, never this
+    /// webview's. It goes to the opener plugin, whose capability allows those three schemes and
+    /// refuses every other one; a refusal is shown to the reader as the URL itself.
+    External { url: String },
+    /// `#fn-1`: a scroll, not a file. The ids a document really links itself with are the footnote
+    /// refs and their `↩` back-refs (`markdown.rs` writes both), which are element ids in the render.
+    Anchor { id: String },
+    /// A path, absolute or resolved against the folder of the document the link was written in.
+    /// `exists` is what turns a click on a destination that is not on disk into a toast rather than a
+    /// failing open.
+    Local { path: String, exists: bool },
+}
+
+/// `C:` — the shape `has_scheme` special-cases, and the shape that follows a `file:` URL's third
+/// slash.
+fn is_drive_letter(path: &str) -> bool {
+    let mut chars = path.chars();
+    matches!(chars.next(), Some(c) if c.is_ascii_alphabetic()) && chars.next() == Some(':')
+}
+
+/// A `file:` URL as the path it is: `file:///C:/docs/a.md`, `file:///home/a.md`,
+/// `file://server/share/a.md`.
+///
+/// It arrives more often than its rarity in hand-written markdown suggests, because a copied browser
+/// address bar is one. The scheme and the *authority* come off; the `/` in front of a drive letter
+/// is the URL's separator rather than part of the path (`Path::new("/C:/docs")` is rooted on the
+/// current drive, which is not the file the author meant); and a host, when there is one, is a UNC
+/// share — which is also what a leading `//` means on Unix.
+fn file_url_path(url: &str) -> Option<PathBuf> {
+    let rest = url.strip_prefix("file://")?;
+    let (authority, path) = match rest.find('/') {
+        Some(at) => rest.split_at(at),
+        None => (rest, ""),
+    };
+    let path = percent_decode(path);
+    let path = match path.strip_prefix('/') {
+        Some(tail) if cfg!(windows) && is_drive_letter(tail) => Cow::Borrowed(tail),
+        _ => path,
+    };
+    Some(if authority.is_empty() {
+        PathBuf::from(path.as_ref())
+    } else {
+        // A share is spelled with the platform's own separator: `//host/share/a.md` is the URL's
+        // form, and Rust keeps a path prefix exactly as it was parsed, so normalizing the components
+        // would leave the mixed `//host/share\a.md` — a path Windows accepts, and one nobody writes.
+        let unc = format!("//{authority}{}", path.as_ref());
+        PathBuf::from(if cfg!(windows) { unc.replace('/', r"\") } else { unc })
+    })
+}
+
+/// Classifies one markdown link destination (SPEC §13). `dir` is the folder of the document the link
+/// was written in, which is what a relative destination is relative to.
+///
+/// `None` is a destination that says nothing (`[x]()`): a link with nowhere to go, not an error.
+fn classify_link(dest: &str, dir: &Path) -> Option<LinkTarget> {
+    let dest = dest.trim();
+    // `#` ends the target and starts the fragment, and a literal `#` in a file name is written `%23`
+    // — so splitting first is the URL rule rather than an approximation of it. What is decoded is
+    // each half on its own, after the split, for the same reason.
+    let (target, fragment) = dest.split_once('#').unwrap_or((dest, ""));
+    if target.is_empty() {
+        let id = percent_decode(fragment).into_owned();
+        return (!id.is_empty()).then_some(LinkTarget::Anchor { id });
+    }
+    if let Some(path) = file_url_path(target) {
+        let path = normalize(path);
+        return Some(LinkTarget::Local {
+            exists: path.exists(),
+            path: path.display().to_string(),
+        });
+    }
+    // Decoded *before* the scheme is read, and that order is the whole point: `E:%5Cdocs%5Ca.md` is a
+    // markdown destination for an absolute Windows path (a backslash in a destination may only be
+    // written encoded), and a scheme read off the raw text sees one letter and a colon and sends the
+    // path to the browser. What the browser gets is still the destination as written.
+    let decoded = percent_decode(target);
+    // `//host/a.md` is protocol-relative, i.e. a URL; `has_scheme` knows that `C:\a.md` is not one.
+    // The fragment rides along: for a URL it is the browser's to resolve.
+    if decoded.starts_with("//") || has_scheme(&decoded) {
+        return Some(LinkTarget::External { url: dest.to_string() });
+    }
+    let path = normalize(dir.join(Path::new(decoded.as_ref())));
+    Some(LinkTarget::Local {
+        exists: path.exists(),
+        path: path.display().to_string(),
+    })
+}
+
+/// Classifies a link destination from a rendered document (SPEC §13): what a click on it should open,
+/// and where. The frontend makes the click; the arithmetic — a `#` fragment, percent-encoding, a
+/// Windows drive letter that reads as a scheme — lives here for the same reason `resolve_target`'s
+/// does.
+///
+/// `doc` is the document the link lives in, and only its folder is used: a relative destination is
+/// relative to the file that contains it.
+#[tauri::command]
+pub async fn link_target(dest: String, doc: PathBuf) -> Result<Option<LinkTarget>> {
+    blocking(move || {
+        let dir = doc.parent().unwrap_or(Path::new("")).to_path_buf();
+        Ok(classify_link(&dest, &dir))
+    })
+    .await
 }
 
 // ---------------------------------------------------------------- tree
@@ -551,6 +668,143 @@ mod tests {
             } else {
                 under(&dir(), &["c:", "img", "a.png"])
             }
+        );
+    }
+
+    // ------------------------------------------------------------ links
+
+    fn link(dest: &str) -> Option<LinkTarget> {
+        classify_link(dest, &dir())
+    }
+
+    /// A local destination that is not on disk — what every case below expects unless it writes a
+    /// real file.
+    fn local(path: &str) -> Option<LinkTarget> {
+        Some(LinkTarget::Local {
+            path: path.to_string(),
+            exists: false,
+        })
+    }
+
+    #[test]
+    fn a_url_is_the_browsers_business() {
+        assert_eq!(
+            link("https://example.com/a.md"),
+            Some(LinkTarget::External {
+                url: "https://example.com/a.md".into()
+            })
+        );
+        assert_eq!(
+            link("mailto:someone@example.com"),
+            Some(LinkTarget::External {
+                url: "mailto:someone@example.com".into()
+            })
+        );
+        // A fragment of a URL is the browser's to resolve, so it stays on the URL. A destination
+        // ending in `.md` is the case that would otherwise be read as a local document.
+        assert_eq!(
+            link("https://example.com/a#b"),
+            Some(LinkTarget::External {
+                url: "https://example.com/a#b".into()
+            })
+        );
+        // Protocol-relative is still a URL, the same rule the image resolver keeps.
+        assert_eq!(
+            link("//example.com/a.md"),
+            Some(LinkTarget::External {
+                url: "//example.com/a.md".into()
+            })
+        );
+    }
+
+    #[test]
+    fn a_local_link_resolves_against_the_documents_folder() {
+        assert_eq!(link("other.md"), local(&under(&dir(), &["other.md"])));
+        assert_eq!(link("./sub/a.md"), local(&under(&dir(), &["sub", "a.md"])));
+        assert_eq!(
+            link("../sibling.md"),
+            local(&under(dir().parent().unwrap(), &["sibling.md"]))
+        );
+        assert_eq!(link("images/a%20b.png"), local(&under(&dir(), &["images", "a b.png"])));
+        assert_eq!(link("图 1.md"), local(&under(&dir(), &["图 1.md"])));
+        // A one-letter prefix with a separator after it is a drive letter, not a scheme — in a link
+        // as in an image.
+        let drive = if cfg!(windows) {
+            r"C:\docs\a.md".to_string()
+        } else {
+            under(&dir(), &[r"C:\docs\a.md"])
+        };
+        assert_eq!(link(r"C:\docs\a.md"), local(&drive));
+        // The form markdown actually carries an absolute Windows path in: a `\` may only be written
+        // encoded, and `E:` must be read as a drive letter rather than as a scheme.
+        let encoded_expected = if cfg!(windows) {
+            r"E:\docs\a.md".to_string()
+        } else {
+            under(&dir(), &[r"E:\docs\a.md"])
+        };
+        assert_eq!(link("E:%5Cdocs%5Ca.md"), local(&encoded_expected));
+    }
+
+    #[test]
+    fn a_fragment_is_a_scroll_in_the_document_being_read() {
+        // What a document really links itself with: the footnote refs and their `↩` back-refs, which
+        // are element ids in the render (`markdown.rs` writes both).
+        assert_eq!(link("#fn-1"), Some(LinkTarget::Anchor { id: "fn-1".into() }));
+        assert_eq!(link("#fnref-2"), Some(LinkTarget::Anchor { id: "fnref-2".into() }));
+        // An author's `#heading` names an id the renderer never assigns, but the click is still this
+        // document's business rather than a file's.
+        assert_eq!(link("#配置"), Some(LinkTarget::Anchor { id: "配置".into() }));
+        // A fragment on a link to *another* document: the file is what opens, and the fragment is not
+        // ours to resolve — heading ids are assigned per render (`h0`, `h1`, …).
+        assert_eq!(link("other.md#top"), local(&under(&dir(), &["other.md"])));
+        // A destination that says nothing is not a link.
+        for empty in ["", "  ", "#", " # "] {
+            assert_eq!(link(empty), None, "{empty:?} says nothing");
+        }
+    }
+
+    #[test]
+    fn a_file_url_is_the_path_it_names() {
+        // A host is the authority, and on Windows that is a UNC share.
+        assert_eq!(
+            link("file://server/share/a.md"),
+            local(if cfg!(windows) {
+                r"\\server\share\a.md"
+            } else {
+                "//server/share/a.md"
+            })
+        );
+        // The third slash is the URL's, not the path's: what follows it is a drive letter, and
+        // `C:\docs` is a different file from a `/C:/docs` rooted on the current drive.
+        assert_eq!(
+            link("file:///C:/docs/a.md"),
+            local(if cfg!(windows) { r"C:\docs\a.md" } else { "/C:/docs/a.md" })
+        );
+        // Off the drive letter the root survives, and percent-encoding decodes as it does everywhere.
+        if !cfg!(windows) {
+            assert_eq!(link("file:///home/a%20b.md"), local("/home/a b.md"));
+        }
+    }
+
+    #[test]
+    fn a_destination_that_is_on_disk_says_so() {
+        // The one thing the frontend branches on: a link to a file that is not there becomes a toast
+        // instead of a failing open.
+        let base = std::env::temp_dir().join("markdownaura-link-target");
+        std::fs::create_dir_all(&base).unwrap();
+        let real = base.join("real.md");
+        std::fs::write(&real, "# real\n").unwrap();
+
+        assert_eq!(
+            classify_link("real.md", &base),
+            Some(LinkTarget::Local {
+                path: real.display().to_string(),
+                exists: true
+            })
+        );
+        assert_eq!(
+            classify_link("gone.md", &base),
+            local(&base.join("gone.md").display().to_string())
         );
     }
 

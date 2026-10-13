@@ -201,6 +201,15 @@ export interface StartupInfo {
   path: string | null;
 }
 
+/** What a link in a rendered document points at (SPEC §13). Mirrors `LinkTarget` in
+ *  `src-tauri/src/commands.rs`, where the destination is classified. */
+export type LinkTarget =
+  | { kind: "external"; url: string }
+  | { kind: "anchor"; id: string }
+  /** `exists` is false for a destination that is not on disk. Whether the path is *markdown* is not
+   *  asked here — `isMarkdownPath` is the one definition of that, further down this file. */
+  | { kind: "local"; path: string; exists: boolean };
+
 // ---------------------------------------------------------------- invoke wrapper
 
 /** One failed command, in the shape `diag.ts` logs: the command name and the raw error, never the
@@ -304,6 +313,12 @@ export const defaultAppStatus = () => call<DefaultAppStatus>("default_app_status
 export const setDefaultApp = (path: string | null) => call<string>("set_default_app", { path });
 export const revealInExplorer = (path: string) => call<void>("reveal_in_explorer", { path });
 
+/** Where a click on a link inside a rendered document should go (SPEC §13). `doc` is the document
+ *  the link was written in — a relative destination resolves against its folder. `null` means the
+ *  destination says nothing (`[x]()`). */
+export const linkTarget = (dest: string, doc: string) =>
+  call<LinkTarget | null>("link_target", { dest, doc });
+
 export const watchSet = (paths: string[]) => call<WatcherStatus>("watch_set", { paths });
 export const watchStopAll = () => call<void>("watch_stop_all");
 export const watcherStatus = () => call<WatcherStatus>("watcher_status");
@@ -362,8 +377,9 @@ export const pickFile = async (title: string, extensions: string[]): Promise<str
 };
 
 /** Opens a URL in the system browser. Wrapped here for the same reason every other call is: this
- *  module is the app's whole Tauri boundary (`IMPL.md` §2 rule 3), plugin APIs included. The plugin
- *  is scoped by capability to the one URL the app links to. */
+ *  module is the app's whole Tauri boundary (`IMPL.md` §2 rule 3), plugin APIs included. The
+ *  capability allows `http`, `https` and `mailto` and refuses every other scheme — a refusal is the
+ *  capability layer's, not a check this module keeps (`capabilities/default.json`). */
 export const openExternal = (url: string) => openUrl(url);
 
 // ---------------------------------------------------------------- updates

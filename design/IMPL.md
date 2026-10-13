@@ -25,7 +25,7 @@ read against.
 | layer | choice | why |
 |---|---|---|
 | shell | Tauri 2 (`2.12.1`), WebView2 | given |
-| external links | `tauri-plugin-opener` `2`, capability-scoped | the About sheet's GitHub line is the only URL the app opens; the plugin beats shelling out to `cmd /C start`, and the scope is what makes "only that URL" true |
+| external links | `tauri-plugin-opener` `2`, capability-scoped | the About sheet's GitHub line, and any `http`/`https`/`mailto` link a document carries; the plugin beats shelling out to `cmd /C start`, and the scope is what makes "these schemes and no others" true |
 | frontend | **vanilla TypeScript + Vite 6** | No framework runtime. The mockup's logic (`design/mockup.js`) ports almost line for line, and the app's UI is a handful of panes plus a tab strip — a virtual DOM earns nothing and costs 40–150 KB. |
 | markdown | **Rust side, `pulldown-cmark` 0.13.4** | decided 2026-10-01, see §4 |
 | watching | `notify` 8 | coalesced in our own thread, see §3 |
@@ -97,7 +97,7 @@ MarkdownAura/
 │     ├─ diag.rs               # the NDJSON log, its rotation, the panic report and the run marker (§13)
 │     └─ spec.rs               # the CommonMark/GFM conformance gate — `#[cfg(test)]`, runs nothing
 ├─ src/                        # frontend
-│  ├─ main.ts                  # boot, theming, layout, keyboard, session
+│  ├─ main.ts                  # boot, theming, layout, keyboard, session, link clicks
 │  ├─ i18n.ts                  # en + zh-CN catalogues, t(), data-i18n scanner
 │  ├─ env.d.ts                 # build-time constants declared once (__APP_VERSION__)
 │  ├─ measure.ts               # reading-width presets (record + guard + token writer)
@@ -181,11 +181,11 @@ throw and the settings panel silently refused to open.
 
 ### Commands (frontend → Rust)
 
-Twenty-four commands, all registered in `lib.rs`. All are `async` — except `startup_target`,
+Twenty-five commands, all registered in `lib.rs`. All are `async` — except `startup_target`,
 `data_directory`, `default_app_status` and `set_log_level`, which are pure reads of state or of a
 path — and the filesystem-heavy ones
 (`open_folder`, `read_dir`, `resolve_target`, `read_file`, `render_doc`,
-`reveal_in_explorer`, `session_load`, `session_save`, `engine_status`, `note_recent`) hop
+`reveal_in_explorer`, `link_target`, `session_load`, `session_save`, `engine_status`, `note_recent`) hop
 to a blocking thread through one `spawn_blocking` helper, because the §9 budgets assume no
 command stalls the UI thread. Two exceptions are deliberate and named so they stay
 decisions: the watcher commands do their work inline while holding the watcher mutex
@@ -235,6 +235,15 @@ path).
                                        -> Result<RenderedDoc>;
 // -> implemented for Windows (`explorer /select,<path>`) and other platforms (`xdg-open`); the tab
 //    menu's "show in explorer" and the About sheet's data-directory button both call it.
+#[tauri::command] async fn link_target(dest: String, doc: PathBuf) -> Result<Option<LinkTarget>>;
+// -> what a click on a link in a rendered document should open (SPEC §13): `{ kind: "external", url }`,
+//    `{ kind: "anchor", id }` or `{ kind: "local", path, exists }`, and `null` for a destination that
+//    says nothing (`[x]()`). Classified here rather than in TypeScript for the same reason
+//    `resolve_target` is: a markdown destination is URL-shaped, and percent-encoding in front of a
+//    Windows drive letter (`E:%5Cdocs%5Ca.md`) reads as a scheme to anything that looks at the text
+//    before decoding it. The frontend still decides *markdown or not*, through `isMarkdownPath` —
+//    Rust keeps no copy of the extension list on purpose. `doc` is the document the link was written
+//    in; only its folder is used, because that is what a relative destination is relative to.
 
 // --- watching ---
 #[tauri::command] async fn watch_set(paths: Vec<PathBuf>) -> Result<WatcherStatus>;
@@ -920,9 +929,11 @@ the quit goes through `destroy()` rather than re-emitting the event), `core:even
   `allow-unlisten` for the `fs://` and `app://` events, `dialog:allow-open`, the updater pair
   (`updater:default`, `process:allow-restart`) that the About sheet's check-for-updates path uses,
   and **one scoped opener permission** —
-  `opener:allow-open-url` with `allow: [{ "url": "https://github.com/westsource/MarkdownAura" }]`.
-  That single entry is what makes "the app can open exactly one URL" a fact rather than an
-  intention; widening it is a security change, not a convenience one.
+  `opener:allow-open-url` with `allow: [{ "url": "https://*" }, { "url": "http://*" }, { "url": "mailto:*" }]`.
+  Widened 2026-10-13 (SPEC §13): it used to allow exactly the About sheet's GitHub URL, and a document's
+  own web links go through the same command. Those three schemes are what makes "the app can open a web
+  page and a mail address and nothing else" a fact rather than an intention; widening it further is a
+  security change, not a convenience one.
 - **The installer cannot set the default handler either, so it leaves a marker instead.**
   `bundle.windows.nsis.installerHooks` points at `nsis/hooks.nsh`, whose `NSIS_HOOK_POSTINSTALL` writes
   `HKCU\Software\MarkdownAura\OfferDefaultApp = 1` (HKCU because the installer is per-user by default, and
@@ -1022,7 +1033,7 @@ status bar's `rendered in N ms` is where a reader sees it.
 
 ## 10. Testing
 
-- **Rust: 84 unit tests, in-module** (`cargo test --lib`; 84 on 2026-10-11, and the count moves as
+- **Rust: 89 unit tests, in-module** (`cargo test --lib`; 89 on 2026-10-13, and the count moves as
   tests are added) — `session` (round-trip, unknown
   version, corrupt file, missing file, no temp file left, recent cap/dedupe/order);
   `fs_ops` (ignore rules, BOM detection, UTF-16 byte orders, truncation at the 8 MiB cap);
@@ -1036,7 +1047,9 @@ status bar's `rendered in N ms` is where a reader sees it.
   `engines` (all three bundled and always installed, no opt-in); `lib` (arg parsing, unknown
   flags ignored); `emphasis` (16: the shapes the CJK widening accepts, the ones it refuses, and the
   content boundaries it does not cross); `spec` (the conformance gate below); `diag` (log-level
-  parsing, rotation, the unclean-run marker and the tail read); `commands` (the two read commands' edge cases). An
+  parsing, rotation, the unclean-run marker and the tail read); `commands` (the two read commands'
+  edge cases, the image resolver's arithmetic, and link classification since 2026-10-13: URL vs path,
+  `#fragment`, `file:` URLs, percent-encoded Windows paths, and whether the destination is on disk). An
   integration-test target would need `build.rs`'s link-arg repair, which is why the tests
   live in `#[cfg(test)]` modules — do not "move them out" without reading that comment.
 - **`markdown` gets hostile fixtures that are not happy paths** (required by §4): raw

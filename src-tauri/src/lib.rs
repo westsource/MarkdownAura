@@ -183,6 +183,7 @@ pub fn run() {
             commands::render_doc,
             commands::render_text,
             commands::reveal_in_explorer,
+            commands::link_target,
             commands::watch_set,
             commands::watch_stop_all,
             commands::watcher_status,

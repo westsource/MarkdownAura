@@ -748,12 +748,13 @@ Decisions inside that shape, each of which was made deliberately:
   owner's request) and moved again the same day: the facts block is hanging labels answering "what is
   this build", and a button and its state are a control, not one of those answers. A hairline, the button
   and its state are enough to say what it is.
-- **The GitHub line is the only external URL in the app**, and it is opened through
-`tauri-plugin-opener` rather than by shelling out to `cmd /C start`. The capability allows **that
-one URL** (`opener:allow-open-url` with a single-entry `allow` scope); anything else is refused by
-the capability layer, not by our code. The element is an `<a>` for semantics and cursor, but its
-click is intercepted (`preventDefault`): an `<a href>` inside the webview would try to navigate the
-webview itself, and CSP would block it rather than open a browser.
+- **The GitHub line is the only URL the app itself offers**, and it is opened through
+`tauri-plugin-opener` rather than by shelling out to `cmd /C start` — the same plugin a web link in a
+rendered document goes through (SPEC §13). The capability therefore allows `https://*`, `http://*` and
+`mailto:*` and refuses every other scheme; the refusal is the capability layer's, not our code. The
+element is an `<a>` for semantics and cursor, but its click is intercepted (`preventDefault`): an
+`<a href>` inside the webview would try to navigate the webview itself, and CSP would block it rather
+than open a browser.
 
 ### Settings
 
@@ -1166,3 +1167,44 @@ reader gets instead of the picture — inside a dashed box that carries the reas
 (`image failed to load`). While an image is still on the wire the box is reserved at 50px, so the text
 below it does not jump when the bytes land. Amended 2026-10-08: the alternative was Chromium's
 broken-image glyph and a paragraph that moved twice.
+
+### A link leaves the document
+
+A link in a rendered document is the one place a reader expects to go somewhere else, and there are
+exactly four somewheres (added 2026-10-13, product owner's request): **a URL** opens in the system
+browser, **another markdown file** becomes a tab of this window, **any other local file** opens the
+file manager on its folder with the file selected, and **`#id`** is a scroll in the document already
+open.
+
+Three consequences of taking the *destination* rather than the click at face value:
+
+- **Classification is Rust's, and only the classification.** `commands.rs::classify_link` answers
+  `external` / `anchor` / `local` + `exists`, for the same reason `resolve_target` is Rust's: a
+  markdown destination is URL-shaped, so `E:%5Cdocs%5Ca.md` reads as a one-letter scheme and a colon
+  to anything that looks at the text naively, and the decode has to happen before that look. What is
+  **not** decided there is whether a path is markdown — `MD_EXTENSIONS` in `src/ipc.ts` is the one
+  definition of that and Rust keeps no copy, so the click asks `isMarkdownPath` and nothing else.
+- **A fragment is the document's own.** `#fn-1` and `#fnref-1` are element ids the renderer writes,
+  and they are what a document really links itself with (footnote refs and their `↩` back-refs), so
+  those work. An author's `#heading` does not: heading ids are assigned per render (`h0`, `h1`, …),
+  and a slug table exists nowhere. A fragment on a link to *another* document is dropped rather than
+  guessed at — the file opens, the fragment names nothing in it.
+- **A click never navigates the webview.** Every `a[href]` click is `preventDefault`ed before it is
+  even classified: an `<a href>` left to itself makes the webview navigate, and CSP refuses that
+  rather than opening a browser — the dead click this replaces. The listener is delegated onto the
+  two rendered panes because the markup is rebuilt on every render, next to the diagram-card and
+  code-copy buttons that are delegated for the same reason.
+
+Two boundaries that are visible, and are therefore stated:
+
+- **A URL is the capability's decision, not the app's.** `opener:allow-open-url` allows `https://*`,
+  `http://*` and `mailto:*` — the schemes a document links a person with — and refuses everything
+  else. A refusal is shown as the URL itself, in a toast, so the reader can act on it.
+- **A destination that is not on disk is a toast, not a failure.** `link_target` reports `exists`, so
+  a link to a deleted file says `nothing at C:\…` instead of opening a failing tab or a file manager
+  on an empty folder. An empty destination (`[x]()`) does nothing at all: it is a link with nowhere
+  to go, which is what the author wrote.
+
+A `file:` URL is read as the path it names (`file:///C:/docs/a.md` is `C:\docs\a.md`), because that is
+the form a copied browser address bar has. Protocol-relative (`//host/a.md`) stays a URL, the same rule
+the image resolver keeps.
