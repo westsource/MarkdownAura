@@ -765,13 +765,16 @@ mod tests {
 
     #[test]
     fn a_file_url_is_the_path_it_names() {
-        // A host is the authority, and on Windows that is a UNC share.
+        // A host is the authority, and on Windows that is a UNC share. On Unix the same string is a
+        // legal path and `normalize` collapses the leading `//` into one separator — which is what
+        // reassembling a path from its components does there, and what the POSIX rule for a leading
+        // double slash allows.
         assert_eq!(
             link("file://server/share/a.md"),
             local(if cfg!(windows) {
                 r"\\server\share\a.md"
             } else {
-                "//server/share/a.md"
+                "/server/share/a.md"
             })
         );
         // The third slash is the URL's, not the path's: what follows it is a drive letter, and
