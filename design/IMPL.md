@@ -1307,6 +1307,15 @@ until a target headroom is reached (`--apply` to act; without it, a dry run). De
 for the product: Gitee is a *download mirror* — the updater's endpoint is GitHub, and every release's
 AppImage is still on GitHub — so no client's update path can notice.
 
+**Any `*.AppImage`, not only the staged spelling (2026-10-13).** The pattern was
+`/_linux-amd64\.AppImage$/`, which the staging rename introduced in 1.0.0 — so the four 0.2.x/0.3.x
+AppImages (`MarkdownAura_0.2.0_amd64.AppImage`, 87.9 MB each, **351 MB of the oldest assets in the
+repository**) were invisible to it. That is why v1.4.1's AppImage could be called the "oldest candidate"
+on 2026-10-08 while an earlier release's sat there untouched: the script's *policy* was oldest-first, its
+*pattern* was not. Widened to `/\.AppImage(\.sig)?$/` before the 1.5.0 run (nothing else has that
+suffix); the prune then did what it is for — v0.2.0's and v0.2.1's went, **175.8 MB freed, and not one
+release from the 1.4.x line was touched.**
+
 Two facts the first attempt at this did not know:
 
 * **The delete endpoint works.** `DELETE /repos/{owner}/{repo}/releases/{release_id}/attach_files/{file_id}`
@@ -1323,6 +1332,18 @@ releases (14 MB free), so the next release of comparable size will not fit and t
 give up: the step is run the audit (`node var/gitee-quota-audit.mjs`), run the prune, then publish — and when
 the prune would have to delete something recent to make room, that is a decision for the product owner, never
 for the script.
+
+**v1.5.0 leaves 954.5 MB / 1024 MB across 16 releases (69.5 MB free)** — the prune above freed 175.8 MB, the
+mirror took 129.3 MB, and the arithmetic is again one short of a release (setup 13.7 + zip 14 + deb 14.5 +
+AppImage 93.4 ≈ 135.6 MB), so the *next* one prunes first too. Two facts from that run worth keeping:
+
+- **v1.4.3 has no Gitee mirror at all.** The release list goes v1.4.2 → v1.5.0: that release was published to
+  GitHub (10 assets) and its site snapshot was taken, but the mirror step never ran, and nobody noticed for
+  four days because nothing reads Gitee automatically. Backfilling it needs 93 MB of quota that is not there;
+  the audit is the only thing that would have caught it, so it is worth running the audit *after* a release,
+  not only before one.
+- **The mirror's AppImage went up in one attempt** (`HTTP 201`, no undici timeout), so the `curl` fallback in
+  `var/gitee-ensure-asset.mjs` was not needed this time — it stayed a no-op, which is how it should be.
 
 **`WANT_FREE_MB` is free space, and the newest release's AppImage is not a prune candidate.** Both halves were
 learned the hard way on 2026-10-08: the loop compared the constant against the bytes *it had freed in this
