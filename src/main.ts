@@ -301,7 +301,11 @@ async function syncEditor(tab: Tab, retried = false): Promise<void> {
     { key: "split", host: "#editor-split", pre: "#out-split-src", container: "#view-split .pane-src" },
   ];
   for (const pane of panes) {
-    const on = tab.editing && tab.source !== null;
+    /* Which pane this is, is the *mode's* answer, not the text's: a save and the watcher's own
+       reload both drop `tab.source` for the length of a re-read, and reading that as "no editor"
+       hid the element the caret was in and put the tinted read-only sheet back underneath it — one
+       visible flash, and a pane that had lost its focus by the time the next keystroke arrived. */
+    const on = tab.editing;
     $(pane.container).classList.toggle("editing", on);
     $(pane.host).hidden = !on;
     $(pane.pre).hidden = on;
@@ -314,7 +318,15 @@ async function syncEditor(tab: Tab, retried = false): Promise<void> {
       if (!retried) await syncEditor(tab, true);
       return;
     }
-    editor.show(pane.key, tab.id, tab.buffer ?? tab.source ?? "", tab.blocked !== null);
+    /* Which text the pane should show, and the rule that it is *not* an assignment: `null` means the
+       pane has nothing to be given — a re-read still in flight, or a file that is gone, whose failed
+       read is an empty string rather than an empty document (pushing that would wipe a buffer the
+       reader may not have saved). In both the pane keeps what it has; when the text does arrive,
+       `editor.show` compares before assigning, so the caret and the undo history survive it.
+       Read after the mount await, because a re-read that landed while it was pending is the fresher
+       text. */
+    const text = tab.buffer !== null ? tab.buffer : tab.missing ? null : tab.source;
+    if (text !== null) editor.show(pane.key, tab.id, text, tab.blocked !== null);
   }
 }
 

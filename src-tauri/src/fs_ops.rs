@@ -174,7 +174,9 @@ fn decode_utf16(bytes: &[u8], big_endian: bool) -> String {
     String::from_utf16_lossy(&units)
 }
 
-fn mtime_ms(meta: &std::fs::Metadata) -> i64 {
+/// The mtime convention the whole app compares against: `save_doc`'s baseline, the conflict check,
+/// and the record that tells the watcher an event is this process's own write (SPEC §12).
+pub(crate) fn mtime_ms(meta: &std::fs::Metadata) -> i64 {
     meta.modified()
         .ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())

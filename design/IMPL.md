@@ -384,6 +384,18 @@ Debounce detail worth keeping: an event pushes the window out, so a burst of twe
 notifications collapses into one. Remove followed by create is classified as a *change*, not
 a removal, so a save-by-rewrite does not flicker a tab into `missing`.
 
+**A change this process made is not an external change.** `write_file` replaces a document through a
+temp file plus a rename (SPEC §12), and notify reports that burst like any other, so the watcher could
+not tell the app's own `ctrl S` from somebody else's edit — the save re-read the file *and* the watcher
+reloaded it, two repaints ~120 ms apart, and the second one arrived while the editable pane had no text
+to show (SPEC §12 records what that looked like). `save_doc` now records the mtime it left behind
+(`watcher::SelfWrites`, registered as state), and `flush` drops any path that still carries it: the
+disk already holds exactly what is on screen, so there is nothing to reload. The record is consumed by
+that comparison and dropped when it does not match — an external write moves the mtime, and that write
+is the one the reader still has to hear about. Paths meet through `fs_ops::absolute` plus the same
+case/separator folding as `normalizePath` in `state.ts`, because the two sides spell the same file
+independently. Found 2026-10-13 by timing the panes' DOM during a save, not by reading the code.
+
 ## 4. Markdown pipeline — **decided 2026-10-01**
 
 **Render in Rust with `pulldown-cmark` 0.13.4** (MIT, four light dependencies: `bitflags`,
@@ -1209,9 +1221,13 @@ status bar's `rendered in N ms` is where a reader sees it.
     after the reconfigure (accepted). Composition events do not throw, but real IME behaviour still has to be
     tried by hand on Windows with the actual input method.
 - **The unsaved-buffer conflict policy is decided: an external change reloads silently.** That is what the
-  watcher already does (`main.ts:1391-1397` drops `tab.source`/`tab.doc` and re-reads through Rust), so it needs
-  no new code — and its accepted cost is that an unsaved buffer is lost when something else writes the file.
+  watcher already does (the `fs://changed` handler in `main.ts` drops `tab.source`/`tab.doc` and re-reads
+  through Rust), so it needs no new code — and its accepted cost is that an unsaved buffer is lost when
+  something else writes the file.
   Recorded as the product owner's call on 2026-10-04, so that it is not later mistaken for an oversight.
+  Two corrections since, both because the edit mode is the first thing that *writes* the files it watches:
+  a change this process made is not an external one (§3), and a reload never turns the pane the reader is
+  typing in back into the read-only one while the text is being re-read (SPEC §12).
   Whatever does the saving still has to refuse the two states the reader merely *badges*: a truncated file
   (> 8 MiB) and a lossy decode would both round-trip into permanent data loss.
 

@@ -981,6 +981,15 @@ surface is safe only while nothing can write:
   a failure must never look like a success.
 - After a successful save the document is re-rendered through the normal path, so the preview, the
   outline, the word count and `rendered in N ms` all follow the new text.
+- **The save never disturbs the pane it came from.** Re-rendering the document is not re-rendering
+  the editor: the pane stays the editable pane, its text is replaced only when it actually differs,
+  and the caret, the selection, the undo history and the focus all survive `ctrl S`. Which pane this
+  is, is the *mode's* answer rather than the text's — a re-read leaves the text absent for a moment,
+  and reading that as "no editor" put the read-only sheet back under the caret (found 2026-10-13).
+- **A write this process made is not an external change**, and the watcher does not treat it as one
+  (`SelfWrites`, IMPL.md §3): the save path has already re-read and re-rendered the file, so the
+  event its own atomic replace produces has nothing left to reload. Without that rule one `ctrl S`
+  repainted the whole document twice, ~120 ms apart.
 - **The dirty mark is also the save control.** `ctrl S` is the keyboard path, and the status bar's
   `unsaved` mark is the pointer path: it already says the one thing that is wrong, it is already in the
   accent colour, and it already exists — so the mouse route to saving costs no new chrome. Without it a

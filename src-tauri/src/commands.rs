@@ -8,7 +8,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 use crate::error::{ApiError, Result};
-use crate::watcher::WatcherStatus;
+use crate::watcher::{SelfWrites, WatcherStatus};
 use crate::{engines, fs_ops, markdown, session, watcher::FsWatcher, AppState, StartupInfo, WatcherState};
 
 /// Runs blocking work off the UI thread. A poisoned or cancelled task is reported as an I/O
@@ -327,6 +327,10 @@ pub async fn read_file(path: PathBuf) -> Result<fs_ops::FilePayload> {
 /// Writes an edited buffer back (SPEC §12). The mtime check is the safety net under the reader's
 /// reload policy: an external change wins, so a save that would overwrite content the buffer never
 /// saw is refused instead of applied.
+///
+/// The write is also *recorded* (`SelfWrites`), because the temp-file-and-rename it does is reported
+/// by the watcher exactly like an external edit; the record is what lets the watcher tell the two
+/// apart and leave this save's echo alone.
 #[tauri::command]
 pub async fn save_doc(
     path: PathBuf,
@@ -334,8 +338,12 @@ pub async fn save_doc(
     encoding: String,
     eol: String,
     expected_mtime_ms: i64,
+    writes: State<'_, SelfWrites>,
 ) -> Result<i64> {
-    blocking(move || fs_ops::write_file(&path, &text, &encoding, &eol, expected_mtime_ms)).await
+    let written = path.clone();
+    let mtime = blocking(move || fs_ops::write_file(&path, &text, &encoding, &eol, expected_mtime_ms)).await?;
+    writes.remember(&written, mtime);
+    Ok(mtime)
 }
 
 /// Renders markdown that has no file behind it — the live preview of an edited buffer (SPEC §12).

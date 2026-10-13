@@ -24,7 +24,7 @@ use std::sync::Mutex;
 use serde::Serialize;
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
-use watcher::FsWatcher;
+use watcher::{FsWatcher, SelfWrites};
 
 /// Emitted to the running window when a second launch hands over a path.
 pub const OPEN_EVENT: &str = "app://open";
@@ -114,6 +114,7 @@ pub fn run() {
             startup: Mutex::new(startup),
         })
         .manage(WatcherState(Mutex::new(None)))
+        .manage(SelfWrites::default())
         .setup(|app| {
             // The single-instance plugin has already decided this process owns the window, so this
             // is the earliest safe point to record the run marker (IMPL.md §13.5).
