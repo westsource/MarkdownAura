@@ -101,6 +101,12 @@
   --h-toolbar: 40px;
   --h-status: 26px;
 
+  /* controls (not chrome). One box for both button weights: the filled primary was 32.125px and the
+     ghost it always sits beside 24.675px, so neither the About update row nor the empty state nor the
+     unsaved dialog ever lined up. Weight is carried by fill and type size — the two sizes stay apart on
+     purpose — and never by box height. */
+  --h-btn: 25px;
+
   /* Panels. The bounds are read at drag time (`src/ui/panels.ts`), so these two numbers are the whole
      contract. The sidebar's cap was 360px — on a wide display that is narrower than the paths it has
      to show, so it is 640 now; the floor and the cap together are what keeps a drag from leaving the

@@ -609,6 +609,13 @@ adding a key means editing two files and the help panel can silently go stale.
   inputs, tabs, the segmented control, menus, toasts, the find bar; 12px (`--r-lg`) cards, overlays, the
   window. Badges are 5px and chips/frontmatter pills are full pills (99px), so neither is a step on that
   scale.
+- **Control height is one token, and it is not a hierarchy signal** (amended 2026-10-13). Both button
+  weights read `--h-btn` (25px): the filled primary and the outline ghost beside it measured 32.125px and
+  24.675px, so no pair in the app ever lined up — the About update row showed the 7.46px outright, and the
+  empty state and unsaved dialog only looked even because their flex containers' default `stretch` pulled
+  the ghost up. Emphasis is carried by fill and type size; box height is not available for it. Rows of
+  controls align on **baselines**, not on box centres — `.about-brand` sets four text facts at three sizes,
+  and centring their boxes left the 16px name 2.75px below the metadata beside it.
 - Icons are inline SVG, 1.1–1.6px strokes — most 1.1–1.3, 1.4 on the find controls and two 10px status
   glyphs, 1.5 on the tree chevrons, 1.6 on the tab close's ✕ — no icon font, no emoji.
 - Motion is 90ms/140ms `ease-out`. Reduce-motion is honoured twice: the OS query in

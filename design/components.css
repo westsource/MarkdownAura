@@ -765,6 +765,7 @@ button.readonly-pill[aria-disabled="true"]:hover { color: var(--tx-3); border-co
   color: var(--tx-2);
   font: inherit;
   font-size: 11.5px;
+  min-height: var(--h-btn);
   padding: 3px 9px;
   cursor: pointer;
 }
@@ -776,7 +777,8 @@ button.readonly-pill[aria-disabled="true"]:hover { color: var(--tx-3); border-co
   color: #fff;
   font: inherit;
   font-size: 12.5px;
-  padding: 7px 18px;
+  min-height: var(--h-btn);
+  padding: 3px 18px;
   cursor: pointer;
 }
 .primary-btn:hover { filter: brightness(1.08); }
@@ -1022,7 +1024,11 @@ mark.current { background: var(--ac); color: #fff; }
    type and hanging labels, read like the front matter of the book this app wants .md to be. The
    only boxes left are the engine badges, which carry colour because they carry identity. */
 .about-page { padding: 22px 28px 18px; }
-.about-brand { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+/* Baseline, not centre: the four text facts on this line are set at three sizes (16 / 11.5 / 12 px)
+   and centring their boxes left the name 2.75px below the metadata. The mark has no baseline, so it
+   stays centred on its own. */
+.about-brand { display: flex; align-items: baseline; flex-wrap: wrap; gap: 9px; }
+.about-brand > svg { align-self: center; }
 .about-name { font-size: 16px; font-weight: var(--fw-emphasis); }
 .about-ver { font-family: var(--font-mono); font-size: 11.5px; color: var(--tx-2); }
 .about-lic { font-size: 11.5px; color: var(--tx-3); }
