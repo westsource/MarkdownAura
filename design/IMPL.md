@@ -1403,6 +1403,39 @@ a floor, not a plan. Nothing else in the flow needed handling: both remotes took
 first attempt, GitHub's API was reached through the proxy, and the whole mirror path (prune → publish →
 ensure-asset) ran unattended.
 
+**v1.5.4 leaves 899.3 MB / 1024 MB across 19 releases (124.7 MB free)** — the mirror took the same
+**129.3 MB** (10 files), and the prune gave up **178.2 MB**, but this time the *owner picked which two*:
+v1.5.0's and v1.5.2's AppImages, both from the 1.5.x line, because the oldest candidate the script would have
+taken on its own was already v1.5.0 — the cross the two notes above describe, reached. The mechanism matters
+more than the number: `WANT_FREE_MB` was raised to 200 for that one run and restored by a `trap` on exit, so
+the constant in `var/gitee-prune.mjs` is still **150** and the *policy* is unchanged (the log carries both
+lines: `freed ≈ 178.2 MB`, then `var/gitee-prune.mjs restored (WANT_FREE_MB = 150)`). 124.7 MB of headroom is
+**less than one release** (≈135.6 MB), so the next one prunes first again — and the only AppImages left from
+the 1.5.x line will then be 1.5.3's and 1.5.4's, i.e. the release before last and the current one. That is the
+decision the script is not allowed to make.
+
+**v1.5.4 is the first release whose commit was not `git add -A`.** The working tree also held the owner's
+uncommitted reading-trail prototype (design files only — §11), and the owner's call was "the fix only", so the
+fix's hunks were staged by hand and the driver committed *the index*. Two measured traps in doing that, both
+worth keeping: a hand-assembled `-U0` patch needs `git apply --unidiff-zero` (without it: `corrupt patch`,
+because a zero-context hunk's last line arrives without its newline), and its **new-side** line numbers have to
+be recomputed for the hunks actually kept — git apply places a zero-context insertion by the new-side number,
+so the 18-line SPEC §3 bullet landed 8 lines below its anchor (into the middle of the sentence above the
+paragraph it was written before), which is exactly the size of the prototype hunk being skipped. The driver
+refuses twice: if nothing is staged, and if the staged diff contains `trail`/`menuBox`/`menu-meta`/`menu-dir`.
+Consequence, stated rather than hidden: the bundle is built from the *working tree*, so it carries the
+prototype's 44 lines of `.trail-*` / `.menu-meta` CSS that the commit does not (the app references none of
+those classes). Stashing the WIP across both builds to close that 44-line gap was rejected — a 25-minute
+window where the owner's file leaves the tree is a worse trade than a dead rule in a stylesheet, and the
+commit message says so.
+
+**One `502` and no missing asset.** The Linux pass's `.deb` POST answered `502` (the proxy, ~14 MB) — and the
+read-back at the end of that same pass lists it at **13.79 MB** with the other nine, so what the proxy dropped
+was the *response*, not the upload. That is the case the "read the asset list, not the exit status" note above
+is for; v1.5.3's `000` (LICENSE) is still the only asset this flow has ever lost. Both remotes took the branch
+and the tag on the first attempt, the live manifest read back as **1.5.4** with both platforms, and the site
+sync went 1.5.3 → 1.5.4. End to end: 23 minutes, `cargo test` 91 passed.
+
 **`WANT_FREE_MB` is free space, and the newest release's AppImage is not a prune candidate.** Both halves were
 learned the hard way on 2026-10-08: the loop compared the constant against the bytes *it had freed in this
 run* rather than against the free space the header describes, so after deleting 88 MB (less than the 150 it
