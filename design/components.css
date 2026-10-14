@@ -486,6 +486,26 @@ input:focus { border-color: var(--ac); }
    cards) can exceed the text column — see the reading-measure block in prose.css. */
 .prose { margin: 0 auto; user-select: text; }
 
+/* The measuring surface for a view that renders no prose (SPEC §3, `src/measure.ts`). The presets
+   are resolved to pixels against the prose font of the view the reader is in, and `#out-preview` /
+   `#out-split` do that job for the preview and the split — but the source view is a `<pre>`, so with
+   it up there was no laid-out `.prose` at all: `chToPx` returned `null`, `--measure` kept whatever
+   the previous view had resolved, and picking 窄 / 舒适 / 撑满 in the source view did nothing to the
+   pane in front of the reader. Hence one of these per view that needs it (`index.html`).
+
+   The class carries the typography (`prose.css`, the same one the rendered pane uses) and being
+   *laid out* is the entire job — which is why this hides with `visibility`, never `display: none`,
+   and reports a non-null `offsetParent`, which is what the lookup tests. Absolutely positioned:
+   every view is a flex row, and an empty in-flow item with `margin-inline: auto` would eat the free
+   space beside the pane it sits next to. */
+.measure-host {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* `flex: 1 1 auto; min-width: 0` is not decoration. `.view.on` is a flex row, and a lone flex item
    left at the default `flex: 0 1 auto` is sized by its **content** — here, the longest line of the
    source — so a document with short lines rendered the source pane at a fraction of the window width
@@ -523,6 +543,18 @@ input:focus { border-color: var(--ac); }
   font-size: calc(var(--doc-size, 15px) * .867 * var(--zoom, 1));
   user-select: text;
 }
+/* The reading column reaches the code panes (SPEC §3). The rendered pane centres every block with
+   these same two declarations (`prose.css`); the source panes took neither, so 窄 / 舒适 / 撑满
+   narrowed the render half of a split while the source half stayed the full width of its pane — and
+   the source *view* ignored the presets entirely, at any window size. One column per preset, both
+   sides of a split, and the read-only pane and the editable pane it becomes (`.cm-editor
+   .cm-content`, further down) are in the same column, so entering the mode no longer moves the text.
+
+   This rule has to stay *after* `margin: 0` above: that shorthand zeroes `margin-inline`, it wins
+   nothing back on its own (same specificity, earlier), and nothing else here re-centres the pre.
+   `measure.ts` resolves the token against the *prose* font, so both panes get the same pixel
+   column; the source pane is mono and simply shows fewer characters of it per line. */
+.source-view pre, .view.split .pane-src pre { max-width: var(--measure); margin-inline: auto; }
 .readonly-pill {
   position: sticky;
   top: 0;
@@ -559,6 +591,13 @@ button.readonly-pill[aria-disabled="true"]:hover { color: var(--tx-3); border-co
   position: relative;
   height: 100%;
   min-height: 0;
+  /* The reading column of the editable pane, on the box both layers fill — the same column the
+     read-only pane states on its `pre` (see the source-pane rules above) and the same one the app
+     states on `.cm-content`. Only the *container* takes it: this box is not a block formatting
+     context, so its auto margins centre it in the whole pane, which is what keeps the text and the
+     caret in the same place (see `.editor-input`). */
+  max-width: var(--measure);
+  margin-inline: auto;
 }
 .editor[hidden] { display: none; }
 /* In the editing state the pane stops scrolling and the editor owns the scroll, and it also stops
@@ -594,6 +633,12 @@ button.readonly-pill[aria-disabled="true"]:hover { color: var(--tx-3); border-co
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;         /* `body` turns selection off for the chrome; this opts back in */
+  /* No column here: the reading column is on `.editor`, the box both layers fill. Centring the
+     textarea itself looked equivalent and was not — `overflow: auto` makes it a block formatting
+     context, and a block formatting context has to keep clear of the `readonly-pill` float, so its
+     *auto margins* were resolved against the pane minus the pill (107px left against 167px right,
+     measured) while the absolutely positioned backdrop beside it centred in the whole pane: a
+     31px drift between the glyphs and the caret, which is the one thing this pair must not have. */
 }
 .view.split .pane-src .editor-input { font-size: calc(var(--doc-size, 15px) * .867 * var(--zoom, 1)); }
 .editor-input::selection { background: var(--ac-bg); }

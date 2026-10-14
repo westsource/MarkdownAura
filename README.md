@@ -58,7 +58,7 @@ The installer carries the WebView2 loader. It only fetches the WebView2 Runtime 
 | Diagrams | mermaid / dot / d2 cards with an engine badge, the first source line as a title and the source line number; the card appears where the fence is and fills in when the engine answers, and one that fails keeps its place, its badge and its anchors — the outline, the viewer's target and split-view sync still find it — losing only its `zoom` button; `zoom` opens the viewer (wheel to zoom, drag to pan, copy SVG, copy source, `esc` to close) |
 | Find | `ctrl F`, match case, a hit counter, next / previous |
 | Outline | headings (levels 1–4) and diagrams, click to jump, draggable width |
-| Reading | body size 12–22px; three reading widths (narrow 60ch / comfortable 100ch / full); light / dark / follow the system; UI language follows the system (Chinese / English); reduce motion |
+| Reading | body size 12–22px; three reading widths (narrow 60ch / comfortable 100ch / full) — one column for the prose and the source pane alike; light / dark / follow the system; UI language follows the system (Chinese / English); reduce motion |
 | Immersive | `F11` hides every piece of chrome; `esc` or `F11` leaves |
 | Help | `F1` — the keyboard map plus a diagram-syntax card for each engine |
 | About | version, author, licence, the three diagram engines plus the editor, each with its licence and (where the UI shows one) its size, the data folder (openable from there), the log folder (openable from there — the files in it are the report), a link to the project, and a **check for updates** row. That row also runs by itself at launch: it fetches one small manifest (a version and a download URL) and, when something is newer, the status bar grows a chip that opens this sheet — nothing about you is sent either way |
@@ -120,7 +120,7 @@ npm run dev            # frontend only, in a browser
 npm run tauri dev      # the real window
 npm run build:prod     # production build: frontend + release binary
 npm run typecheck      # TypeScript check
-npm run check:prose    # design-constraint check (centred column, relative sizes)
+npm run check:prose    # design-constraint check (centred column in prose and code panes, relative sizes)
 npm run check:rawhtml  # asserts the mockup honours the raw-HTML allow-list
 npm run notices        # regenerates THIRD-PARTY.md from the real dependency tree
 ```

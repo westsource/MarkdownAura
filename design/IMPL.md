@@ -67,7 +67,7 @@ MarkdownAura/
 ├─ design/                     # spec: tokens.css, components.css, prose.css, SPEC.md, IMPL.md
 │  ├─ mockup.html / mockup.js  # interactive reference + behaviour spec
 │  ├─ check-raw-html.mjs       # asserts the mockup honours §4's allow-list
-│  └─ check-prose-css.mjs      # asserts the reading column stays centred and its sizes stay relative (§5)
+│  └─ check-prose-css.mjs      # asserts the reading column stays centred (prose *and* code panes) and its sizes stay relative (§5)
 ├─ tools/
 │  ├─ make-icons.mjs           # regenerates src-tauri/icons from one geometry description
 │  ├─ make-notices.mjs         # regenerates THIRD-PARTY.md from cargo metadata + node_modules
@@ -675,11 +675,25 @@ Invariants worth stating because they are the bugs:
   strikethrough says the file is gone, the text stays readable until it returns.
 - The reading measure is a **resolved length** (`src/measure.ts`): pixels for the two measured
   presets, `100%` for "full" — never a `ch` length left for each child to resolve itself, which made
-  headings 40% wider than body text. The pixel value comes from a probe inside `#out-preview`; the
-  probe must keep `max-width: none`, or the measure rule clamps the probe to the *current*
-  `--measure` and the number feeds back on itself (745px → 386px → 278px, once per re-layout). It
-  must be recomputed on every font-size or zoom change (`applyLayout`) and once after
-  `document.fonts.ready`.
+  headings 40% wider than body text. The pixel value comes from a probe inside the first *laid out*
+  `.prose` — the rendered pane of the view the reader is in (`#out-preview`, or the compact
+  `#out-split`), and, in the source view, the empty `.prose.measure-host` that view carries for the
+  purpose (it renders no prose, so every other `.prose` on the page is `display: none` while it is
+  up — and a hidden element measures zero). The probe must keep `max-width: none`, or the measure
+  rule clamps it to the *current* `--measure` and the number feeds back on itself (745px → 386px →
+  278px, once per re-layout). It must be recomputed on every font-size or zoom change (`applyLayout`)
+  and once after `document.fonts.ready`.
+- The column is on the **code panes too**, not only `.prose > *`: `.source-view pre`,
+  `.view.split .pane-src pre` and the editable `.cm-editor .cm-content` each carry
+  `max-width: var(--measure); margin-inline: auto`. Without it the presets narrowed the render half
+  of a split while the source half stayed the full width of its pane, and the source view — which
+  showed no rendered pane to compare against — changed nothing at all (reported 2026-10-14).
+  `design/check-prose-css.mjs` asserts all four surfaces carry it, and that the `.measure-host` the
+  source view needs still exists in `index.html`/`mockup.html` and is hidden with `visibility`, not
+  `display: none`, which would take it out of layout and make it unmeasurable. The mockup's faked
+  editor states the column on `.editor`, the box both of its layers fill: auto margins on the
+  `<textarea>` itself are resolved against the pane minus the `readonly-pill` float (it is a block
+  formatting context), which moved the caret 31px off the glyphs (measured 107px against 167px).
 - **Every size on the reading surface is relative to that same base**, and the source panes are part of
   the reading surface. `prose.css` sizes headings and everything else in `em` off `.prose`'s
   `calc(var(--doc-size) * var(--zoom))`; a px heading silently stops following the size control and the
@@ -700,7 +714,9 @@ Invariants worth stating because they are the bugs:
   that centres the column (vertical margins still collapse, so the rhythm is unchanged by design).
   `design/check-prose-css.mjs` enforces both halves of this; it is a build-side check because no
   measurement that looks at widths can see the failure (the box has the right size, in the wrong
-  place).
+  place). The ban is `prose.css`'s own: the code panes are not `.prose` children, so their size rule
+  legitimately states `margin: 0` and the column rule that follows it re-centres (order is load-bearing
+  there — same specificity, so the later declaration wins).
 - Menus have exactly one dismissal path: `dom.ts` installs a **capture-phase `pointerdown`** listener
   that closes any open menu whose target is neither the menu nor the control that opened it, and
   `showMenu(items, x, y, opener)` turns that control into a toggle. Keep it in the capture phase —
@@ -1115,6 +1131,15 @@ status bar's `rendered in N ms` is where a reader sees it.
   and asserts the checker fails on each one and passes on the fix. The harness lives in `var/`
   (gitignored) because it is a one-off proof, not a gate; if these assertions start changing often,
   move it next to the checker and wire it into `npm run check:prose`.
+- A fourth group covers the **code** panes (SPEC §3, 2026-10-14): all four column surfaces carry
+  `max-width: var(--measure)` **and** `margin-inline: auto` (`.source-view pre`,
+  `.view.split .pane-src pre`, the editor's `.cm-editor .cm-content`, and the mockup's `.editor`), and
+  the source view still carries the `.prose.measure-host` the presets are resolved against — in
+  `index.html` *and* `mockup.html`, hidden with `visibility` rather than `display: none`. Verified
+  against the real defect by emptying the one column rule (both `pre` selectors fail) and by taking
+  the host out of both files and renaming the class (all three host checks fail), watching them pass
+  again on restore. These are the shapes that fail *invisibly*: a pane without the column still
+  renders, and a host that is `display: none` still exists in the DOM.
 - **Anything that spawns a process fails misleadingly from a bash-launched app.** The About sheet's
   "open data folder" button calls `reveal_in_explorer`, which returns `io` / `os error 50`
   (ERROR_NOT_SUPPORTED) when the app was started from the MSYS bash here and succeeds from a
@@ -1207,11 +1232,12 @@ status bar's `rendered in N ms` is where a reader sees it.
 - **Four things an editable pane must get right, measured rather than assumed** (`var/editor-probe/`,
   driven over CDP on 2026-10-04):
   - The reading column can be imposed on the editor from *outside*: `#host .cm-content { max-width:
-    var(--measure) }` resolved `60ch` to 527 px against the mono font, with no JS. Today `--measure` reaches
-    only `.prose > *` (`prose.css:313`), so the source pane has no reading column at all. If the editable
-    pane gets one, note that `measure.ts`'s `chToPx` resolves against the first *laid out* `.prose`
-    (`measure.ts:59`) — a *sans* element, and in split view the compacted one — so the same preset
-    would mean a different number of columns in a *mono* pane.
+    var(--measure) }` resolved `60ch` to 527 px against the mono font, with no JS. `--measure` reaches
+    `.prose > *`, the source panes' `pre` and this `.cm-content` today (2026-10-14; before that the
+    source pane had no reading column at all). Note that `measure.ts`'s `chToPx` resolves against the
+    first *laid out* `.prose` (`measure.ts:58`) — a *sans* element, and in split view the compacted
+    one — so the same preset is the same *pixel* column with a different number of columns in a *mono*
+    pane. That is the accepted trade: one column, one number on screen, both halves of a split.
   - Geometry lags CSS by exactly one measure pass. Changing the font size 15 px → 22 px applied the CSS
     synchronously (`font-size: 22px`) while `view.contentHeight` still read 155; only after
     `requestMeasure({ read })` did it report 224 with a 30.8 px line. Anything that writes `--zoom` /

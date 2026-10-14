@@ -1045,12 +1045,15 @@ Errors render inline with the line number instead of blanking the page.`
 
   /* The column is resolved once, against the prose font — a `ch` value used by a child resolves
      against *that* child's font, which made headings ~40% wider than body text. Keep in step with
-     src/measure.ts (including the probe's `max-width: none`). */
+     src/measure.ts (including the probe's `max-width: none` and the *laid out* host lookup: a
+     `display: none` element measures zero, and in the source view `#out-preview` is exactly that —
+     the view carries a `.measure-host` of its own for this). */
   let measureFont = "";
   let measureChPx = 0;
   function resolveMeasure(ch) {
     if (ch === null) return "100%";
-    const host = $("#out-preview") || document.body;
+    const host = [...document.querySelectorAll(".prose")].find((el) => el.offsetParent !== null);
+    if (!host) return null;
     const font = getComputedStyle(host).font;
     if (font !== measureFont) {
       const probe = document.createElement("span");
@@ -1066,7 +1069,10 @@ Errors render inline with the line number instead of blanking the page.`
 
   function applyMeasure() {
     const ch = measureCh(settings.measure);
-    document.documentElement.style.setProperty("--measure", resolveMeasure(ch));
+    /* `null` is "there is nothing laid out to measure" — leave the token alone rather than write a
+       number derived from nothing, which is how the column once collapsed to one character per line. */
+    const px = resolveMeasure(ch);
+    if (px !== null) document.documentElement.style.setProperty("--measure", px);
     const label = ch === null ? "full" : ch + "ch";
     $("#stMeasureLabel").textContent = label;
     $("#imMeasureLabel").textContent = label;

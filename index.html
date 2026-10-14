@@ -133,6 +133,10 @@
       </div>
 
       <div class="view source" id="view-source">
+        <!-- The source view is the one view that renders no prose, and the reading-width presets are
+             resolved against the prose font of the view the reader is in (`src/measure.ts`). This is
+             that missing surface: an empty, laid-out, off-screen `.prose` — see `.measure-host`. -->
+        <div class="prose measure-host" aria-hidden="true"></div>
         <div class="source-view">
           <button class="readonly-pill" id="readonlyPill" type="button">read-only</button>
           <pre class="src" id="out-source"></pre>

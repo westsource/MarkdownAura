@@ -48,12 +48,15 @@ let cachedChPx = 0;
  *
  *  `null` means "there is nothing laid out to measure right now" — see the host lookup. */
 function chToPx(ch: number): string | null {
-  /* Measured in a *laid out* `.prose`. This used to hard-code `#out-preview`, which is
-     `display: none` in split view (that view renders into `#out-split`) and in source view — and a
-     `display: none` element measures **zero**. So changing the font size from either of those views
-     resolved the token to `0px`, and `max-width: 0` with `overflow-wrap: anywhere` renders exactly
-     one character per line. The preview and the editable pane share this one token, which is why
-     both collapsed together.
+  /* Measured in a *laid out* `.prose`, and every view has exactly one: `#out-preview` in the
+     preview, `#out-split` in the split, and the `.measure-host` the source view carries because it
+     renders no prose of its own (index.html, SPEC §3). This used to hard-code `#out-preview`, which
+     is `display: none` in split view (that view renders into `#out-split`) and in source view — and
+     a `display: none` element measures **zero**. So changing the font size from either of those
+     views resolved the token to `0px`, and `max-width: 0` with `overflow-wrap: anywhere` renders
+     exactly one character per line. The preview and the editable pane share this one token, which is
+     why both collapsed together — and why the source view, which has no rendered pane to measure,
+     could not resolve a preset at all until it got a measuring surface of its own.
      Split view's prose is `.prose.compact`, so the column is resolved against the pane the reader is
      actually looking at — the same thing the token describes. */
   const host = [...document.querySelectorAll<HTMLElement>(".prose")].find((el) => el.offsetParent !== null);
@@ -86,8 +89,9 @@ export function applyMeasure(id: Measure): void {
     return;
   }
   const px = chToPx(ch);
-  // No laid-out prose to measure (source view): leave the token as it is. Writing a number derived
-  // from nothing is how the column collapsed to one character per line.
+  // No laid-out prose anywhere (every view's prose hidden — not a state the shell can reach, every
+  // view carries one): leave the token as it is. Writing a number derived from nothing is how the
+  // column collapsed to one character per line.
   if (px === null) return;
   document.documentElement.style.setProperty("--measure", px);
 }

@@ -144,6 +144,9 @@
       </div>
 
       <div class="view source" id="view-source">
+        <!-- The measuring surface for the one view that renders no prose — the app carries the same
+             element (`index.html`) because they share `src/measure.ts`'s lookup. See `.measure-host`. -->
+        <div class="prose measure-host" aria-hidden="true"></div>
         <div class="source-view">
           <button class="readonly-pill" id="readonlyPill" type="button" title="edit (ctrl E)">read-only</button>
           <pre class="src" id="out-source"></pre>

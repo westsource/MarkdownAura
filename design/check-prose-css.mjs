@@ -118,6 +118,44 @@ for (const selector of [".source-view pre", ".view.split .pane-src pre", ".edito
   );
 }
 
+/* 3. The reading column reaches the *code* panes, not just the rendered one (SPEC §3).
+ *
+ * The rendered pane centres every block; the source panes took neither declaration, so 窄 / 舒适 /
+ * 撑满 narrowed the render half of a split while the source half stayed the full width of its pane,
+ * and the source *view* ignored the presets at any window size. Reported 2026-10-14 ("代码区和渲染区
+ * 应该是同样的行为"). A selector list counts too — the intent is "this surface carries the column",
+ * not "it carries it in a rule of its own". */
+const carriesColumn = (selector) => {
+  const wanted = selector.replace(/\s+/g, " ").trim();
+  for (const match of components.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    const inList = match[1].split(",").some((part) => part.replace(/\s+/g, " ").trim() === wanted);
+    if (inList && /max-width:\s*var\(--measure\)/.test(match[2]) && /margin-inline:\s*auto/.test(match[2])) {
+      return true;
+    }
+  }
+  return false;
+};
+for (const selector of [".source-view pre", ".view.split .pane-src pre", ".cm-editor .cm-content", ".editor"]) {
+  check(carriesColumn(selector), `\`${selector}\` carries the reading column (max-width + centring)`);
+}
+
+/* …and a view that renders no prose needs a surface for the preset to be *resolved* against, or
+ * `src/measure.ts` finds no laid-out `.prose` and the token goes stale on the pane the reader is
+ * looking at. `.measure-host` has to stay laid out to be measurable: `visibility: hidden`, never
+ * `display: none`. */
+for (const file of ["index.html", path.join("design", "mockup.html")]) {
+  const html = fs.readFileSync(path.join(here, "..", file), "utf8");
+  check(
+    /id="view-source"[\s\S]{0,700}?class="prose measure-host"/.test(html),
+    `${file}: the source view carries a \`.measure-host\` for the presets to resolve against`,
+  );
+}
+const hostRule = componentRules.get(".measure-host") ?? "";
+check(
+  /visibility:\s*hidden/.test(hostRule) && !/display:\s*none/.test(hostRule),
+  "`.measure-host` is hidden but still laid out (`visibility: hidden`, not `display: none`)",
+);
+
 console.log(
   failed
     ? `\n${failed} assertion(s) failed — see IMPL.md §5`

@@ -209,6 +209,24 @@ free slider, because line length is the one typographic knob a reader can genuin
     leaving exactly that block flush left while every other block stays centred. That shipped once
     (`.prose p`, and it is invisible to a width measurement: the box is the right size, in the wrong
     place), so `node design/check-prose-css.mjs` now fails instead (`IMPL.md` §10).
+- **The code panes take the same column, and the preset means the same thing on both halves of a
+  split** (2026-10-14). The source pane and the editable pane that replaces it carry the same two
+  declarations, so 窄 / 舒适 / 撑满 narrows the code and the render side together instead of leaving
+  the code side at the full width of its pane — which is what it did until then, in split view and in
+  the source view alike, where the presets changed nothing at all. Accepted consequence, stated
+  because it is the one place the token is *not* a character count: the source pane is mono while the
+  token is resolved against the prose font, so the same preset is the same **pixel** column with
+  fewer characters per line there (`components.css`). The editable pane states it on `.cm-content`,
+  the read-only pane on its `pre` — and in the mockup's faked editor on the layer container
+  (`.editor`), because centring the `<textarea>` itself resolved its auto margins against the pane
+  minus the `readonly-pill` float and drifted the caret 31px off the glyphs (measured).
+  - A view that renders no prose has nothing to resolve the `ch` presets against, and the source view
+    is exactly that: `src/measure.ts` looks for the first *laid out* `.prose`, and with the source
+    view up, both rendered panes are `display: none`. The source view therefore carries an empty,
+    off-screen `.prose.measure-host` of its own (`index.html`) — the class is the typography, being
+    laid out is the whole job — so picking a preset while reading source resolves and applies on the
+    pane in front of the reader. `design/check-prose-css.mjs` asserts it is still there, and that it
+    hides with `visibility` rather than `display: none`, which would make it unmeasurable.
 - **The limit is resolved once, into pixels, not left as `ch`.** `ch` is resolved against the *using*
   element's font, so a `72ch` token on an `h1` (22px) is 40% wider than the same token on a
   paragraph (16px): the "column" came out ragged, with headings jutting past the body text by up to
@@ -1031,9 +1049,9 @@ This is where the work is; the control itself is the easy part.
   scroller, which becomes the editor's.
 - **Reading width, zoom and font size reach the editable pane like any other pane.** `--measure`
   applies to its content column, and the same `--doc-size` × `--zoom` multipliers apply. Two measured
-  traps: the `ch` preset resolves against the *preview* element's font today, which is sans while this
-  pane is mono — the same preset would mean a different number of columns — and the editor brings its
-  own `line-height: 1.4` against this pane's `1.8`.
+  traps: the `ch` preset resolves against the view's rendered pane — `src/measure.ts`, a *sans*
+  element, while this pane is mono, so the same preset means a different number of columns — and the
+  editor brings its own `line-height: 1.4` against this pane's `1.8`.
 - **The status bar reports the buffer**, not the last render: word count, byte size, encoding and EOL
   follow what is on screen. `rendered in N ms` keeps meaning "the last render" and refreshes on save.
 - **One pane, one editor, one state per tab.** Every tab shares the single source element, so the
