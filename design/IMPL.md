@@ -1392,7 +1392,6 @@ about which newer asset to drop, because 89 MB of AppImage per release does not 
 this and reads the release back rather than retrying blindly). When the read-back says the file is *not*
 attached either — which is what the quota rejection looks like — upload that one file with `curl`, whose
 default has no such timeout:
-
 ```bash
 curl --max-time 3000 -F "access_token=$TOKEN" \
      -F "file=@var/release/MarkdownAura_<v>_linux-amd64.AppImage" \
@@ -1400,6 +1399,29 @@ curl --max-time 3000 -F "access_token=$TOKEN" \
 ```
 
 The response says which it was: `HTTP 201` with the file attached, or `HTTP 400` naming the quota.
+
+**A GitHub upload can fail with `000`, and `publish-release.sh` carries straight on past it.** The loop
+prints its `curl` code and keeps going, so a *transport* failure — no HTTP status at all, which is what a
+socks5 hiccup through the proxy looks like — leaves that one asset simply missing from the release. v1.5.3
+lost its `LICENSE` exactly that way (the Linux pass's first asset, `000` at 17:11); the same POST retried at
+18:15 returned `201`. Nothing in the run stops for it: the only places it shows are the asset list in the
+final read-back, the site's `fetch-release.py` count (`9 assets` beside every other release's `10`), and the
+release page itself. Two things follow, and the second is the one that matters:
+
+- **Read the asset list, not the exit status.** A `000` is silent in every summary line the run prints; the
+  step that catches it is `GET /releases/tags/v1.5.3` at the end.
+- **Fix it with one targeted `POST`, not by re-running the script.** `publish-release.sh` makes itself
+  idempotent by *deleting* an asset of the same name before re-uploading it, so a second `000` on a large
+  file would turn "missing" into "missing after having been there" — and for `latest.json` that is the
+  updater's endpoint. The single-file form has no delete window:
+
+```bash
+ID=$(curl -s -H "Authorization: Bearer $TOKEN" \
+     https://api.github.com/repos/westsource/MarkdownAura/releases/tags/v1.5.3 | node -pe "'"+JSON.parse(require('fs').readFileSync(0,'utf8')).id+"'")
+curl -sS -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" \
+     --data-binary @var/release/LICENSE \
+     "https://uploads.github.com/repos/westsource/MarkdownAura/releases/$ID/assets?name=LICENSE"
+```
 
 **The updater refuses a non-`https` endpoint before anything else runs.** Pointing `plugins.updater.endpoints`
 at a local `http://127.0.0.1:…` fixture does not give you a cheap offline test — the config fails to
