@@ -12,6 +12,10 @@
   --side: #faf9f7;         /* sidebar, card headers */
   --code: #f5f4f1;         /* code blocks, source view */
   --card: #ffffff;         /* raised cards (diagrams) */
+  /* The editable pane's current line (SPEC §12). A neutral tint rather than an accent one, because
+     the accent already means "selected" in this pane (`--ac-bg` is the selection) — a current line in
+     the same colour would hide the selection sitting on it. Neutral also keeps the one-accent rule. */
+  --active-line: rgba(0, 0, 0, .045);
 
   /* hairlines — always 0.5px strokes, three strengths */
   --line: rgba(0, 0, 0, .09);
@@ -146,6 +150,7 @@
   --side: #1c1b1f;
   --code: #26252a;
   --card: #242328;
+  --active-line: rgba(255, 255, 255, .05);
 
   --line: rgba(255, 255, 255, .09);
   --line-2: rgba(255, 255, 255, .16);

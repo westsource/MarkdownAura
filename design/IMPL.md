@@ -1147,7 +1147,11 @@ status bar's `rendered in N ms` is where a reader sees it.
   rendering `\ce{}`, a bad formula keeping its place, the pending card, the derived `viewBox`, and
   the error card keeping `data-diagram`. `var/` is gitignored, so the page is deleted with the batch;
   the alternative (booting the Tauri shell and driving it over CDP) costs minutes per iteration and
-  cannot inspect a module in isolation.
+  cannot inspect a module in isolation. **Used again for SPEC §12's current line** (2026-10-14): the
+  same shape, but importing `@/ui/editor` and mounting both panes, because the thing under test is
+  which class lands on which element and what that class resolves to — a computed style, not a pixel
+  diff, and the one place where "the rule lost the tie against CodeMirror's own base theme" is
+  invisible to every other check in this repo.
 
 ## 11. Open items
 

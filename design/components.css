@@ -642,7 +642,13 @@ button.readonly-pill[aria-disabled="true"]:hover { color: var(--tx-3); border-co
   font-family: inherit;
 }
 .cm-editor .cm-lineNumbers .cm-gutterElement { padding: 0 8px 0 4px; }
-.cm-editor .cm-activeLineGutter { background: transparent; color: var(--tx-2); }
+/* The caret's line (SPEC §12), both halves of it: the line gets a tint, its number comes forward.
+   `.cm-line` is in the selector on purpose — CodeMirror's own rule here is `&light .cm-activeLine`
+   (two classes) and it paints a fixed `#cceeff44`; at two classes ours would only win on stylesheet
+   order, which is not a thing to rely on for a colour that has to hold in both themes. The token is
+   what makes the tint follow the theme, exactly like the markdown roles below. */
+.cm-editor .cm-line.cm-activeLine { background-color: var(--active-line); }
+.cm-editor .cm-gutterElement.cm-activeLineGutter { background: transparent; color: var(--tx-2); }
 
 /* ---------- markdown, in the editable pane ----------
    The same roles the read-only source view uses (`prose.css`: `h`, `em`, `code`, `meta`, `quote`),

@@ -119,7 +119,7 @@ function highlightOf(rt: Runtime): HighlightStyle {
 
 function extensionsFor(pane: Pane, rt: Runtime, readOnly: boolean): Extension[] {
   const { EditorState } = rt.state;
-  const { EditorView, keymap, drawSelection, lineNumbers } = rt.view;
+  const { EditorView, keymap, drawSelection, lineNumbers, highlightActiveLine, highlightActiveLineGutter } = rt.view;
   const { defaultKeymap, history, historyKeymap } = rt.commands;
   const { syntaxHighlighting, bracketMatching, indentOnInput } = rt.language;
   const { markdown, markdownKeymap } = rt.markdown;
@@ -137,6 +137,17 @@ function extensionsFor(pane: Pane, rt: Runtime, readOnly: boolean): Extension[] 
        error and an outline jump both name one — so the pane that lets you act on that should show
        them. The read-only view stays a clean column (SPEC §1). */
     lineNumbers(),
+    /* The line the caret is on, in the text and in the gutter. Two halves of one thing: the line gets
+       a background and its number comes up from `--tx-3` to `--tx-2`, which is what says "you are
+       here" while `ctrl E` has the pane. Both are *classes only* — CodeMirror's palette for them is a
+       fixed light blue (`#cceeff44`), wrong on both themes for the same reason `defaultHighlightStyle`
+       was, so every value lives in `design/components.css` (`--active-line`) next to the markdown
+       roles below. The gutter half restores the number's colour without stepping the gutter's own
+       background: a filled gutter cell would put a second column of colour beside the reading column.
+       These decorations follow the *selection*, so they only ever appear in this pane: the read-only
+       source view is a `<pre>` and the editor is not on screen until the mode is (SPEC §12). */
+    highlightActiveLine(),
+    highlightActiveLineGutter(),
     markdown(),
     /* Markdown's own keys come first: Enter continues a list item or a quote, and its markup-aware
        deletions only fire where they make sense. Then CodeMirror's defaults, then history — the window

@@ -940,9 +940,13 @@ chunks plus one stylesheet, 483.5 KB minified / 167.2 KB gzip in total, the larg
 - In **source view** the same pane is the only one, at the uncompacted size (§3).
 - Leaving the mode with unsaved changes asks first. Immersive (`F11`), view switches and tab switches
   never ask — they are not a commit and they do not drop the buffer.
-- The mode is visible without being loud: the pill changes state and the pane gains a caret. Nothing
-  else in the chrome moves — no toolbar row appears, and no new button is added except the three the
-  unsaved sheet needs while it is open.
+- The mode is visible without being loud: the pill changes state, the pane gains a caret, and the line
+  the caret is on is tinted — `--active-line`, a neutral step over the pane's `--bg`, with its number in
+  the gutter coming up from `--tx-3` to `--tx-2`. The tint is neutral rather than accent-coloured for a
+  reason that is only visible once you select something: the accent already means *selected* in this
+  pane, so a current line in `--ac-bg` would swallow the selection sitting on it (and §8's one accent
+  says nothing else is saturated). Nothing else in the chrome moves — no toolbar row appears, and no new
+  button is added except the three the unsaved sheet needs while it is open.
 - **Undo and redo belong to the pane while it is editable.** They come from the editor's own history
   keymap (`CodeMirror`'s), so they work exactly as long as the mode is on, together with the editing keys
   the platform gives a text field. There is no undo button: the keyboard has this one, and a pair of
@@ -1054,6 +1058,13 @@ This is where the work is; the control itself is the easy part.
   instead of opening; find inside the pane searched the buffer (one hit for a word that appears once, with
   no `<mark>` elements in the DOM — the current hit is the selection); and `dirty` means "differs from the
   file", so undoing back to the saved text clears the mark instead of outliving the difference.
+  The current line's tint (2026-10-14) is the one piece of this section added after the fact, and the only
+  one driven without the shell — IMPL.md §10's throwaway page, importing the real `ui/editor.ts` and the
+  real stylesheets, mounting both panes: the class lands on the `.cm-line` div and on the
+  `.cm-gutterElement` cell, exactly one line at a time, moving with `revealRange`; and the token resolved
+  to `rgba(0, 0, 0, .045)` / `rgba(255, 255, 255, .05)` in the two themes rather than to CodeMirror's own
+  `#cceeff44`, which is what a lost tie against its base theme would have looked like. The screenshot for
+  the part a JSON report cannot say (a 4% step is a pixel fact) came from there too.
 - **deferred**: the `KEYMAP`/dispatcher two-lists refactor this section deliberately did not absorb.
   (Rendered code-fence highlighting left this line on 2026-10-08 — it ships, §13.)
 - **deviates**: §1's former prohibition ("if a proposed feature turns MarkdownAura into an editor, it
@@ -1064,10 +1075,12 @@ This is where the work is; the control itself is the easy part.
   project-wide search and replace, visual table editing, image drag-and-drop, and WYSIWYG editing of
   the rendered view. Syntax highlighting inside *rendered* code fences stays where it is (§11).
 - **The mockup carries this mode** (`design/mockup.html`, `?edit=` for the states below), and it fakes
-  exactly two things, both loudly: the editor is a `<textarea>` over the same 5-role highlight layer
-  instead of CodeMirror 6, and *save* has no file writer behind it. Everything the design is about is
-  real — the caret, the dirty marks, the promotion of a preview tab, the refusals, and the live render
-  beside the buffer.
+  exactly three things, all loudly: the editor is a `<textarea>` over the same 5-role highlight layer
+  instead of CodeMirror 6; *save* has no file writer behind it; and the current-line tint is the third,
+  because a `<textarea>` cannot be made to show one — the visual line a caret is on is not knowable from
+  it without building a mirror element to measure against, which is a bigger piece of machinery than
+  the affordance it would draw. Everything the design is about is real — the caret, the dirty marks,
+  the promotion of a preview tab, the refusals, and the live render beside the buffer.
 - **Driving that prototype changed two decisions**, which is what it was for. The pill has to exist in
   **both** panes: it lived only in the source view, so in split view — the shape this mode exists for —
   there was no pointer path into it at all. And a toolbar-style control must not take focus on click
