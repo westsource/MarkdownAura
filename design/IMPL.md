@@ -1365,6 +1365,18 @@ AppImage 93.4 ≈ 135.6 MB), so the *next* one prunes first too. Two facts from 
 - **The mirror's AppImage went up in one attempt** (`HTTP 201`, no undici timeout), so the `curl` fallback in
   `var/gitee-ensure-asset.mjs` was not needed this time — it stayed a no-op, which is how it should be.
 
+**v1.5.3 leaves 948.2 MB / 1024 MB across 18 releases (75.8 MB free)** — the mirror took **129.3 MB** (10
+files: AppImage 89.1, deb 13.8, portable zip 13.3, installer 13.0), and the prune had to free **177.0 MB**,
+which it did by deleting two AppImages: v0.3.1's (87.9 MB) and — **for the first time one from the 1.4.x
+line, v1.4.2's (89.1 MB)**. That is the cross the 1.5.0 note above said had *not* been reached yet: the
+`WANT_FREE_MB = 150` target can no longer be met out of the 0.2.x/0.3.x AppImages, so the next release either
+pays the same cost again (177 MB out, 129 MB in — the repository is losing ground by ~48 MB per release) or
+drops something the product owner should pick, not the script. Also worth knowing: the run stopped as soon as
+the target was met, so 177 MB is the *first* pair of AppImages that cleared 150 — the loop's `freed ≈` line is
+a floor, not a plan. Nothing else in the flow needed handling: both remotes took the branch and the tag on the
+first attempt, GitHub's API was reached through the proxy, and the whole mirror path (prune → publish →
+ensure-asset) ran unattended.
+
 **`WANT_FREE_MB` is free space, and the newest release's AppImage is not a prune candidate.** Both halves were
 learned the hard way on 2026-10-08: the loop compared the constant against the bytes *it had freed in this
 run* rather than against the free space the header describes, so after deleting 88 MB (less than the 150 it
