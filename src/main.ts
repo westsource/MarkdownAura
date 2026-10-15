@@ -368,12 +368,20 @@ async function enterEdit(): Promise<void> {
   // Preview view has no source pane, so the mode would be invisible there. The useful shape is the
   // one where the render sits beside the buffer, which is the split.
   if (tab.view === "preview") await setView("split");
+  /* Where the reader is, read before the mode starts: `paintActive` below hands the pane to the
+     editor, and the position the reader had must survive that repaint. Without this the restored
+     scroll came from whatever the last debounced capture had stored — an editing-era value — and the
+     mode opened near the top of the document (measured in the built app). The out pane keeps its
+     pixel through `tab.scroll`'s restore; `applyPosition` then re-derives both panes from the place
+     the reader actually was, matching the leave handoff below. */
+  const from = doc.capturePosition();
   tab.editing = true;
   // The pills, the tab strip (a promoted preview tab stops being italic) and the status bar all change
   // with the mode, and `paintActive` paints the panes, not the chrome — so the chrome is repainted
   // here. Without this the pill kept saying "read-only" while the pane was editable.
   renderChrome();
   await paintActive();
+  doc.applyPosition(from);
   editor.focus(tab.view === "split" ? "split" : "source");
   scheduleSave();
 }
@@ -385,9 +393,19 @@ function leaveEdit(force = false): void {
     askUnsaved(i18n.t("unsaved.leave"), () => leaveEdit(true));
     return;
   }
+  /* Where the reader is, read before the mode ends. While editing, that place lives in the editor
+     (the caret's scroll), and `renderDocument` inside `paintActive` would restore `tab.scroll` — the
+     last *capture*, taken by the debounced save of an earlier moment — into the panes. Measured in
+     the built app: leaving the mode landed the read-only pane at the top of the document and left
+     split view desynced until the first scroll. The anchors both panes render translate the editor's
+     place into the read-only one, the same handoff a view switch already gets (setView, below). */
+  const from = doc.capturePosition();
   tab.editing = false;
   renderChrome();
-  void paintActive();
+  void paintActive().then(() => {
+    doc.applyPosition(from);
+    doc.captureScroll(tab);
+  });
   scheduleSave();
 }
 

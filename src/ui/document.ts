@@ -53,10 +53,21 @@ export function activeScroller(): HTMLElement {
 
 /** The element that actually scrolls a pane: the editor's scroller while the pane is editable, the pane
  *  itself otherwise. SPEC §12 promises the reading features "address the pane's scroller, which becomes
- *  the editor's" — this is that sentence, in one place. */
+ *  the editor's" — this is that sentence, in one place.
+ *
+ *  The editability test is the pane's own `editing` class, not "an editor exists": both editor views are
+ *  kept alive after the mode ends (their states carry the undo history), so an unqualified editor lookup
+ *  would return the *hidden* host's scroller — zero geometry, invisible to the reader — and reads and
+ *  writes meant for the pane would land there. That decays split sync on the out→src direction 双向 in
+ *  practice: measured by driving the built app after one enter/leave cycle. The class is what
+ *  `syncEditor` actually toggles, so it can never disagree with which scroller owns the view. */
 function scrollerOf(pane: HTMLElement): HTMLElement {
   const key = pane.classList.contains("source-view") ? "source" : pane.classList.contains("pane-src") ? "split" : null;
-  return (key && editor.scroller(key)) || pane;
+  if (key && pane.classList.contains("editing")) {
+    const editorScroller = editor.scroller(key);
+    if (editorScroller) return editorScroller;
+  }
+  return pane;
 }
 
 export function captureScroll(tab: Tab): void {
@@ -114,11 +125,27 @@ export function capturePosition(): ScrollView {
 /** Puts the current view where `position` was: through the anchors both panes render, interpolated
  *  inside the segment, with a proportional fallback for a document that has neither headings nor
  *  diagrams. A view that opened at the top of the document instead of where the reader was is the
- *  failure this prevents (SPEC §5). */
+ *  failure this prevents (SPEC §5).
+ *
+ *  A direct write to one split pane does not pull the other along: the sync rides on scroll *events*
+ *  (syncSplit), and a programmatic assignment that lands exactly where the pane already is — or fires
+ *  while the outgoing pane is still being repainted — leaves the twin wherever it happened to be
+ *  (top, after a mode leave). So in split view both halves get the mapping, and the echo records the
+ *  follower's target the same way a user-driven sync would. */
 export function applyPosition(position: ScrollView | null): void {
   if (!position) return;
   const pane = activePane();
   scrollerOf(pane).scrollTop = mapScroll(position, viewOf(pane));
+  if (current === "split") {
+    const src = document.querySelector<HTMLElement>(SRC_PANE);
+    const out = document.querySelector<HTMLElement>(OUT_PANE);
+    const to = src && out ? (pane === src ? out : src) : null;
+    if (to) {
+      const target = mapScroll(position, viewOf(to));
+      expectedScroll.set(to, target);
+      scrollerOf(to).scrollTop = target;
+    }
+  }
 }
 
 /**

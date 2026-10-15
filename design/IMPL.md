@@ -766,17 +766,31 @@ Invariants worth stating because they are the bugs:
   older session must not be able to write garbage into the token).
 - Split view keeps its two panes on the same document position, in both directions
   (`document.ts syncSplit`): anchors are headings + diagram cards, and the position between two
-  anchors is interpolated by pixel fraction. Two details are the whole bug surface:
+  anchors is interpolated by pixel fraction. Three details are the whole bug surface:
   **`.pane-src` must be in the scroll-listener list** (it is a scroller like any other, and leaving
-  it out makes one direction silently dead), and a programmatic write is recorded per pane so its
-  echo is not treated as a user scroll — without the guard the panes drive each other in a loop.
+  it out makes one direction silently dead), a programmatic write is recorded per pane so its
+  echo is not treated as a user scroll — without the guard the panes drive each other in a loop —
+  and **`scrollerOf` hands the pane's scroll to the editor only while the pane carries its
+  `editing` class**. Later it is not an optimisation spend: both editor views stay mounted after
+  the mode ends (their states hold the undo history), so an unqualified editor lookup returns the
+  hidden host's scroller — zero geometry — and an out-pane drive wrote its target there instead of
+  into the visible pane. Measured driving the built app: one enter/leave cycle and the out→pane
+  direction went dead until the first pane-side scroll. The mode leave and the mode enter both
+  capture the reading place through the anchors (`capturePosition`) and re-apply it after the
+  repaint (`applyPosition`) — the same handoff a view switch gets — because the debounced session
+  save stores whichever scroller made sense *then*, and restoring that in the other state lands the
+  reader somewhere else entirely.
   The mapping is exact at anchors and approximate between them; do not "fix" that by measuring
   per line unless `markdown.rs` starts emitting line numbers for rendered blocks.
-- **A view switch carries the reading position through the anchors, and captures it before the view
-  changes** (`main.ts` `setView`, `document.ts` `capturePosition` / `applyPosition`). A tab's stored
+- **A view switch — and entering or leaving the edit mode — carry the reading position through the
+  anchors, and capture it before the change** (`main.ts` `setView` / `enterEdit` / `leaveEdit`,
+  `document.ts` `capturePosition` / `applyPosition`). A tab's stored
   `scroll` is a pixel in one mode's coordinate space and the panes wrap differently, so it cannot be
   reused across a switch; both sides go through `viewOf` + `mapScroll`, the anchor-and-fraction mapping
-  split-view sync already uses. The order is the whole bug: the first version switched the view class
+  split-view sync already uses. In split view the re-apply writes **both** panes and records the
+  follower's echo: a bare write into one half leaves the other wherever it was, because the sync rides
+  on scroll events the programmatic write does not carry. The order is the whole bug: the first version
+  switched the view class
   and *then* captured, which read the incoming pane at `scrollTop` 0 and lost the position — measured,
   the outgoing pane must be measured while it is still visible, because a hidden pane reports every
   anchor rect as 0. After the switch, `captureScroll` stores the pixel the new mode actually landed on,
