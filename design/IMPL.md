@@ -1243,9 +1243,6 @@ status bar's `rendered in N ms` is where a reader sees it.
 - **`KEYMAP` and the dispatcher** are still two hand-kept lists (SPEC §7). They agree today;
   nothing enforces it.
 - **`.tab.pinned`** has no CSS rule while the class is emitted (SPEC §5).
-- **Per-tab outline highlight** (SPEC §5): the field exists, but the spy does not remember it per
-  tab. The outline jump landing both panes on the same anchor ships, as does continuous split-view
-  sync (IMPL §5); what is left is remembering the highlight per tab.
 - **Resize handles are pointer-only**, like the split-view `#splitter`: no `tabindex`, no arrow
   keys. `role="separator"` without a keyboard path is incomplete accessibility; fixing one
   without the other would make the two handles behave differently, so fix both together.
