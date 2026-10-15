@@ -888,6 +888,14 @@ a decision, not a surprise.
   read by the frontend, and has been removed rather than kept as a control that does nothing.
   `boot()` always calls `restoreSession()` and the folder to reopen comes from `recent[0]`. A
   future opt-out belongs as an explicit flag whose effect is wired, not as a leftover argument.
+- **The reading trail has its own file** (`reading-trail.json`, beside `session.json`; `trail.rs`,
+  shipped 2026-10-15, SPEC §5): it is *not* part of the session, because this file is rewritten on a
+  500 ms debounce and an unknown `version` here means "start clean, do not migrate" — an append-only
+  list in it would grow every state write and make that rule dangerous on a schema bump. The frontend
+  holds the list (`WindowState.trail`) and never mixes it into `session_save`; `trail_note` and
+  `trail_position` write it, `trail_list` reads it back with the `missing` flag derived per entry
+  (`trail::views`, never stored — the file carries no fact about the disk), `trail_clear` empties it.
+  `session.recent` shrinks to one fact only: which folder `restoreSession` reopens.
 
 ## 7. Engine loading
 
