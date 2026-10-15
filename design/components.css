@@ -987,7 +987,7 @@ mark.current { background: var(--ac); color: #fff; }
 .recent { margin-top: var(--sp-4); font-size: 11.5px; color: var(--tx-2); }
 .recent a { color: var(--ac); text-decoration: none; cursor: pointer; }
 .recent a:hover { text-decoration: underline; }
-/* The reading trail (prototype — SPEC §6/§7). One row per document: what it is, where it lives, and
+/* The reading trail (SPEC §5). One row per document: what it is, where it lives, and
    the one fact that makes the list worth having — that you were in the middle of it. `tabular-nums`
    is here because these are right-aligned numbers of varying width (`9m` `3h` `1w`), and a ragged
    right edge is the kind of 2px misalignment this file exists to prevent. */

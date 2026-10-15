@@ -10,12 +10,14 @@ vanilla JS so it ports without rework; the shipped app is vanilla TypeScript + V
 Scope convention: this document describes the **target** UX. Every section that differs
 from the shipped app carries a **v1 status** note naming three things: what is
 implemented, what is deferred *with its feature*, and what deliberately deviates. The
-notes were last revised on 2026-10-08 against the running build (83 Rust tests on that date, `tsc`
-clean, production asset-protocol render verified, the same suite run on Linux, and a live UI sweep).
-A documentation/code pass on 2026-10-11 corrected the notes that had drifted since — a card render
-time and an update check that were described wrongly, the badge radii, the icon stroke range, the
-mockup's reading-section row count, the editor chunk figures and two cross-references; the suite is
-84 tests as of that pass.
+notes were revised on 2026-10-08 against the running build (83 Rust tests on that date, `tsc`
+clean, production asset-protocol render verified, the same suite run on Linux, and a live UI sweep),
+corrected on 2026-10-11 for the drift since (a card render time and an update check that were
+described wrongly, the badge radii, the icon stroke range, the mockup's reading-section row count, the
+editor chunk figures and two cross-references — 84 tests as of that pass), and corrected again on
+2026-10-15 for the reading trail (§5), the reading column reaching the code panes (§3) and the
+cross-references the trail moved. The suite is **103 tests** as of this pass (`cargo test --lib`,
+2026-10-15), plus the data-driven conformance gate in `src-tauri/tests/spec/`.
 
 Three terms are used precisely, because the difference between them is the whole point
 of the status notes:
@@ -74,7 +76,7 @@ which is what makes this a menu that pays for itself rather than one that adds a
 `<button>` and not a div with a handler because the title bar is a drag region: the `no-drag` list is
 `.titlebar button, .tab, input`, so a div would look right in the mockup and do nothing in the built app
 (it would also bring UA chrome, hence the `.tabbtn` reset idiom in `components.css`). Its tooltip names
-the first row it would open, which is the whole of this feature's advertising — see §7.
+the first row it would open, which is the whole of this feature's advertising — see §5.
 
 Tab overflow scrolls horizontally instead of wrapping, and the active tab is scrolled
 into view on every switch — a jumping title bar is worse than a hidden tab.
@@ -244,6 +246,10 @@ free slider, because line length is the one typographic knob a reader can genuin
   document font size or the zoom changes, and once more when webfonts settle; the status-bar tooltip
   shows the resolved figure and its share of the pane (`阅读宽度 — 舒适 · 1035px · 57%`) so the number
   on screen is never a mystery.
+  - **Deviates, in one detail**: the share is measured against `#out-preview`, which is `display: none` in
+    the split and source views, so the tooltip reads `1035px` there and `1035px · 57%` only in the preview
+    view (`measure.ts` `measureReadout`). The pixel figure — the number the token is written with — is
+    always reported; a view whose prose pane is hidden simply has no pane to divide by.
 - Consequence worth knowing: the resolved column is the same pixel value in both split panes, and a
   half-width pane is narrower than it, so in split view the pane — not the measure — is the binding
   constraint.
@@ -396,7 +402,7 @@ packaging plan.
 | engine | package (licence) | shipped cost | notes |
 |---|---|---|---|
 | mermaid | `mermaid@12` (MIT) | **29 KB entry**, chunks on demand | The ESM build is code-split: 104 chunks, 5.18 MB on disk, but only the entry plus the chunks for the diagram types actually used get loaded. `dist/mermaid.min.js` — the monolith — is 5.3 MB and must **not** be used. |
-| dot | `@hpcc-js/wasm-graphviz@1.29.2` (Apache-2.0) | **~0.9 MB** | 13 files, zero dependencies. The wasm is inlined into the JS, so there is no separate `.wasm` to ship or fetch. |
+| dot | `@hpcc-js/wasm-graphviz@1.29.2` (Apache-2.0) | **~0.8 MB** | 13 files, zero dependencies. The wasm is inlined into the JS, so there is no separate `.wasm` to ship or fetch: `dist/index.js` is 814,770 bytes, re-measured 2026-10-15, which is what the "~0.8 MB" is. |
 | dot (alternative) | `@viz-js/viz@3.31.0` (MIT) | ~1.2 MB | One self-contained file, MIT rather than Apache-2.0. Take this one only if the Apache licence or the `@hpcc-js` API is a problem. |
 | d2 | `@d2lang/d2@0.1.34` (MPL-2.0) | **11.5 MB** | `dist/browser/index.js` (11,514,165 bytes) is the one file the frontend imports: wasm inlined, and the package runs it in its own worker. Bundled, like the other two. The document's text paints before any card does, so the first `d2` block is the only thing that waits — measured 3.8 s for that parse on this machine, and 19 ms for a re-render once the module is resident. The module is started early on purpose: `paint()` preloads it the moment a document is known to contain an **uncached** d2 block, and `warmHeaviestEngineOnIdle()` preloads it once per session, on idle, after any document that has diagrams has rendered. So the parse normally happens while the reader is still reading, and what remains for the first d2 card is the render, not the parse. |
 
@@ -533,14 +539,15 @@ the same heading and, between two anchors, to the same fraction of the way down 
 between them — the same promise split-view sync makes (§3), for the same reason.
 
 **The outline highlight is per tab, and `Tab.outlineHit` is what carries it.** The field was in the
-record for two versions without a reader; the reading trail (§7) needed exactly it — "which heading is
+record for two versions without a reader; the reading trail (§5, below) needed exactly it — "which heading is
 the reader under" — so the scroll-spy now writes it (with `trailPct`, the fraction of the document it was
 at) and two things read it: `renderChrome` marks the heading when a tab comes back, and the trail stores
 it. Do not "clean up" either field.
 
 ### The reading trail — what was opened, and where you were
 
-**Status: implemented 2026-10-15.** It was prototyped in the mockup first (`?trail=`), and IMPL.md §11
+**Status: implemented 2026-10-15.** It was prototyped in the mockup first (the `?trail=` corner switcher it
+carried then is retired; `?panel=trail` opens the sheet now), and IMPL.md §11
 keeps the record of what driving that prototype settled before any of this was written.
 
 A list of documents and folders, most recently touched first, with one extra fact per document: the
@@ -581,7 +588,8 @@ folder to reopen on the next launch.
 
 The window opens here when no folder is loaded. It is also the drop target.
 
-- Dashed dropzone, one line of copy, `open folder` (primary) / `open file`.
+- Dashed dropzone with a folder icon, a title, one line of copy under it, then
+  `open folder` (primary) / `open file`.
 - Three shortcut hints (`ctrl O`, `ctrl shift P`, `F1`).
 - The three most recent **reading-trail** entries as links (§5): `README.md 12m · notes.md 3h ·
   architecture.md yesterday · all 12 →`. A name and a time, not a raw path — the path is in the tooltip
@@ -599,7 +607,7 @@ The window opens here when no folder is loaded. It is also the drop target.
 | `ctrl alt O` | toggle outline | implemented |
 | `ctrl T` | new tab | **not bound** (mockup-only, §5) |
 | `ctrl W` | close tab | implemented |
-| `ctrl shift P` | recently opened (top 8, as a menu) | implemented (§7) |
+| `ctrl shift P` | recently opened (top 8, as a menu) | implemented (§5) |
 | `ctrl shift W` | close all tabs | **not bound** |
 | `ctrl tab` / `ctrl shift tab` | next / previous tab | implemented |
 | `ctrl 1…9` | jump to tab N | implemented |
@@ -618,11 +626,13 @@ The window opens here when no folder is loaded. It is also the drop target.
 | `F1` | help | implemented |
 | `esc` | dismiss one layer (see below) | implemented |
 
-This table is what the app binds; the mockup's extra keys are not listed here. The one row with a
-prototype behind it is `ctrl shift P`: the mockup's bottom-left switcher (`today` / `menu of 8` /
-`list sheet`) carries two candidate shapes for that list, and the entry points are settled — the same
-key, the `⋯` menu's `recently opened` section, and a status bar chip that appears only when there is
-something to resume. The shape itself is still open — IMPL.md §11.
+This table is what the app binds; the mockup's extra keys are not listed here. `ctrl shift P` is the one
+row that had a prototype behind it, and it settled on 2026-10-15: the mockup's bottom-left switcher
+(`today` / `menu of 8` / `list sheet`) was carrying three candidate shapes, and the shipped one is the
+**flat menu of eight**, ending in `all N — open the list`, which opens the same sheet the other two entry
+points open (§5). The status-bar chip the prototype also carried was dropped with it; §5 says why the
+mark's tooltip is now the whole of the feature's advertising. The record of what driving the prototype
+settled is `IMPL.md` §11.
 
 > **Resolved 2026-10-01.** `ctrl shift O` was bound to both "open folder" and "toggle
 > outline". **Open folder keeps `ctrl shift O`** (VS Code muscle memory, and it is the
@@ -633,7 +643,7 @@ something to resume. The shape itself is still open — IMPL.md §11.
 > fall back to `ctrl shift K` (currently unbound).
 
 `esc` dismissal is ordered, and the app's order is the **reverse of opening order**: menu
-→ diagram viewer → **the reading trail's sheet (§7)** → settings → help → about → find bar → **edit
+→ diagram viewer → **the reading trail's sheet (§5)** → settings → help → about → find bar → **edit
 mode (§12)** → immersive. Only one layer closes per keypress. Leaving edit mode with unsaved changes
 asks first, which is why it belongs inside this chain rather than beside it.
 
@@ -645,7 +655,9 @@ next press anywhere.
 
 **The help table and the dispatcher are two lists.** `src/ui/help.ts` owns `KEYMAP` and the
 panel is generated from it; `main.ts` owns a hand-written `switch`, and the two are kept in
-step by review. They agree today, but nothing enforces that — either generate the dispatch
+step by review. They have already drifted apart: the dispatcher binds `ctrl shift tab` (previous tab,
+the row above) and `KEYMAP` has no row for it, so the help panel is a binding short. Nothing enforces the
+match — either generate the dispatch
 from the table, or add a test that asserts the two lists match. Until one of those exists,
 adding a key means editing two files and the help panel can silently go stale.
 
@@ -732,13 +744,17 @@ overlay and error markup in `mockup.js` (`renderMarkdown`) is what was ported, a
 stylesheet.
 
 **Scope note — what the mockup does not mirror.** It stays the clickable design reference, not a
-copy of the app, and four surfaces have drifted apart: the status bar has no truncation cluster
+copy of the app, and these surfaces have drifted apart: the status bar has no truncation cluster
 (`#stTrunc`), the About sheet has neither the lede paragraph nor the `logs` row and its
-unclean-run line, the settings sheet still draws the pre-2026-10-06 row set (an `engines` section,
+unclean-run line — and its version is a literal (`MarkdownAura 1.2.0`) where the app injects
+`__APP_VERSION__` —, the settings sheet still draws the pre-2026-10-06 row set (an `engines` section,
 the ignore chips, the watch-debounce read-out) and lacks the shipped math switch, default-app row
-and diagnostics section, and the two editor panes are a `<textarea>` stand-in for CodeMirror. The
-app-only classes that follow from this — and from a state the mockup's synchronous renderer has no
-answer for — are listed in `IMPL.md` §4.
+and diagnostics section, and the two editor panes are a `<textarea>` stand-in for CodeMirror. Three
+smaller ones are drift rather than scope: its shortcut table omits `ctrl 1-9`, `ctrl shift M` and
+`ctrl shift tab` and adds `ctrl T` (§7), its `esc` chain puts the menu last where the app puts it
+first, and the empty state's subtitle reads `no network, no telemetry` where the app says `no network
+needed`. The app-only classes that follow from this — and from a state the mockup's synchronous
+renderer has no answer for — are listed in `IMPL.md` §4 (the renderer's five).
 
 ## 10. Settings, immersive, help
 
@@ -952,7 +968,7 @@ not the present.
 ### Screenshot parameters
 
 The mockup takes `?view= &theme= &tab= &preview= &find= &overlay= &edit=`, plus `?panel=settings`,
-`?panel=help`, `?immersive=1`, and `?peek=1` to force the immersive hover bar open — a
+`?panel=help`, `?panel=trail`, `?immersive=1`, and `?peek=1` to force the immersive hover bar open — a
 headless browser cannot hover, so the bar is otherwise uncapturable.
 
 `preview=N` and `overlay=N` are **indices, not booleans**: `?preview=1` marks tab 1 as the
@@ -966,8 +982,10 @@ number 1. Parameters without an explicit boolean value are still "present" to
 Deliberately out of scope for this pass; each needs its own decision before implementation.
 Tab-related deferrals are not here — they live in §5, already designed and waiting.
 
-- A full recents panel. `ctrl shift P` ships as a menu of the top 8 and the empty state
-  shows the top 3 links, but a panel with pinning/clearing is not designed.
+- **A curated recents list.** The panel itself is designed and shipped (§5): grouped by last touch,
+  filterable, `clear history` in the foot. What is still undesigned is any way to *curate* it — pin an
+  entry, hide one, or sort by anything but the last touch. `Entry.opens` is stored for that and is shown
+  nowhere yet (`trail.rs`).
 - Error toast / notification styling beyond the placeholder in `mockup.js`
   (`dom.ts toast()` is the shipped shape: colour dot, 1.8 s fade).
 - Touch and pen input
@@ -1110,6 +1128,11 @@ This is where the work is; the control itself is the easy part.
   editor brings its own `line-height: 1.4` against this pane's `1.8`.
 - **The status bar reports the buffer**, not the last render: word count, byte size, encoding and EOL
   follow what is on screen. `rendered in N ms` keeps meaning "the last render" and refreshes on save.
+- **The split stays in sync across a mode change.** Entering or leaving the editable pane hands the
+  reading place over — `capturePosition` before the repaint, `applyPosition` after it, both panes written
+  in split view — so the position survives the round trip and the two-way scroll sync is still alive
+  afterwards (fixed 2026-10-15; `IMPL.md` §9 has the three defects that made one direction die after a
+  single cycle).
 - **One pane, one editor, one state per tab.** Every tab shares the single source element, so the
   mode swaps the editor's document state per tab instead of creating an editor per tab — which is also
   what keeps undo history per tab and the DOM count at one.
@@ -1171,7 +1194,8 @@ the reasons below are mostly its reasons.
 
 ### Code fences are highlighted — on, with no switch
 
-Prism, loaded per document rather than at boot: the core `7.3 KB` plus a curated set of
+Prism, loaded lazily on the first code fence rather than at boot — once per session, not per
+document. The core `7.3 KB` plus a curated set of
 grammars in one lazy chunk (measured: `120.31 kB` raw, `41.73 kB` gzipped). A document with
 no fenced code never loads it.
 

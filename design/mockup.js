@@ -1999,7 +1999,7 @@ Errors render inline with the line number instead of blanking the page.`
     showAppMenu();
   });
 
-  /* The reading trail's own controls (prototype: SPEC §6/§7). "clear history" is not decoration: a
+  /* The reading trail's own controls (SPEC §5). "clear history" is not decoration: a
      store that remembers what you read has to have a way out that is not "find the file on disk". */
   $("#trailClose").addEventListener("click", closeTrail);
   $("#trailFilter").addEventListener("input", (e) => { trailQuery = e.target.value; renderTrail(); });

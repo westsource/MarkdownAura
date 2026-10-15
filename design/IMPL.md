@@ -18,6 +18,13 @@ fields, the pulldown-cmark dependency count, the window-permission count, the un
 count and a set of stale `file:line` citations — the source, not a build, is what it was
 read against.
 
+Re-checked a third time on 2026-10-15, after the reading trail shipped: the §1 tree gained
+`trail.rs` and `ui/trail.ts` (and the overlay count went six → seven), §3's command count went
+25 → 29 with its blocking list and the `trail_list` response type, §10's count went 89 → 103 with
+`trail`'s own tests listed, §11 corrected the `--code-*` token count and now names the `KEYMAP`
+binding the help panel is missing, and §13's `file:line` citations are current again — with its
+"no global handler exists" row re-read as the state the section was built from, not as today.
+
 ---
 
 ## 1. Build and stack
@@ -92,6 +99,7 @@ MarkdownAura/
 │     ├─ emphasis.rs           # the CJK emphasis widening pass (§4)
 │     ├─ watcher.rs            # notify -> coalesced 120 ms batches
 │     ├─ session.rs            # persistence (§6)
+│     ├─ trail.rs              # the reading trail's own file, its quota and the prune (§6)
 │     ├─ engines.rs            # engine availability for the status bar dots (§7)
 │     ├─ defaultapp.rs         # the `.md` handler read-out; `xdg-mime` / the Open-with dialog (§10)
 │     ├─ diag.rs               # the NDJSON log, its rotation, the panic report and the run marker (§13)
@@ -110,7 +118,7 @@ MarkdownAura/
 │  │  ├─ panels.ts             # side-panel resize handles -> --w-sidebar / --w-outline
 │  │  ├─ editor.ts             # the editable pane: CodeMirror 6, lazy (§12)
 │  │  ├─ tabs.ts  tree.ts  outline.ts  statusbar.ts
-│  │  └─ find.ts  viewer.ts  settings.ts  help.ts  about.ts  immersive.ts
+│  │  └─ find.ts  viewer.ts  settings.ts  help.ts  about.ts  immersive.ts  trail.ts
 │  └─ render/
 │     ├─ types.ts              # EngineId + isEngineId
 │     ├─ pipeline.ts           # markdown html -> DOM -> cards -> engines
@@ -125,11 +133,10 @@ MarkdownAura/
 `vendor/d2/` from the earlier draft **does not exist and is not needed**: d2 is a bundled npm
 dependency (`@d2lang/d2`), not something vendored into the tree (§7).
 
-The six overlay modules (find, viewer, settings, help, about, immersive) are implemented and wired
-in `main.ts`. One of them deliberately stops short of a full feature: `ctrl shift P` shows the recent
-list as a menu rather than a picker. The settings panel used to have a second one — a d2 install
-button that reported the unimplemented download — and that row is gone now that d2 is bundled. The
-`index.html` shell carries the markup for all six.
+The seven overlay modules (find, viewer, settings, help, about, immersive, the reading trail) are
+implemented and wired in `main.ts`. The settings panel used to stop short of a full feature — a d2
+install button that reported the unimplemented download — and that row is gone now that d2 is
+bundled. The `index.html` shell carries the markup for all seven.
 
 Three repairs for this machine must not be "cleaned up" (two of them live under `tools/`, one in
 `src-tauri/`):
@@ -164,10 +171,11 @@ throw and the settings panel silently refused to open.
    `design/` so the mockup and the app stay in sync.
 2. The frontend never writes to disk directly. All I/O is a `#[tauri::command]`.
 3. The backend boundary is `src/ipc.ts`: the only module that calls `invoke`/`listen` or the
-   opener/updater/process plugins. Everything else calls a typed function — `openExternal` is the
-   opener plugin's `openUrl` behind that boundary, not a second door. `main.ts` is the one
-   exception, and only for the shell's own UI: `@tauri-apps/api/window` and `dpi` for the window
-   rect and the titlebar buttons, and `plugin-dialog` for open file / open folder. A new *backend*
+   opener/updater/process/dialog plugins. Everything else calls a typed function — `openExternal` is the
+   opener plugin's `openUrl` behind that boundary, not a second door, and `openDialog` is the
+   dialog plugin's `open` behind the same one. `main.ts` is the one exception, and only for the
+   shell's own UI: `@tauri-apps/api/window` and `dpi` for the window
+   rect and the titlebar buttons. A new *backend*
    call still belongs in `ipc.ts`.
 4. Rust holds no UI state. Tab state, theme, zoom, panel widths live in the frontend (§5) and are
    only *persisted* through Rust. Rust state is limited to the startup hint, the watcher and
@@ -181,11 +189,13 @@ throw and the settings panel silently refused to open.
 
 ### Commands (frontend → Rust)
 
-Twenty-five commands, all registered in `lib.rs`. All are `async` — except `startup_target`,
+Twenty-nine commands, all registered in `lib.rs`. All are `async` — except `startup_target`,
 `data_directory`, `default_app_status` and `set_log_level`, which are pure reads of state or of a
 path — and the filesystem-heavy ones
-(`open_folder`, `read_dir`, `resolve_target`, `read_file`, `render_doc`,
-`reveal_in_explorer`, `link_target`, `session_load`, `session_save`, `engine_status`, `note_recent`) hop
+(`open_folder`, `read_dir`, `resolve_target`, `read_file`, `save_doc`, `render_doc`, `render_text`,
+`reveal_in_explorer`, `link_target`, `session_load`, `session_save`, `engine_status`, `note_recent`,
+`trail_list`, `trail_note`, `trail_position`, `trail_clear`, `set_default_app`, `log_event`,
+`set_log_dir`, `diag_status`, `open_log_folder`) hop
 to a blocking thread through one `spawn_blocking` helper, because the §9 budgets assume no
 command stalls the UI thread. Two exceptions are deliberate and named so they stay
 decisions: the watcher commands do their work inline while holding the watcher mutex
@@ -274,12 +284,15 @@ path).
 //    path computation, not I/O. The About sheet shows it and opens it with `reveal_in_explorer`,
 //    which until then had been implemented and unused since the first pass.
 
-// --- the reading trail (SPEC §5, §7) ---
-#[tauri::command] async fn trail_list() -> Result<Vec<TrailEntry>>;
-// -> most recent first, each `{ path, kind, openedAt, opens, lastRead, missing }`. `missing` is
-//    *derived* here (one `stat` per entry, on the blocking pool) and skipped by serde, so the file
-//    never carries a fact about the disk.
-#[tauri::command] async fn trail_note(path: String, kind: String) -> Result<Vec<TrailEntry>>;
+// --- the reading trail (SPEC §5) ---
+#[tauri::command] async fn trail_list() -> Result<Vec<EntryView>>;
+// -> most recent first, each `{ path, kind, openedAt, opens, lastRead, missing }`. The response type
+//    is `EntryView` — a stored `Entry` with `#[serde(flatten)]` plus a `missing` bool — not `Entry`
+//    with a `serde(skip)`: the first version used the attribute, which keeps the field out of the
+//    file *and out of the serialized response*, so the UI received `undefined` and drew a vanished
+//    file as if it were there. A separate type makes "the file never stores a disk fact" a
+//    type-level fact. `missing` costs one `stat` per entry, on the blocking pool.
+#[tauri::command] async fn trail_note(path: String, kind: String) -> Result<Vec<EntryView>>;
 // -> records an open and answers with the whole new list, like `note_recent`: one round trip, and the
 //    caller's copy cannot disagree with the file. `kind` is `"file"` or `"folder"`.
 #[tauri::command] async fn trail_position(path: String, heading: String, pct: f64) -> Result<()>;
@@ -1109,9 +1122,14 @@ status bar's `rendered in N ms` is where a reader sees it.
 
 ## 10. Testing
 
-- **Rust: 89 unit tests, in-module** (`cargo test --lib`; 89 on 2026-10-13, and the count moves as
+- **Rust: 103 unit tests, in-module** (`cargo test --lib`; 103 on 2026-10-15, and the count moves as
   tests are added) — `session` (round-trip, unknown
   version, corrupt file, missing file, no temp file left, recent cap/dedupe/order);
+  `trail` (round-trip, no temp file left, unknown version, a broken file as an empty trail,
+  de-duplication that is case-insensitive and most-recent-first, re-opening keeping the position,
+  the entry cap, the window measuring the last touch rather than the first open, an ignored
+  position for an unknown path, a clamped percentage, `missing` derived and never stored, and a
+  clear that leaves the version alone);
   `fs_ops` (ignore rules, BOM detection, UTF-16 byte orders, truncation at the 8 MiB cap);
   `markdown` (the allow-list, normalisation, hostile input, allowed tags in paragraphs,
   heading ids/lines, heading text with inline code, diagram placeholders, `graphviz` alias,
@@ -1254,8 +1272,9 @@ status bar's `rendered in N ms` is where a reader sees it.
   opening at the top.
 - **The two contract guards in §4**: the `insta` snapshot over fixture documents and the
   class-name lint against `design/*.css`. `insta` is already a dev-dependency.
-- **`KEYMAP` and the dispatcher** are still two hand-kept lists (SPEC §7). They agree today;
-  nothing enforces it.
+- **`KEYMAP` and the dispatcher** are still two hand-kept lists (SPEC §7), and they no longer agree:
+  the dispatcher binds `ctrl shift tab` (previous tab) and `help.ts`'s `KEYMAP` has no row for it, so
+  the help panel omits one binding it documents. Nothing enforces the match.
 - **`.tab.pinned`** has no CSS rule while the class is emitted (SPEC §5).
 - **Resize handles are pointer-only**, like the split-view `#splitter`: no `tabindex`, no arrow
   keys. `role="separator"` without a keyboard path is incomplete accessibility; fixing one
@@ -1267,7 +1286,7 @@ status bar's `rendered in N ms` is where a reader sees it.
   (*Syntax* highlighting for non-diagram code fences left this list on 2026-10-07: it is now
   designed and shipped in SPEC §13, and its Prism setup is IMPL §7. Its *theme* — what a
   `catppuccin`-style code palette would look like as a second theme — is still undesigned; the
-  colours are the eight `--code-*` tokens, and a light/dark pair is all there is.)
+  colours are the nine `--code-*` tokens, and a light/dark pair is all there is.)
 - **The editable source pane ships; this is what its control was chosen on.** SPEC §1 was rewritten for it
   on 2026-10-04 (product owner's call) — it had been a rule ("a reader, not an editor") that several
   shipped decisions were justified by: the `read-only` pill, a `<pre>` rather than a `<textarea>`, no
@@ -1304,7 +1323,7 @@ status bar's `rendered in N ms` is where a reader sees it.
     var(--measure) }` resolved `60ch` to 527 px against the mono font, with no JS. `--measure` reaches
     `.prose > *`, the source panes' `pre` and this `.cm-content` today (2026-10-14; before that the
     source pane had no reading column at all). Note that `measure.ts`'s `chToPx` resolves against the
-    first *laid out* `.prose` (`measure.ts:58`) — a *sans* element, and in split view the compacted
+    first *laid out* `.prose` (`measure.ts:50`) — a *sans* element, and in split view the compacted
     one — so the same preset is the same *pixel* column with a different number of columns in a *mono*
     pane. That is the accepted trade: one column, one number on screen, both halves of a split.
   - Geometry lags CSS by exactly one measure pass. Changing the font size 15 px → 22 px applied the CSS
@@ -1592,10 +1611,13 @@ then refuses, which is the right outcome.
 Numbered last on purpose: it is an appendix to §2–§12, and appending avoids renumbering the
 cross-references that source comments make to `IMPL §3`, `§5`, `§6`, `§8`.
 
-### 13.1 What is invisible today
+### 13.1 What was invisible before this
 
 A crash reported from another machine had **no evidence of any kind**, and that is a design gap rather than a
-user's mistake. Four separate blind spots, each verified in the tree:
+user's mistake. Four separate blind spots, each verified in the tree at the time. This is the gap §13 was
+built to close, so read the table as the state the section starts from, not as the state today: §13.11 has
+the release-build evidence that three of the four now leave something readable, and one (a hard abort) still
+cannot.
 
 | failure | why there is nothing to read |
 |---|---|
@@ -1604,10 +1626,10 @@ user's mistake. Four separate blind spots, each verified in the tree:
 | WebView2 renderer dies | tauri 2.12's `WindowEvent` has no render-process-gone variant (`tauri-runtime-2.12.1/src/window.rs:30`), and `wry` exposes no `ProcessFailed` callback. The window stays, the page is dead, and §2's "one Crashpad dump per launch, no error surfaced anywhere" was written from experience |
 | abort / power loss / force-kill | no marker, no `run.end`, nothing |
 
-The three `eprintln!` calls that *do* exist (`lib.rs:152`, `lib.rs:164`, `commands.rs:49` — a fourth,
-`fs_ops.rs:485`, is test-only) reach no one: the release binary is a windowed process with no console
+The three `eprintln!` calls that *do* exist (`lib.rs:154`, `lib.rs:166`, `commands.rs:50` — a fourth,
+`fs_ops.rs:487`, is test-only) reach no one: the release binary is a windowed process with no console
 attached, so the text is discarded. The watcher used to drop notify's error stream on the floor; since
-2026-10-08 it logs it (`watcher.rs:208`, `diag_warn!`), because a watcher that stopped working looks
+2026-10-08 it logs it (`watcher.rs:262`, `diag_warn!`), because a watcher that stopped working looks
 exactly like a file that stopped changing — the most likely silent degradation in the whole app.
 
 ### 13.2 Decision: a hand-rolled `diag.rs`, and no new crates
@@ -1744,12 +1766,12 @@ This is why `lib.rs` moves from `builder.run(context)` to `builder.build(context
 
 | where | what is logged |
 |---|---|
-| `lib.rs:71` `run()` | version, pid, argv, OS/arch, exe path, log dir, whether `MARKDOWNAURA_BROWSER_ARGS` is set |
-| `lib.rs:152`, `lib.rs:164`, `commands.rs:49` | the three surviving `eprintln!` sites, re-pointed at the logger (debug builds keep mirroring to stderr) |
-| `watcher.rs:208` | notify's error stream, logged as `warn` (it used to be discarded) |
+| `lib.rs:72` `run()` | version, pid, argv, OS/arch, exe path, log dir, whether `MARKDOWNAURA_BROWSER_ARGS` is set |
+| `lib.rs:154`, `lib.rs:166`, `commands.rs:50` | the three surviving `eprintln!` sites, re-pointed at the logger (debug builds keep mirroring to stderr) |
+| `watcher.rs:262` | notify's error stream, logged as `warn` (it used to be discarded) |
 | every `#[tauri::command]` | already covered by the IPC wrapper in §13.7 — no per-command code |
 | `session::save` failure, engine load/render failure | `warn` / `debug` |
-| front-end `main.ts:894` (session save swallowed) and `render/engines.ts:164` (d2 preload swallowed) | the two silent real failures; `dom.ts`'s `copyText` misses are deliberately not logged |
+| front-end `main.ts:1148` (session save swallowed) and `render/engines.ts:164` (d2 preload swallowed) | the two silent real failures; `dom.ts`'s `copyText` misses are deliberately not logged |
 
 There is **no** render-over-budget comparison and no per-switch breadcrumb: the log says which document
 was on screen because the startup line carries `argv` and the session line carries the open tabs, not
@@ -1759,7 +1781,7 @@ one.
 ### 13.7 Front-end: one wrapper covers every IPC failure
 
 `ipc.ts` is the app's entire Tauri boundary (§2 rule 3), so wrapping `invoke` there logs **every** command
-failure with the command name and the error, and none of the twenty-four commands changes. The rule that comes
+failure with the command name and the error, and none of the twenty-nine commands changes. The rule that comes
 with it is absolute: **the wrapper logs the command name and the error, never the arguments** — `saveDoc`'s
 arguments include the whole document text.
 
