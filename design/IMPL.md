@@ -273,6 +273,22 @@ path).
 // -> where the app keeps its state (`%APPDATA%/MarkdownAura`). Sync, like `startup_target`: it is a
 //    path computation, not I/O. The About sheet shows it and opens it with `reveal_in_explorer`,
 //    which until then had been implemented and unused since the first pass.
+
+// --- the reading trail (SPEC §5, §7) ---
+#[tauri::command] async fn trail_list() -> Result<Vec<TrailEntry>>;
+// -> most recent first, each `{ path, kind, openedAt, opens, lastRead, missing }`. `missing` is
+//    *derived* here (one `stat` per entry, on the blocking pool) and skipped by serde, so the file
+//    never carries a fact about the disk.
+#[tauri::command] async fn trail_note(path: String, kind: String) -> Result<Vec<TrailEntry>>;
+// -> records an open and answers with the whole new list, like `note_recent`: one round trip, and the
+//    caller's copy cannot disagree with the file. `kind` is `"file"` or `"folder"`.
+#[tauri::command] async fn trail_position(path: String, heading: String, pct: f64) -> Result<()>;
+// -> where the reader stopped. `heading` is the heading's *text* and `pct` the fraction of the
+//    document: an id would point at nothing after the next render (§13). An unknown path is ignored —
+//    a position is not an open.
+#[tauri::command] async fn trail_clear() -> Result<()>;
+// -> forgets everything. A store that remembers what you read needs a way out that is not "find the
+//    file in %APPDATA%".
 ```
 
 #[tauri::command] fn default_app_status() -> DefaultAppStatus;
@@ -591,7 +607,11 @@ type Tab = {
   name: string;
   view: "preview" | "split" | "source";
   scroll: number;
-  outlineHit: string | null;   // present, not wired (SPEC §5 v1 status)
+  // Wired since the reading trail (SPEC §5, §7): the scroll-spy writes the heading the reader is under,
+  // and `renderChrome` marks it when a tab comes back. `trailPct` is the fraction of the document that
+  // went with it — both are what a trail position is made of.
+  outlineHit: string | null;
+  trailPct: number;
   find: { q: string; case: boolean; hit: number };
   preview: boolean;      // italic: opened by a single tree click
   // v2 contract — the fields exist, `missing` and `reloading` are wired, `pinned` is not
@@ -632,6 +652,12 @@ type WindowState = {
   activeTab: number;
   tabs: Tab[];
   recent: string[];
+  // The reading trail (SPEC §5, §7), most recent first, as Rust last answered. Every list the UI shows
+  // reads this and every write replaces it wholesale. `recent` above is now one fact only: which folder
+  // `restoreSession` reopens. The trail is *not* in the session and not in `session.json` — its own
+  // file, because that one is rewritten on a 500 ms debounce and treats an unknown `version` as "start
+  // clean" (§6), so an append-only list in it would grow every write and make that rule dangerous.
+  trail: TrailEntry[];
   root: string | null;           // folder currently in the explorer, null for the empty state
   watching: number;              // last watcher count; not persisted, needed to re-render its label
   windowRect: WindowRect;        // cached last rect; refreshed from the real window at save time
@@ -1180,6 +1206,30 @@ status bar's `rendered in N ms` is where a reader sees it.
 
 ## 11. Open items
 
+- **What the reading-trail prototype settled** (it shipped 2026-10-15; SPEC §5 is the design). It was
+  prototyped in the mockup first, behind a corner switcher — a control that was *there* rather than
+  behind a URL, because the first cut hid it behind `?trail=` and the review came back as "I can't tell
+  the difference", which is the correct answer to a control nobody can find. Four things that came out
+  of driving it rather than reading it, kept because two of them are load-bearing in the shipped code:
+  * **The durable anchor is the heading text plus a fraction, never a heading id.** Ids are assigned per
+    render (§13), so an id kept across sessions points at nothing after the next one — and the text has
+    to resolve through the *parsed* headings: the renderer puts a `#` anchor chip inside every heading
+    (`<h2 id="h3">Pipeline<a class="anchor">#</a></h2>`), so a `textContent` compare finds nothing and
+    every resume silently falls through to the fraction.
+  * **Group and sort by last touch, not first open** — a document opened in March and read this morning
+    belongs under `today`, and the window is measured the same way.
+  * **The time column has to change meaning with its group** (how long ago inside `today`, the date
+    outside it), or the sheet prints `yesterday` under the heading `yesterday`.
+  * Two traps that were the *prototype's*, not the feature's: `openMenu`/`openMenuAt` measured against
+    `#main` while the menu's containing block is the viewport, so every menu anchored in the title bar
+    was drawn 78px too high and clipped (`top: -42`, measured — the app's `showMenu` had always clamped
+    against the window); and `input[type="search"]` (element + attribute) beats a bare `.trail-filter`
+    class, so the filter grew to fill the sheet's head until the selector named the element. The same
+    class of tie the editor's active line had to win.
+  The two decisions that shaped it are recorded in the code and in SPEC §5: the mark is the app menu
+  (and the status-bar chip was dropped, which is why the mark's tooltip is now the only thing that
+  advertises the feature), and a heading that no longer exists falls back to the fraction rather than
+  opening at the top.
 - **The two contract guards in §4**: the `insta` snapshot over fixture documents and the
   class-name lint against `design/*.css`. `insta` is already a dev-dependency.
 - **`KEYMAP` and the dispatcher** are still two hand-kept lists (SPEC §7). They agree today;

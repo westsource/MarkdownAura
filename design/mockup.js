@@ -916,11 +916,22 @@ Errors render inline with the line number instead of blanking the page.`
 
   function allTabsMenu() {
     const acts = state.tabs.map((t, i) => () => { state.active = i; renderAll(); });
-    return {
-      html: menuHead("all tabs · " + state.tabs.length) + state.tabs.map((t, i) =>
-        menuItem((i === state.active ? "● " : "") + t.name, "", i === state.active)).join(""),
-      actions: acts
-    };
+    let html = menuHead("all tabs · " + state.tabs.length) + state.tabs.map((t, i) =>
+      menuItem((i === state.active ? "● " : "") + t.name, "", i === state.active)).join("");
+    /* A pointer path into the trail, on a control that already exists. The app's `⋯` is "the list of
+       what you have open"; "what you had open" is the same question one section later.
+       "Recently opened", not "recently read": the rows can be folders, and a folder is never read. It
+       means *opened recently and not already on screen* — the section above has just listed the open
+       tabs, and the same name three rows lower reads as a bug rather than as a history. The app compares
+       absolute paths here; the mockup's tabs are keyed by name. */
+    const recent = trailSorted().filter((e) => !state.tabs.some((t) => t.name === e.name)).slice(0, 3);
+    if (recent.length) {
+      html += menuSep() + menuHead("recently opened") + recent.map((e) =>
+        `<div class="menu-item"${e.missing ? ' aria-disabled="true"' : ""}><span>${esc(e.name)}<span class="menu-dir"> · ${esc(e.dir)}</span></span><span class="menu-meta">${trailWhen(e)}</span></div>`).join("")
+        + menuItem("all " + TRAIL.length + " — open the list");
+      acts.push(...recent.map((e) => () => resumeTrail(e)), () => openTrail());
+    }
+    return { html, actions: acts };
   }
 
   function tabMenu(e, i) {
@@ -945,14 +956,23 @@ Errors render inline with the line number instead of blanking the page.`
     });
   }
 
+  /* The box a menu's absolute offsets are measured against. `#menu` has no positioned ancestor inside
+     `.window`, so that box is the viewport — but this file measured against `#main`, which starts *below*
+     the title bar (78px lower). Every menu anchored in the title bar, i.e. the `⋯` (and now the mark),
+     was therefore drawn 78px too high, clipped off the top of the window — measured, `top: -42` — and the
+     tab context menu hung the same 78px above the pointer. The app never had this: `showMenu` (dom.ts)
+     clamps against `window.innerWidth/innerHeight` with `Math.max(6, …)`. This is the mockup catching up;
+     it was invisible because a screenshot of the *app* cannot show a menu the mockup draws wrong. */
+  const menuBox = () => ({ left: 0, top: 0, width: window.innerWidth, height: window.innerHeight });
+
   function openMenu(x, y, def) {
     const m = $("#menu");
-    const r = $("#main").getBoundingClientRect();
+    const r = menuBox();
     m.innerHTML = def.html;
     m.classList.add("on");
     const mw = m.offsetWidth, mh = m.offsetHeight;
-    m.style.left = Math.min(x - r.left, r.width - mw - 6) + "px";
-    m.style.top = Math.min(y - r.top, r.height - mh - 6) + "px";
+    m.style.left = Math.max(6, Math.min(x - r.left, r.width - mw - 6)) + "px";
+    m.style.top = Math.max(6, Math.min(y - r.top, r.height - mh - 6)) + "px";
     wireMenu(m, def);
   }
 
@@ -965,12 +985,12 @@ Errors render inline with the line number instead of blanking the page.`
       return;
     }
     m.dataset.anchor = btn.id;
-    const r = $("#main").getBoundingClientRect();
+    const r = menuBox();
     const b = btn.getBoundingClientRect();
     m.innerHTML = def.html;
     m.classList.add("on");
     m.style.left = Math.max(6, Math.min(b.left - r.left - m.offsetWidth + b.width, r.width - m.offsetWidth - 6)) + "px";
-    m.style.top = Math.min(b.bottom - r.top + 4, r.height - m.offsetHeight - 6) + "px";
+    m.style.top = Math.max(6, Math.min(b.bottom - r.top + 4, r.height - m.offsetHeight - 6)) + "px";
     wireMenu(m, def);
   }
 
@@ -986,6 +1006,269 @@ Errors render inline with the line number instead of blanking the page.`
   }
 
   document.addEventListener("click", () => $("#menu").classList.remove("on"));
+
+  /* ===================== reading trail (SPEC §5, §7) =====================
+     "Where was I, and how do I get back": what was opened, most recently touched first, with the
+     heading the reader stopped under — the sheet, the two menus, the empty state's three links and the
+     resume all read it. The app ships this (SPEC §5); the mockup carries it so the design reference
+     stays the design, and so a change to it can be looked at without a build.
+
+     **What is mocked, loudly:** the entries and their timestamps (`TRAIL` below). In the app they live
+     in `reading-trail.json` next to `session.json` — *not* inside it, because that file is rewritten on
+     a 500 ms debounce and an unknown `version` there means "start clean, do not migrate" — and `missing`
+     is derived by Rust (`trail::views`) rather than stored. Nothing here writes anything: "clear
+     history" empties this array in memory and says so. **What is real:** the widget (grouping, the two
+     label rules, truncation, the esc-chain slot), the three entry points, and the resume's two halves.
+
+     One fixture detail is a finding, not a convenience: `lastRead` stores the heading *text* plus a
+     fraction of the document, never a heading id — ids are assigned per render (SPEC §13), so an id kept
+     across sessions points at nothing after the next one. The resume below resolves the text against the
+     parsed headings (never `textContent`: the renderer puts a `#` anchor chip inside every heading) and
+     falls back to the fraction when the heading is gone. */
+
+  const TRAIL_DAYS = 90;   // the window the app would keep (decided 2026-10-14)
+  const TRAIL_CAP = 100;   // and its bound
+  const MINUTE = 60 * 1000, HOUR = 60 * MINUTE, DAY = 24 * HOUR;
+  const ago = (ms) => Date.now() - ms;
+
+  /* Fixtures, most recent first by `at` — the last *touch* (a read), not the first open: a document
+     you opened in March and read again this morning belongs under "today". Every bucket has an entry
+     so the grouping is visible, and between them they cover all five cases the resume has to survive:
+     a heading that still resolves (README, diagrams, architecture), a heading that does **not**
+     (quickstart — the document was edited since, its `Reading` section is gone, so the percentage is
+     the fallback), a file that was never scrolled (CHANGELOG), a folder, and one row that is missing
+     from disk. */
+  const TRAIL = [
+    { kind: "file", name: "README.md", dir: "E:\\notes", at: ago(12 * MINUTE), opens: 6, lastRead: { heading: "Pipeline", pct: .34 } },
+    { kind: "file", name: "examples/diagrams.md", dir: "E:\\notes", at: ago(3 * HOUR), opens: 2, lastRead: { heading: "A broken block", pct: .71 } },
+    { kind: "folder", name: "notes", dir: "E:\\", at: ago(2 * DAY) },
+    { kind: "file", name: "architecture.md", dir: "E:\\notes", at: ago(DAY + 4 * HOUR), opens: 9, lastRead: { heading: "Caching", pct: .88 } },
+    { kind: "file", name: "quickstart.md", dir: "E:\\notes", at: ago(DAY + 6 * HOUR), opens: 1, lastRead: { heading: "Reading", pct: .4 } },
+    { kind: "file", name: "CHANGELOG.md", dir: "E:\\notes", at: ago(6 * DAY), opens: 3, lastRead: null },
+    { kind: "folder", name: "demo-docs", dir: "E:\\OpenCode\\MarkdownAura\\var", at: ago(19 * DAY) },
+    { kind: "file", name: "spec.md", dir: "E:\\notes\\docs", at: ago(23 * DAY), opens: 4, missing: true, lastRead: { heading: "State", pct: .6 } },
+  ];
+
+  /** Midnight today, as a timestamp — the boundary every bucket below is measured from. */
+  const midnight = () => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  };
+
+  /** `today` / `yesterday` / `this week` / `earlier`. Calendar-relative, not "n hours ago": "yesterday"
+      that means 26 hours is wrong at 01:00, which is exactly when a reader notices. */
+  function trailBucket(at) {
+    const t0 = midnight();
+    if (at >= t0) return "today";
+    if (at >= t0 - DAY) return "yesterday";
+    if (at >= t0 - 6 * DAY) return "this week";
+    return "earlier";
+  }
+
+  const relTime = (at) => {
+    const d = ago(at);
+    if (d < MINUTE) return "now";
+    if (d < HOUR) return Math.floor(d / MINUTE) + "m";
+    if (d < DAY) return Math.floor(d / HOUR) + "h";
+    if (d < 2 * DAY) return "yesterday";
+    if (d < 7 * DAY) return Math.floor(d / DAY) + "d";
+    if (d < 30 * DAY) return Math.floor(d / (7 * DAY)) + "w";
+    return Math.floor(d / (30 * DAY)) + "mo";
+  };
+
+  /* The exact time is the tooltip, never a column: a list of absolute timestamps is a log, and what a
+     reader needs from this list is "roughly when" plus "where exactly". */
+  const fmtAt = (at) => {
+    const d = new Date(at);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+
+  /**
+   * The right-hand column. Inside `today` the useful fact is how long ago (`12m`, `3h`); in the older
+   * groups the label already says that, so the column carries the date instead — the first render had
+   * a row reading `yesterday … yesterday` under the heading `yesterday`, which is the kind of repeat a
+   * reader cannot unsee. `MM-DD` is enough inside this year (the window is 90 days) and it grows a year
+   * when it is not, because a bare `01-04` in January is ambiguous rather than terse.
+   */
+  function trailWhen(e) {
+    if (trailBucket(e.at) === "today") return relTime(e.at);
+    const d = new Date(e.at);
+    const p = (n) => String(n).padStart(2, "0");
+    const md = `${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    return d.getFullYear() === new Date().getFullYear() ? md : `${d.getFullYear()}-${md}`;
+  }
+
+  const trailSorted = () => [...TRAIL].sort((a, b) => b.at - a.at);
+
+  function trailMatches(e, q) {
+    if (!q) return true;
+    return [e.name, e.dir, e.lastRead ? e.lastRead.heading : ""].join(" ").toLowerCase().includes(q);
+  }
+
+  let trailQuery = "";
+  let trailShown = [];
+
+  function trailRowHTML(e, i) {
+    const sub = e.kind === "folder"
+      ? "folder · " + e.dir
+      : [e.dir, e.missing ? "gone" : e.lastRead ? "read to §" + e.lastRead.heading : "never scrolled"].join(" · ");
+    return `<div class="trail-row${e.missing ? " missing" : ""}" data-row="${i}" role="button" tabindex="0" title="${esc(fmtAt(e.at))}">
+      <div class="trail-main">
+        <div class="trail-name">${esc(e.name)}</div>
+        <div class="trail-sub">${esc(sub)}</div>
+      </div>
+      <div class="trail-when">${trailWhen(e)}</div>
+    </div>`;
+  }
+
+  function renderTrail() {
+    const q = trailQuery.trim().toLowerCase();
+    trailShown = trailSorted().filter((e) => trailMatches(e, q));
+    let html = "", last = null;
+    trailShown.forEach((e, i) => {
+      const b = trailBucket(e.at);
+      if (b !== last) { html += `<div class="trail-group">${b}</div>`; last = b; }
+      html += trailRowHTML(e, i);
+    });
+    $("#trailBody").innerHTML = html || `<div class="trail-none">${
+      TRAIL.length ? `nothing matches “${esc(trailQuery)}”` : "nothing here yet — the list fills as you read"
+    }</div>`;
+    $("#trailCount").textContent = String(trailShown.length);
+    $("#trailMeta").textContent = `${TRAIL.length} of ${TRAIL_CAP} · kept ${TRAIL_DAYS} days`;
+    $("#trailClear").disabled = TRAIL.length === 0;
+    $("#trailBody").querySelectorAll("[data-row]").forEach((el) => {
+      el.addEventListener("click", () => resumeTrail(trailShown[+el.dataset.row]));
+      el.addEventListener("keydown", (ev) => { if (ev.key === "Enter") resumeTrail(trailShown[+el.dataset.row]); });
+    });
+  }
+
+  function openTrail() {
+    trailQuery = "";
+    $("#trailFilter").value = "";
+    renderTrail();
+    $("#trailOverlay").classList.add("on");
+    $("#trailFilter").focus();
+  }
+
+  function closeTrail() { $("#trailOverlay").classList.remove("on"); }
+
+  /**
+   * The half that is not a list: back to where you left off.
+   *
+   * The heading is resolved by text, and the percentage is the fallback — a document that was edited
+   * since you last read it may no longer have that heading, and "same fraction of the document" is a
+   * worse answer than "that heading" but a much better one than "the top".
+   *
+   * Resolved through the *parser's* heading records, never through `textContent`: the renderer appends
+   * a `#` anchor chip inside every heading (`.anchor`), so the DOM text of `## Pipeline` is `Pipeline#`
+   * and a textContent compare silently finds nothing. That is what the first run of this prototype did
+   * — every resume fell through to the percentage — and it is the strongest argument for keeping the
+   * anchor next to the parse (the outline already resolves ids this way) rather than scraping the page.
+   */
+  function resumeTrail(e) {
+    if (!e) return;
+    if (e.missing) {
+      toast("gone from disk — the app would drop " + e.dir + "\\" + e.name + " from the trail", "warn");
+      return;
+    }
+    closeTrail();
+    if (e.kind === "folder") {
+      toast("shell: open " + e.dir + "\\" + e.name + " as the folder", "ok");
+      return;
+    }
+    openFile(e.name, { preview: false });
+    const scroller = activeScroller();
+    const parsed = doc(tab().file);
+    const hit = e.lastRead && parsed.headings.find((h) => h.text === e.lastRead.heading);
+    const target = hit ? document.getElementById(hit.id) : null;
+    requestAnimationFrame(() => {
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        toast("resumed at §" + e.lastRead.heading, "ok");
+      } else if (e.lastRead) {
+        scroller.scrollTop = e.lastRead.pct * (scroller.scrollHeight - scroller.clientHeight);
+        toast("that heading is gone — resumed at " + Math.round(e.lastRead.pct * 100) + "% of the document", "ok");
+      } else {
+        toast("opened at the top — nothing was recorded for this file", "ok");
+      }
+    });
+  }
+
+  /** 甲: the same facts inside the menu of eight — no new surface, no new layer in the esc chain. */
+  function showTrailMenu() {
+    const rows = trailSorted().slice(0, 8);
+    let html = "", actions = [], last = null;
+    rows.forEach((e) => {
+      const b = trailBucket(e.at);
+      if (b !== last) { html += menuSep() + menuHead(b); last = b; }
+      html += `<div class="menu-item"${e.missing ? ' aria-disabled="true"' : ""}>
+        <span>${esc(e.name)}<span class="menu-dir"> · ${esc(e.dir)}</span></span>
+        <span class="menu-meta">${trailWhen(e)}</span></div>`;
+      actions.push(() => resumeTrail(e));
+    });
+    html += menuSep() + menuItem(`all ${TRAIL.length} — open the list`, "ctrl shift P");
+    actions.push(() => openTrail());
+    openMenu(window.innerWidth / 2 - 150, 96, { html, actions });
+  }
+
+  /** The empty state's three links, upgraded: name and when, instead of a full path and nothing. */
+  function renderRecent() {
+    const rows = trailSorted().slice(0, 3);
+    const el = $("#emptyRecent");
+    el.innerHTML = rows.map((e, i) =>
+      `<a data-recent="${i}" title="${esc(fmtAt(e.at))}">${esc(e.name)} <time>${relTime(e.at)}</time></a>`
+    ).join(" · ") + ` · <a data-trail-all class="more">all ${TRAIL.length} →</a>`;
+    el.querySelectorAll("[data-recent]").forEach((a) =>
+      a.addEventListener("click", () => resumeTrail(rows[+a.dataset.recent])));
+    el.querySelector("[data-trail-all]").addEventListener("click", () => openTrail());
+  }
+
+  /** The file a `continue` would resume — the newest entry that is a real file, not a folder. */
+  const trailResumeTarget = () => trailSorted().find((e) => e.kind === "file" && !e.missing);
+
+  /**
+   * Repaints the two places outside the sheet that are built from the list: the empty state's three
+   * links and the mark's tooltip. Both are cheap, and both have to follow a `clear history` — this is
+   * what the app calls from its own `clear`, so the mockup cannot show a stale row either.
+   *
+   * The mark's tooltip is worth keeping in step because it is the *only* thing that advertises the
+   * feature: the status-bar chip that used to carry it was dropped (owner's call, 2026-10-14) and a menu
+   * you have to open cannot advertise anything.
+   */
+  function refreshTrail() {
+    renderRecent();
+    const target = trailResumeTarget();
+    $("#brandMark").title = target
+      ? "menu — recently opened: " + target.name + (target.lastRead ? " §" + target.lastRead.heading : "")
+      : "menu — settings, help, about";
+  }
+
+  /**
+   * The window mark as a control — the owner's proposal, wired so it can be looked at.
+   *
+   * The mark is the one dead surface in the title bar (`grep brand src/main.ts src/ui/*.ts` finds no
+   * handler at all) and SPEC §2 already budgets it in the anatomy, so making it a control costs no
+   * chrome and no width — the same move the pill and the unsaved mark already made. It is **always
+   * there**, which is the property both other entry points lack: the `⋯` route needs a menu opened, the
+   * status-bar chip only exists while there is something to resume.
+   *
+   * Its content is the *app menu*, with `recently opened` on top, because the mark means "this
+   * application" to a reader: settings / help / about are what they expect behind it, and recents is
+   * simply the row they will use most. A mark that jumped straight to a list of documents would be the
+   * version I would argue against.
+   */
+  function showAppMenu() {
+    const recent = trailSorted().filter((e) => !state.tabs.some((t) => t.name === e.name)).slice(0, 3);
+    let html = menuHead("recently opened") + recent.map((e) =>
+      `<div class="menu-item"${e.missing ? ' aria-disabled="true"' : ""}><span>${esc(e.name)}<span class="menu-dir"> · ${esc(e.dir)}</span></span><span class="menu-meta">${trailWhen(e)}</span></div>`).join("")
+      + menuItem("all " + TRAIL.length + " — open the list");
+    const acts = [...recent.map((e) => () => resumeTrail(e)), () => openTrail()];
+    html += menuSep() + menuItem("settings", "ctrl ,") + menuItem("help", "F1") + menuItem("about");
+    acts.push(() => openSettings(), () => openHelp(), () => openAbout());
+    openMenuAt($("#brandMark"), { html, actions: acts });
+  }
 
   /* ===================== theme, panels, zoom ===================== */
 
@@ -1560,6 +1843,10 @@ Errors render inline with the line number instead of blanking the page.`
     if (e.key === "Escape") {
       /* ordered: one layer closes per press, topmost first */
       if (isOn("diagramOverlay")) return closeViewer();
+      /* The reading-trail sheet joins the chain here, ahead of the other sheets. The chain is a
+         hand-kept list (SPEC §7) — this line is the whole cost of adding a layer to it, and it is the
+         part of this prototype that would land in `main.ts` unchanged. */
+      if (isOn("trailOverlay")) return closeTrail();
       if (isOn("helpOverlay")) return closeHelp();
       if (isOn("aboutOverlay")) return closeAbout();
       if (isOn("settingsOverlay")) return closeSettings();
@@ -1579,6 +1866,11 @@ Errors render inline with the line number instead of blanking the page.`
     if (mod && key === ",") { e.preventDefault(); return $("#openSettings").click(); }
     if (mod && e.altKey && key === "o") { e.preventDefault(); return $("#toggleOutline").click(); }
     if (mod && e.shiftKey && key === "o") { e.preventDefault(); return $("#openFolderBtn").click(); }
+    /* The key the app reserves for the trail (SPEC §7): the same rows as a flat menu of eight. */
+    if (mod && e.shiftKey && key === "p") {
+      e.preventDefault();
+      return showTrailMenu();
+    }
     if (mod && e.shiftKey && key === "a") { e.preventDefault(); return $("#listTabsBtn").click(); }
     if (mod && e.shiftKey && key === "w") {
       e.preventDefault();
@@ -1700,6 +1992,24 @@ Errors render inline with the line number instead of blanking the page.`
   $("#unsavedClose").addEventListener("click", closeUnsaved);
   $("#unsavedOverlay").addEventListener("click", (e) => { if (e.target.id === "unsavedOverlay") closeUnsaved(); });
 
+  /* The window mark (SPEC §2): the app menu. `stopPropagation` because the document-level click
+     dismisses any open menu, so a click that bubbles closes what it just opened. */
+  $("#brandMark").addEventListener("click", (e) => {
+    e.stopPropagation();
+    showAppMenu();
+  });
+
+  /* The reading trail's own controls (prototype: SPEC §6/§7). "clear history" is not decoration: a
+     store that remembers what you read has to have a way out that is not "find the file on disk". */
+  $("#trailClose").addEventListener("click", closeTrail);
+  $("#trailFilter").addEventListener("input", (e) => { trailQuery = e.target.value; renderTrail(); });
+  $("#trailClear").addEventListener("click", () => {
+    const n = TRAIL.length;
+    TRAIL.length = 0;
+    renderTrail();
+    toast(n + " entries would be forgotten — the files themselves are untouched", "warn");
+  });
+
   /* ?view= & ?theme= & ?tab= & ?preview= & ?panel= & ?immersive= let screenshots target a state */
   const q = new URLSearchParams(location.search);
 
@@ -1723,6 +2033,12 @@ Errors render inline with the line number instead of blanking the page.`
   if (q.get("view")) setView(q.get("view"));
   if (q.get("panel") === "settings") openSettings();
   if (q.get("panel") === "help") openHelp();
+  /* The trail is part of the shipped surface now, so the mockup shows it the way the app does: the
+     empty state's three links, the `⋯` section, the mark's menu. `?panel=trail` opens the sheet, the
+     same screenshot device `?panel=settings` is — the `?trail=` switcher this used to carry retired
+     with the decision (IMPL.md §11 keeps the record of what it was for). */
+  refreshTrail();
+  if (q.get("panel") === "trail") openTrail();
   if (q.get("immersive") !== null) {
     setImmersive(true);
     if (q.get("peek") !== null) $("#win").classList.add("peeking");

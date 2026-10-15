@@ -68,6 +68,14 @@ button exists only in the mockup; the app has no new-tab button because `ctrl T`
 bound. Of the tab context menu, **close others, close to the right, close all, copy path and
 reveal ship**; **pin and duplicate** are still deferred (§5).
 
+**The mark is the app menu.** `<button class="brand" id="brandMark">` opens `recently opened` on top of
+settings / help / about — the three rows that were reachable only from two keys and one status-bar chip,
+which is what makes this a menu that pays for itself rather than one that adds a layer. It is a
+`<button>` and not a div with a handler because the title bar is a drag region: the `no-drag` list is
+`.titlebar button, .tab, input`, so a div would look right in the mockup and do nothing in the built app
+(it would also bring UA chrome, hence the `.tabbtn` reset idiom in `components.css`). Its tooltip names
+the first row it would open, which is the whole of this feature's advertising — see §7.
+
 Tab overflow scrolls horizontally instead of wrapping, and the active tab is scrolled
 into view on every switch — a jumping title bar is worse than a hidden tab.
 
@@ -524,10 +532,50 @@ the same heading and, between two anchors, to the same fraction of the way down 
 0.833 / 0.831 / 0.832, and a round trip back to the identical pixel). Exact at an anchor, approximate
 between them — the same promise split-view sync makes (§3), for the same reason.
 
-**v1 status — outline highlight is not per-tab.** `Tab.outlineHit` exists in the record but
-is never written or read; the outline shows the active tab's current heading from the
-scroll spy only. Per-tab outline memory is deferred with the field. Do not "clean up" the
-unused field — it is the v2 contract.
+**The outline highlight is per tab, and `Tab.outlineHit` is what carries it.** The field was in the
+record for two versions without a reader; the reading trail (§7) needed exactly it — "which heading is
+the reader under" — so the scroll-spy now writes it (with `trailPct`, the fraction of the document it was
+at) and two things read it: `renderChrome` marks the heading when a tab comes back, and the trail stores
+it. Do not "clean up" either field.
+
+### The reading trail — what was opened, and where you were
+
+**Status: implemented 2026-10-15.** It was prototyped in the mockup first (`?trail=`), and IMPL.md §11
+keeps the record of what driving that prototype settled before any of this was written.
+
+A list of documents and folders, most recently touched first, with one extra fact per document: the
+heading you stopped under. Three entry points, all of them already on screen, none of them new chrome:
+
+| where | what it opens | why there |
+|---|---|---|
+| the mark (`#brandMark`, §2) | the app menu: three `recently opened` rows, `all N — open the list`, then settings / help / about | the only dead surface in the title bar, and the only entry point that is always on screen |
+| `⋯` / `ctrl shift A` | every open tab, then what was opened recently and is **not** one of those tabs | a reader looking for a document looks at the tab strip, and that menu already answers "what do I have open" — "what did I have open" is the next question, not a second control |
+| `ctrl shift P` | the same rows as a flat menu of eight, ending in `all N — open the list` | the key that already existed; the quick path, not the surface |
+
+The sheet is what `all N` opens: grouped by **last touch** (`today` / `yesterday` / `this week` /
+`earlier` — not by first open, or a document opened once in March and read this morning files under
+March), filterable, one row per entry with `read to §<heading>` as its second line, the full path in the
+tooltip, `gone` struck through when the path is no longer on disk, and `clear history` in the footer.
+
+**Nothing on screen advertises it, and that is the price of dropping the status-bar chip** that carried
+it during the prototype: the mark's tooltip names the first row it would open (`menu — recently opened:
+README.md §Pipeline`), which is the whole of the advertising. A chip in a 26px bar that already reports
+eight other things was the more expensive way to say it, and a menu you have to open cannot advertise
+anything at all.
+
+**Opening a document resumes it.** The position is stored as the heading's **text** plus the fraction of
+the document — never an id (assigned per render, §13) and never resolved through `textContent` (the
+renderer puts a `#` anchor chip inside every heading, so the comparison has to come from the parsed
+headings; a `textContent` compare silently finds nothing). A heading that is gone falls back to the
+fraction, which is all a document with no headings can offer in the first place. The resumed position is
+written into the tab *before* the jump and the jump is followed by the usual debounced save, so opening
+a document and touching nothing cannot overwrite the place it just resumed.
+
+**Bounded, and in its own file**: 100 entries and 90 days (`trail::TRAIL_CAP`, `TRAIL_DAYS`), measured by
+last touch, in `reading-trail.json` beside `session.json` — never inside it, because that file is
+rewritten on a 500 ms debounce and treats an unknown `version` as "start clean" (IMPL.md §6), which an
+append-only list would both grow and make dangerous. `session.recent` survives as one fact only: which
+folder to reopen on the next launch.
 
 ## 6. Empty state
 
@@ -535,7 +583,9 @@ The window opens here when no folder is loaded. It is also the drop target.
 
 - Dashed dropzone, one line of copy, `open folder` (primary) / `open file`.
 - Three shortcut hints (`ctrl O`, `ctrl shift P`, `F1`).
-- Recent entries as links (the three most recent).
+- The three most recent **reading-trail** entries as links (§5): `README.md 12m · notes.md 3h ·
+  architecture.md yesterday · all 12 →`. A name and a time, not a raw path — the path is in the tooltip
+  and in the sheet. The `all N →` link opens the sheet, the same surface every other entry point ends in.
 - Dragging a file over it tints the whole area (`--ac-bg`) so the drop affordance is
   obvious. With native drag-drop enabled the WebView fires no HTML5 drop events, so the
   tint is driven by Tauri's core drag events adding `.empty.dragover` — see `IMPL.md` §8.
@@ -549,7 +599,7 @@ The window opens here when no folder is loaded. It is also the drop target.
 | `ctrl alt O` | toggle outline | implemented |
 | `ctrl T` | new tab | **not bound** (mockup-only, §5) |
 | `ctrl W` | close tab | implemented |
-| `ctrl shift P` | recent files (top 8, as a menu) | implemented |
+| `ctrl shift P` | recently opened (top 8, as a menu) | implemented (§7) |
 | `ctrl shift W` | close all tabs | **not bound** |
 | `ctrl tab` / `ctrl shift tab` | next / previous tab | implemented |
 | `ctrl 1…9` | jump to tab N | implemented |
@@ -568,7 +618,11 @@ The window opens here when no folder is loaded. It is also the drop target.
 | `F1` | help | implemented |
 | `esc` | dismiss one layer (see below) | implemented |
 
-This table is what the app binds; the mockup's extra keys are not listed here.
+This table is what the app binds; the mockup's extra keys are not listed here. The one row with a
+prototype behind it is `ctrl shift P`: the mockup's bottom-left switcher (`today` / `menu of 8` /
+`list sheet`) carries two candidate shapes for that list, and the entry points are settled — the same
+key, the `⋯` menu's `recently opened` section, and a status bar chip that appears only when there is
+something to resume. The shape itself is still open — IMPL.md §11.
 
 > **Resolved 2026-10-01.** `ctrl shift O` was bound to both "open folder" and "toggle
 > outline". **Open folder keeps `ctrl shift O`** (VS Code muscle memory, and it is the
@@ -579,14 +633,15 @@ This table is what the app binds; the mockup's extra keys are not listed here.
 > fall back to `ctrl shift K` (currently unbound).
 
 `esc` dismissal is ordered, and the app's order is the **reverse of opening order**: menu
-→ diagram viewer → settings → help → about → find bar → **edit mode (§12)** → immersive. Only one
-layer closes per keypress. Leaving edit mode with unsaved changes asks first, which is why it belongs
-inside this chain rather than beside it.
+→ diagram viewer → **the reading trail's sheet (§7)** → settings → help → about → find bar → **edit
+mode (§12)** → immersive. Only one layer closes per keypress. Leaving edit mode with unsaved changes
+asks first, which is why it belongs inside this chain rather than beside it.
 
 **A menu also closes on any pointer press outside it, and a second press on the control that opened
 it closes it** — the control is a toggle. One rule, one implementation (`dom.ts`): every menu opened
 by a control passes that control to `showMenu`, which is also what positions the menu. Menus opened
-from the keyboard (recent files) have no control and simply dismiss on the next press anywhere.
+from the keyboard (`ctrl shift P`'s recently-opened list) have no control and simply dismiss on the
+next press anywhere.
 
 **The help table and the dispatcher are two lists.** `src/ui/help.ts` owns `KEYMAP` and the
 panel is generated from it; `main.ts` owns a hand-written `switch`, and the two are kept in
@@ -699,6 +754,7 @@ and persisted.
 | settings | `.sheet.tight` (560px) | top-aligned, scrolling (`.sheet.form`) |
 | help | `.sheet.wide` (640px) | top-aligned, two columns |
 | about | `.sheet.tight` (560px) | top-aligned, scrolling — a colophon page, not form rows |
+| reading trail (§5) | `.sheet.tight` (560px) | top-aligned, scrolling (`.sheet.form`); the filter sits in the head, `clear history` in the foot |
 | diagram viewer | `.sheet` (full bleed) | centred (unchanged, §4) |
 | unsaved | `.sheet.tight` (560px) | centred: one sentence, and the action row in the foot |
 

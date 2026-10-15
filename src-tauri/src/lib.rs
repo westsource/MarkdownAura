@@ -9,6 +9,7 @@ mod error;
 mod fs_ops;
 mod markdown;
 mod session;
+mod trail;
 mod watcher;
 
 /// CommonMark / GFM conformance against the vendored spec fixtures (IMPL.md §10). Test-only: the
@@ -193,6 +194,10 @@ pub fn run() {
             commands::engine_status,
             commands::startup_target,
             commands::note_recent,
+            commands::trail_list,
+            commands::trail_note,
+            commands::trail_position,
+            commands::trail_clear,
             commands::data_directory,
             commands::default_app_status,
             commands::set_default_app,

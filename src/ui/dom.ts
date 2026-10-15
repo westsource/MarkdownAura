@@ -63,6 +63,10 @@ export function toast(message: string, kind?: "ok" | "warn" | "err"): void {
 export interface MenuItem {
   label: string;
   shortcut?: string;
+  /** A *fact* about the row, muted, in the right-hand slot: the reading trail puts "12m" there. It is
+   *  not a shortcut and must not be rendered as one — a `<kbd>` chip says "press this", and a timestamp
+   *  says nothing of the sort. */
+  note?: string;
   disabled?: boolean;
   run: () => void;
 }
@@ -124,7 +128,8 @@ export function showMenu(
       actions.push(item.run);
       const disabled = item.disabled ? ' aria-disabled="true"' : "";
       const shortcut = item.shortcut ? `<kbd>${item.shortcut}</kbd>` : "";
-      return `<div class="menu-item"${disabled}><span>${esc(item.label)}</span>${shortcut}</div>`;
+      const note = item.note ? `<span class="menu-meta">${esc(item.note)}</span>` : "";
+      return `<div class="menu-item"${disabled}><span>${esc(item.label)}</span>${note}${shortcut}</div>`;
     })
     .join("");
 

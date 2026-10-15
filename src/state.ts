@@ -8,7 +8,17 @@
  */
 import { DEFAULT_MEASURE, isMeasure } from "./measure";
 import { isLogLevel } from "./ipc";
-import type { Lang, LogLevel, Measure, RenderedDoc, Session, SessionTab, ThemeChoice, ViewMode } from "./ipc";
+import type {
+  Lang,
+  LogLevel,
+  Measure,
+  RenderedDoc,
+  Session,
+  SessionTab,
+  ThemeChoice,
+  TrailEntry,
+  ViewMode,
+} from "./ipc";
 
 export interface Tab {
   id: string;
@@ -17,7 +27,13 @@ export interface Tab {
   name: string;
   view: ViewMode;
   scroll: number;
+  /** The heading the reader is under, and how far down the document it was as a fraction (SPEC §7).
+   *  Both are written by the scroll-spy while the tab is on screen, and both are what the reading
+   *  trail stores — the spy already computes the heading for the outline, so the trail keeps the same
+   *  measurement instead of taking a second one. `outlineHit` was carried unwired until the trail
+   *  needed it (SPEC §5 used to say so). */
   outlineHit: string | null;
+  trailPct: number;
   find: { q: string; case: boolean; hit: number };
   /** Italic in the tab strip: opened by a single click in the tree. */
   preview: boolean;
@@ -78,6 +94,11 @@ export interface WindowState {
   activeTab: number;
   tabs: Tab[];
   recent: string[];
+  /** The reading trail (SPEC §6, §7), most recent first, as Rust last answered. Every list the app
+   *  shows — the empty state's three links, the two menus, the sheet — reads this, and every write
+   *  goes through `trail_note`/`trail_position`/`trail_clear` and replaces it wholesale. `recent`
+   *  above is now only what the *session* needs: which folder to reopen on the next launch. */
+  trail: TrailEntry[];
   /** Folder currently open in the explorer, or null for the empty state. */
   root: string | null;
   /** Watched file count, last read from the watcher. Not persisted — a language change has to
@@ -97,6 +118,7 @@ export function makeTab(file: string, name: string, preview: boolean): Tab {
     view: "preview",
     scroll: 0,
     outlineHit: null,
+    trailPct: 0,
     find: { q: "", case: false, hit: 0 },
     preview,
     missing: false,
@@ -135,6 +157,7 @@ export const state: WindowState = {
   activeTab: 0,
   tabs: [],
   recent: [],
+  trail: [],
   root: null,
   watching: 0,
   windowRect: { w: 1200, h: 800, x: null, y: null, maximized: false },

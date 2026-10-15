@@ -63,6 +63,25 @@ export function captureScroll(tab: Tab): void {
   tab.scroll = scrollerOf(activeScroller()).scrollTop;
 }
 
+/** Where the reader is, as a fraction of the scrollable height.
+ *
+ *  This is the *fallback* half of a trail position, not the primary one: the heading text survives a
+ *  re-render, and the fraction is what is left when the heading does not — a renamed section, a
+ *  rewritten document, or one with no headings at all. It is measured on the same scroller
+ *  `captureScroll` uses, so the split view's inner pane and the editor's own scroller both work. */
+export function scrollFraction(): number {
+  const el = scrollerOf(activeScroller());
+  const span = el.scrollHeight - el.clientHeight;
+  return span > 0 ? Math.max(0, Math.min(1, el.scrollTop / span)) : 0;
+}
+
+/** The other half of `scrollFraction`. Clamped to 0 when the document does not scroll at all, which is
+ *  what a short document means by "40% of the way down" — nothing to do, so nothing happens. */
+export function scrollToFraction(pct: number): void {
+  const el = scrollerOf(activeScroller());
+  el.scrollTop = pct * Math.max(0, el.scrollHeight - el.clientHeight);
+}
+
 export function restoreScroll(tab: Tab): void {
   scrollerOf(activeScroller()).scrollTop = tab.scroll;
 }
@@ -354,8 +373,13 @@ function findCurrentHeading(): string | null {
 
   let currentId: string | null = null;
   for (const heading of headings) {
-    // 8px of slack so a heading that has just reached the top counts as current.
-    if (heading.getBoundingClientRect().top - top <= 8) currentId = heading.id;
+    /* A heading that has just reached the top counts as current. The slack is `ANCHOR_OFFSET + 8`
+       because a jump *lands* a heading exactly `ANCHOR_OFFSET` below the edge: with an 8px slack of its
+       own, every jump — an outline click, a footnote back-ref, and the reading trail's resume — left
+       the spy reporting the *previous* heading, which the trail then stored as "where the reader is".
+       Found by driving the built app (the stored heading was one section behind the one it had just
+       scrolled to); the outline's own highlight had been one tick stale for the same reason. */
+    if (heading.getBoundingClientRect().top - top <= ANCHOR_OFFSET + 8) currentId = heading.id;
     else break;
   }
   return currentId;
@@ -386,11 +410,16 @@ export function jumpTo(target: string): void {
 }
 
 /** Puts the matched child 12px below the container's top edge. Rect-based rather than `offsetTop`,
- *  which is relative to the offset parent and silently wrong inside a padded pane. */
+ *  which is relative to the offset parent and silently wrong inside a padded pane.
+ *
+ *  `ANCHOR_OFFSET` is what the scroll-spy's slack is measured against (see `findCurrentHeading`): the
+ *  two numbers are one contract, which is why they are named here and not written twice. */
+const ANCHOR_OFFSET = 12;
+
 function scrollToAnchor(container: HTMLElement, selector: string): void {
   const el = container.querySelector<HTMLElement>(selector);
   if (!el) return;
   const scroller = scrollerOf(container);
-  const delta = el.getBoundingClientRect().top - container.getBoundingClientRect().top - 12;
+  const delta = el.getBoundingClientRect().top - container.getBoundingClientRect().top - ANCHOR_OFFSET;
   scroller.scrollTo({ top: scroller.scrollTop + delta, behavior: "smooth" });
 }

@@ -42,6 +42,7 @@ import * as panels from "./ui/panels";
 import * as settings from "./ui/settings";
 import * as status from "./ui/statusbar";
 import * as tabs from "./ui/tabs";
+import * as trail from "./ui/trail";
 import * as tree from "./ui/tree";
 import * as viewer from "./ui/viewer";
 
@@ -131,6 +132,8 @@ function applyLang(): void {
   applyLayout(); // the width chip and its tooltip carry language too
   renderChrome();
   status.setWatchLabel(state.watching);
+  renderRecent();
+  if (trail.isOpen()) trail.open();
   if (settings.isOpen()) settings.open();
   if (help.isOpen()) help.open();
   if (about.isOpen()) about.open();
@@ -159,11 +162,17 @@ function renderChrome(): void {
   const tab = activeTab();
   tabs.renderTabs();
   outline.renderOutline(tab?.doc ?? null);
+  /* The highlight is per tab now that the spy stores the heading on the tab (SPEC §5): without this,
+     `renderOutline` rebuilds the list with nothing marked and a tab would lose its marker until the next
+     scroll — which is the "present, not wired" half of that field. A tab that has never been scrolled
+     carries `null`, and nothing is marked, which is the truth. */
+  outline.setOutlineActive(tab?.outlineHit ?? null);
   status.setStatus(tab);
   status.setRenderTime(tab?.renderMs ?? 0);
   paintEditorChrome(tab);
   tree.setActiveFile(tab?.file ?? null);
   $("#empty").hidden = state.tabs.length > 0;
+  $("#brandMark").title = trailMarkTitle();
 }
 
 async function paintActive(): Promise<void> {
@@ -528,7 +537,13 @@ async function openFile(path: string, preview: boolean): Promise<void> {
   }
 
   renderChrome();
+  /* The open is recorded before the document is painted, and the answer is the position a *previous*
+     read left: Rust keeps it across a re-open (`trail::note`), so what comes back is where to resume.
+     `loadTab` ends with a debounced save, which would write the top of the document over it — which is
+     why `resumeAt` seeds the tab's own heading and fraction (see there). */
+  const resume = await noteTrailOpen(path, "file");
   await loadTab(tab);
+  if (resume) resumeAt(tab, resume);
 }
 
 /**
@@ -605,6 +620,9 @@ function closeTab(index: number, force = false): void {
     return;
   }
   if (target) editor.forgetTab(target.id);
+  // Before the tab goes: a closed document keeps where the reader stopped, which is the one thing the
+  // debounced save cannot be relied on to have caught.
+  noteTrailPosition(target ?? null);
   state.tabs.splice(index, 1);
   // Closing a tab to the *left* of the active one shifts it left with the rest; without this the
   // reader would be moved to a different document. The tab strip's own × only ever closes the
@@ -712,6 +730,9 @@ async function adoptFolder(view: ipc.FolderView): Promise<void> {
   state.watching = watcher.watching;
   status.setWatchLabel(watcher.watching);
   state.recent = await ipc.noteRecent(view.root);
+  // The session's `recent` above is now only "which folder to reopen"; the trail is what the reader
+  // sees, and a folder belongs in it too (SPEC §6): the sheet says which rows are folders.
+  await noteTrailOpen(view.root, "folder");
   renderRecent();
 }
 
@@ -753,46 +774,194 @@ async function pickFile(): Promise<void> {
   if (chosen) await openFile(chosen, false);
 }
 
+/** The empty state's three links, from the reading trail (SPEC §6): a name and when, not a full path,
+ *  plus the way into the rest of the list. It used to read `state.recent`, which is a list of folder
+ *  paths with no times — the session's own fact, not a history. */
 function renderRecent(): void {
   const el = $("#emptyRecent");
-  el.innerHTML = state.recent.length
-    ? i18n.t("empty.recentHead") +
+  const rows = state.trail.slice(0, 3);
+  el.innerHTML = rows.length
+    ? i18n.t("trail.title") +
       " — " +
-      state.recent
-        .slice(0, 3)
-        .map((entry) => `<a data-recent="${encodeURIComponent(entry)}">${escapeHtml(entry)}</a>`)
-        .join(" · ")
+      rows
+        .map((entry, index) => {
+          const { name } = trail.rowLabels(entry);
+          return `<a data-trail="${index}">${escapeHtml(name)} <time>${trail.whenLabel(entry)}</time></a>`;
+        })
+        .join(" · ") +
+      ` · <a data-trail-all class="more">${i18n.t("trail.allShort", { n: state.trail.length })}</a>`
     : "";
 
-  el.querySelectorAll<HTMLElement>("[data-recent]").forEach((link) => {
+  el.querySelectorAll<HTMLElement>("[data-trail]").forEach((link) => {
     link.addEventListener("click", () => {
-      const path = decodeURIComponent(link.dataset.recent ?? "");
-      if (!path) return;
-      void (ipc.isMarkdownPath(path) ? openFile(path, false) : applyFolder(path));
+      const entry = rows[Number(link.dataset.trail ?? "-1")];
+      if (entry) openTrailEntry(entry);
     });
   });
+  el.querySelector("[data-trail-all]")?.addEventListener("click", () => trail.open());
 }
 
 const escapeHtml = (value: string): string =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/** ctrl shift P: the recent list as a menu, most recent first. */
+// ---------------------------------------------------------------- the reading trail (SPEC §6, §7)
+
+/** The trail entry for a path, as `state.trail` holds it. */
+function trailEntryFor(path: string): ipc.TrailEntry | null {
+  return state.trail.find((entry) => samePath(entry.path, path)) ?? null;
+}
+
+/** Opens what a trail row names. `kind` decides, not the extension: the app records both kinds itself,
+ *  and `openPath` treats anything that is not markdown as a *folder* to adopt. */
+function openTrailEntry(entry: ipc.TrailEntry): void {
+  if (entry.missing) {
+    toast(i18n.t("trail.forgetGone", { name: trail.rowLabels(entry).name }), "warn");
+    return;
+  }
+  if (entry.kind === "folder") void applyFolder(entry.path);
+  else void openFile(entry.path, false);
+}
+
+/** Menu rows for a set of entries: one line each, so the label carries the name and the directory and
+ *  `note` carries when. The `read to §X` detail is the sheet's, which has a second line for it. */
+function trailMenuItems(entries: ipc.TrailEntry[]): MenuItem[] {
+  return entries.map((entry) => {
+    const { name, where } = trail.rowLabels(entry);
+    return {
+      label: `${name} · ${where}`,
+      note: trail.whenLabel(entry),
+      disabled: entry.missing,
+      run: () => openTrailEntry(entry),
+    };
+  });
+}
+
+/** The entries that are not already open **and still exist**.
+ *
+ *  Two filters, both about what a three-row menu is for. "What you have open" and "what you had open"
+ *  sit a few rows apart in the same menu, and the same document in both reads as a bug rather than as a
+ *  history; and a row that cannot be opened is a wasted slot in a menu that shows three. The sheet keeps
+ *  the vanished ones — that is where the strike-through explains itself and `clear history` sits beside
+ *  it. */
+function trailNotOpen(): ipc.TrailEntry[] {
+  return state.trail.filter((entry) => !entry.missing && tabByFile(entry.path) === null);
+}
+
+/** ctrl shift P: recently opened as a flat menu — the rows the sheet shows, cut to eight. */
 function showRecentMenu(): void {
-  if (state.recent.length === 0) {
+  if (state.trail.length === 0) {
     toast(i18n.t("toast.noRecent"), "warn");
     return;
   }
   showMenu(
     [
-      i18n.t("menu.recent"),
-      ...state.recent.slice(0, 8).map((entry) => ({
-        label: entry,
-        run: () => void openPath(entry),
-      })),
+      i18n.t("trail.title"),
+      ...trailMenuItems(state.trail.slice(0, 8)),
+      "sep",
+      { label: i18n.t("trail.all", { n: state.trail.length }), run: () => trail.open() },
     ],
     window.innerWidth / 2 - 140,
     96,
   );
+}
+
+/**
+ * The window mark (SPEC §2): the app menu, with recently opened on top.
+ *
+ * Settings, help and about were reachable from two keys and one status-bar chip before this, and the
+ * mark was the only decoration left in the title bar — so the rows below are a menu that pays for
+ * itself rather than one that adds a layer. It is also the only entry point into the trail that is
+ * always on screen and never needs a menu opened first.
+ */
+function showMarkMenu(): void {
+  const recent = trailNotOpen().slice(0, 3);
+  const items: Array<MenuItem | "sep" | string> = [];
+  if (recent.length > 0) {
+    items.push(
+      i18n.t("trail.title"),
+      ...trailMenuItems(recent),
+      { label: i18n.t("trail.all", { n: state.trail.length }), run: () => trail.open() },
+      "sep",
+    );
+  }
+  items.push(
+    { label: i18n.t("trail.menuSettings"), shortcut: "ctrl ,", run: () => settings.open() },
+    { label: i18n.t("trail.menuHelp"), shortcut: "F1", run: () => help.open() },
+    { label: i18n.t("trail.menuAbout"), run: () => about.open() },
+  );
+  openMenuAt($("#brandMark"), items);
+}
+
+/** The mark's tooltip: what its menu would give you first. This is the whole of the feature's
+ *  advertising now that the status-bar chip is gone (SPEC §7) — a menu you have to open cannot
+ *  advertise anything, and a tooltip costs no pixels. */
+function trailMarkTitle(): string {
+  const entries = trailNotOpen();
+  const next = entries.find((entry) => entry.lastRead !== null) ?? entries[0];
+  if (!next) return i18n.t("trail.menu");
+  const { name } = trail.rowLabels(next);
+  const what = next.lastRead ? `${name} §${next.lastRead.heading}` : name;
+  return i18n.t("trail.menuWith", { what });
+}
+
+/** The last position written, so the 500 ms debounce does not send the same numbers again on every
+ *  scroll frame: a write that changes nothing is a file write for nothing. */
+let trailSent: { id: string; heading: string; pct: number } | null = null;
+
+/** Stores where the reader is in `tab`. Both halves come from the scroll-spy, which already measures
+ *  the heading for the outline — the heading is the anchor, the fraction the fallback (`state.ts`). */
+function noteTrailPosition(tab: Tab | null): void {
+  if (!tab || tab.missing) return;
+  if (trailEntryFor(tab.file) === null) return; // never opened through the app: nothing to update
+  const heading = tab.doc?.headings.find((h) => h.id === tab.outlineHit)?.text ?? "";
+  const pct = tab.trailPct;
+  if (trailSent?.id === tab.id && trailSent.heading === heading && Math.abs(trailSent.pct - pct) < 0.01) {
+    return;
+  }
+  trailSent = { id: tab.id, heading, pct };
+  void ipc.trailPosition(tab.file, heading, pct).catch((err: unknown) => {
+    diag.log("error", "trail", "position write failed", {
+      err: err instanceof Error ? err.message : String(err),
+    });
+  });
+}
+
+/** Records an open and answers with the position to resume at — the one already in the list, which Rust
+ *  keeps across a re-open. `null` when the write failed: an open that cannot be remembered is worth a
+ *  line in the log, never a toast in front of the document. */
+async function noteTrailOpen(path: string, kind: ipc.TrailEntry["kind"]): Promise<ipc.TrailReadPos | null> {
+  try {
+    state.trail = await ipc.trailNote(path, kind);
+  } catch (err) {
+    diag.log("error", "trail", "trail note failed", {
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+  return trailEntryFor(path)?.lastRead ?? null;
+}
+
+/** Jumps to a recorded position. The heading is resolved by **text** against the parsed headings —
+ *  never by `textContent` (the renderer puts a `#` anchor chip inside every heading) and never by an
+ *  id (assigned per render, so it means nothing in a later one). A heading that is gone falls back to
+ *  the fraction, which is what a document with no headings at all uses in the first place.
+ *
+ *  The tab's own heading and fraction are seeded from the position *before* the jump, because the jump
+ *  is followed by a debounced save: without this, opening a document and touching nothing would write
+ *  "the top" over the very position it just resumed, and the reader would lose the place by opening it. */
+function resumeAt(tab: Tab, pos: ipc.TrailReadPos): void {
+  const heading = tab.doc?.headings.find((h) => h.text === pos.heading);
+  if (heading) tab.outlineHit = heading.id;
+  tab.trailPct = pos.pct;
+  if (heading) {
+    doc.jumpTo(heading.id);
+    toast(i18n.t("trail.resumed", { heading: pos.heading }), "ok");
+    return;
+  }
+  if (pos.pct > 0) {
+    doc.scrollToFraction(pos.pct);
+    toast(i18n.t("trail.resumedPct", { pct: Math.round(pos.pct * 100) }), "ok");
+  }
 }
 
 /** Opens a menu attached to the control that opened it: placed on the opposite side of the window
@@ -804,20 +973,31 @@ function openMenuAt(anchor: HTMLElement, items: Array<MenuItem | "sep" | string>
   showMenu(items, rect.left, below ? rect.bottom + 4 : rect.top - 210, anchor);
 }
 
-/** ctrl shift A and the `⋯` button: every tab as a menu, the current one marked. */
+/** ctrl shift A and the `⋯` button: every tab as a menu, the current one marked — and then what was
+ *  read recently and is *not* one of those tabs (SPEC §5, §7). */
 function showTabsMenu(): void {
   if (state.tabs.length === 0) {
     toast(i18n.t("toast.noTabs"), "warn");
     return;
   }
-  openMenuAt($("#listTabsBtn"), [
+  const items: Array<MenuItem | "sep" | string> = [
     i18n.t("tabs.all", { n: state.tabs.length }),
     ...state.tabs.map((tab, index) => ({
       label: `${index === state.activeTab ? "● " : ""}${tab.name}`,
       disabled: index === state.activeTab,
       run: () => void activate(index),
     })),
-  ]);
+  ];
+  const recent = trailNotOpen().slice(0, 3);
+  if (recent.length > 0) {
+    items.push(
+      "sep",
+      i18n.t("trail.title"),
+      ...trailMenuItems(recent),
+      { label: i18n.t("trail.all", { n: state.trail.length }), run: () => trail.open() },
+    );
+  }
+  openMenuAt($("#listTabsBtn"), items);
 }
 
 /** The status-bar chip, the toolbar button and the immersive bar's chip all land here: the same
@@ -941,6 +1121,10 @@ function scheduleSave(): void {
     // to the top. The scroll is part of the session, not just of the interaction.
     const tab = activeTab();
     if (tab) doc.captureScroll(tab);
+    // The same debounce writes where the reader is (SPEC §7): the scroll-spy already updated the tab's
+    // heading and fraction on the frame it measured them, and the trail's own file is separate from the
+    // session's — see `trail.rs` for why it must stay that way.
+    noteTrailPosition(tab);
     void currentWindowRect()
       .then((rect) => ipc.sessionSave(toSession(rect)))
       .catch((err: unknown) => {
@@ -990,6 +1174,9 @@ function wireKeyboard(): void {
     if (event.key === "Escape") {
       if (menuIsOpen()) return hideMenu();
       if (viewer.isOpen()) return viewer.close();
+      // The trail sheet joins the panels here (SPEC §7). It sits above settings because it is the
+      // newest layer a reader can have opened, and `esc` closes one layer per press.
+      if (trail.isOpen()) return trail.close();
       if (settings.isOpen()) return settings.close();
       if (help.isOpen()) return help.close();
       if (about.isOpen()) return about.close();
@@ -1238,8 +1425,15 @@ async function boot(): Promise<void> {
   panels.wirePanelResizers(scheduleSave);
   doc.wireScrollSpy((headingId) => {
     outline.setOutlineActive(headingId);
-    // Scrolling is part of the session too. The spy is already rAF-throttled and the save is
-    // debounced, so this costs nothing while the wheel spins and lands one write per pause.
+    /* The same measurement is what the trail stores (SPEC §7): the heading by id here and by text when
+       it is written, plus how far down the document it was. `scheduleSave` is what carries both to
+       disk — the spy is already rAF-throttled and the save is debounced, so a scrolling wheel costs one
+       write per pause, not one per frame. */
+    const tab = activeTab();
+    if (tab) {
+      tab.outlineHit = headingId;
+      tab.trailPct = doc.scrollFraction();
+    }
     scheduleSave();
   });
   tree.wireFilter();
@@ -1391,6 +1585,22 @@ async function boot(): Promise<void> {
     showTabsMenu();
   });
 
+  /* The reading trail (SPEC §6, §7). The mark is the third entry point and the only one that is always
+     on screen; `stopPropagation` for the reason `#listTabsBtn` needs it — the document-level handler
+     dismisses any open menu, so a click that bubbles closes what it just opened. */
+  trail.wire({
+    onOpen: openTrailEntry,
+    onChanged: () => {
+      // `clear` happened: the empty state, the mark's tooltip and both menus are built from the list.
+      renderRecent();
+      renderChrome();
+    },
+  });
+  $("#brandMark").addEventListener("click", (event) => {
+    event.stopPropagation();
+    showMarkMenu();
+  });
+
   $("#openFolderBtn").addEventListener("click", () => void pickFolder());
   $("#mdOnlyBtn").addEventListener("click", () => {
     state.mdOnly = !state.mdOnly;
@@ -1503,6 +1713,14 @@ async function boot(): Promise<void> {
   void document.fonts?.ready.then(() => applyLayout());
 
   const startup = await ipc.startupTarget();
+  // The trail is loaded before the session: `restoreSession` renders the empty state's links from it,
+  // and a failed read must not stop a launch — an empty list is the honest answer to "no history".
+  state.trail = await ipc.trailList().catch((err: unknown) => {
+    diag.log("error", "trail", "trail load failed", {
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return [];
+  });
   await restoreSession();
 
   // The session carries the level; now that it is restored, apply it to the running logger too.

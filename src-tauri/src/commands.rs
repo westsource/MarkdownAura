@@ -9,7 +9,7 @@ use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 use crate::error::{ApiError, Result};
 use crate::watcher::{SelfWrites, WatcherStatus};
-use crate::{engines, fs_ops, markdown, session, watcher::FsWatcher, AppState, StartupInfo, WatcherState};
+use crate::{engines, fs_ops, markdown, session, trail, watcher::FsWatcher, AppState, StartupInfo, WatcherState};
 
 /// Runs blocking work off the UI thread. A poisoned or cancelled task is reported as an I/O
 /// error rather than panicking, because a failed render must degrade, not abort the app.
@@ -499,6 +499,52 @@ pub async fn note_recent(entry: String) -> Result<Vec<String>> {
         session::push_recent(&mut current.recent, &entry);
         session::save(&current)?;
         Ok(current.recent)
+    })
+    .await
+}
+
+// ---------------------------------------------------------------- the reading trail
+
+/// The list, most recent first. The frontend holds it in `state.trail` and never asks again unless it
+/// writes — the list is what the sheet, the two menus and the resume all read.
+#[tauri::command]
+pub async fn trail_list() -> Result<Vec<trail::EntryView>> {
+    blocking(move || Ok(trail::views(&trail::load()))).await
+}
+
+/// Records an open (a file or a folder) and answers with the new list, the way `note_recent` does: one
+/// round trip, and the caller's copy cannot disagree with the file.
+#[tauri::command]
+pub async fn trail_note(path: String, kind: String) -> Result<Vec<trail::EntryView>> {
+    blocking(move || {
+        let mut current = trail::load();
+        trail::note(&mut current, &path, &kind, trail::now_ms());
+        trail::save(&current)?;
+        Ok(trail::views(&current))
+    })
+    .await
+}
+
+/// Moves where the reader stopped. Written on the same debounce as the session, so a scroll costs two
+/// small file writes rather than one — and the trail never rides inside `session.json` (see `trail.rs`).
+#[tauri::command]
+pub async fn trail_position(path: String, heading: String, pct: f64) -> Result<()> {
+    blocking(move || {
+        let mut current = trail::load();
+        trail::set_position(&mut current, &path, &heading, pct, trail::now_ms());
+        trail::save(&current)
+    })
+    .await
+}
+
+/// Forgets everything. The reader's out: a store that remembers what you read has to be clearable
+/// without leaving the app.
+#[tauri::command]
+pub async fn trail_clear() -> Result<()> {
+    blocking(move || {
+        let mut current = trail::load();
+        trail::clear(&mut current);
+        trail::save(&current)
     })
     .await
 }

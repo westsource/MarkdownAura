@@ -330,6 +330,48 @@ export const engineStatus = () => call<EngineInfo[]>("engine_status");
 export const startupTarget = () => call<StartupInfo>("startup_target");
 export const noteRecent = (entry: string) => call<string[]>("note_recent", { entry });
 
+// ---------------------------------------------------------------- the reading trail
+
+/** One `lastRead` position. The heading is stored as **text**, never as an id: ids are assigned per
+ *  render, so an id kept across sessions points at nothing after the next one. `pct` is the fallback,
+ *  and the only thing that means anything for a document with no headings. Mirrors `trail::ReadPos`. */
+export interface TrailReadPos {
+  heading: string;
+  pct: number;
+  at: number;
+}
+
+/** What the app remembers per document or folder (SPEC §6, §7; `trail::Entry` in Rust). */
+export interface TrailEntry {
+  path: string;
+  kind: "file" | "folder";
+  openedAt: number;
+  /** Open count, from 1. Kept for a future sort; nothing displays it yet. */
+  opens: number;
+  lastRead: TrailReadPos | null;
+  /** **Derived, never stored** (`trail::Entry` skips it in serde): the path is not on disk any more, so
+   *  the row is struck through rather than left to fail on click. Rust fills it in `trail_list`. */
+  missing: boolean;
+}
+
+/** The caps themselves live in Rust (`trail::TRAIL_CAP` / `TRAIL_DAYS`) — these two are for the sheet's
+ *  footer, which says what the bounds are. The list the UI holds is always what Rust last answered. */
+export const TRAIL_CAP = 100;
+export const TRAIL_DAYS = 90;
+
+export const trailList = () => call<TrailEntry[]>("trail_list");
+
+/** Records an open and answers with the whole new list, the way `noteRecent` does: one round trip, and
+ *  the caller's copy cannot disagree with the file. */
+export const trailNote = (path: string, kind: TrailEntry["kind"]) =>
+  call<TrailEntry[]>("trail_note", { path, kind });
+
+/** Moves where the reader stopped. Written on the session's debounce and when a tab closes. */
+export const trailPosition = (path: string, heading: string, pct: number) =>
+  call<void>("trail_position", { path, heading, pct });
+
+export const trailClear = () => call<void>("trail_clear");
+
 /** Where the app keeps its state, for the About sheet to show and open. */
 export const dataDirectory = () => call<string>("data_directory");
 

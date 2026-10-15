@@ -17,7 +17,7 @@
 <div class="window" id="win">
 
   <div class="titlebar" data-tauri-drag-region>
-    <div class="brand">
+    <button class="brand" id="brandMark" data-i18n-title="trail.menu" data-i18n-aria-label="trail.menu" title="menu" aria-label="menu">
       <!-- The mark is written in the icon's 512-unit space (make-icons.mjs: x 0.256–0.744, y
            0.258–0.742) and there is no plate here, so the box is cropped to that ink. Left as
            `0 0 512 512` the glyph filled 48% of the box: a 15px logo drew at 7px. -->
@@ -26,7 +26,7 @@
         <path d="M189 380V156l44-24 52 96 52-96 44 24v224h-44V228l-36 66h-32l-36-66v152z" fill="var(--ac)" fill-opacity="0.4" transform="translate(-32,0)"/>
         <path d="M189 380V156l44-24 52 96 52-96 44 24v224h-44V228l-36 66h-32l-36-66v152z" fill="var(--ac)"/>
       </svg>
-    </div>
+    </button>
     <div class="tabstrip" id="tabstrip"></div>
     <button class="tabbtn" id="listTabsBtn" data-i18n-title="tabs.allTitle" data-i18n-aria-label="tabs.allAria" title="all tabs (ctrl shift A)" aria-label="all tabs">
       <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.2" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="12.8" cy="8" r="1.2"/></svg>
@@ -197,6 +197,30 @@
             <button class="ghost-btn" id="unsavedCancel" data-i18n="unsaved.cancel">cancel</button>
             <button class="ghost-btn" id="unsavedDiscard" data-i18n="unsaved.discard">discard</button>
             <button class="primary-btn" id="unsavedSave" data-i18n="unsaved.save">save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- the reading trail (SPEC §6, §7): what was opened, where the reader stopped, and the one
+           place it can all be forgotten again. Same shell as the other panels. -->
+      <div class="overlay" id="trailOverlay">
+        <div class="sheet tight form">
+          <div class="sheet-head">
+            <span class="sheet-title" data-i18n="trail.title">recently opened</span>
+            <span class="trail-count" id="trailCount">0</span>
+            <div class="spacer"></div>
+            <input type="search" class="trail-filter" id="trailFilter" placeholder="filter"
+              data-i18n-placeholder="trail.filter" data-i18n-aria-label="trail.filter" aria-label="filter">
+            <kbd>esc</kbd>
+            <button class="iconbtn" id="trailClose" data-i18n-title="trail.closeTitle" data-i18n-aria-label="trail.close" title="close (esc)" aria-label="close">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+            </button>
+          </div>
+          <div class="sheet-body" id="trailBody"></div>
+          <div class="sheet-foot">
+            <span id="trailMeta"></span>
+            <div class="spacer"></div>
+            <button class="ghost-btn" id="trailClear" data-i18n="trail.clear">clear history</button>
           </div>
         </div>
       </div>
