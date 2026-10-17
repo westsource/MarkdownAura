@@ -5,12 +5,14 @@
  * content area (measured). But it is a preset rather than a free slider, because line length is the
  * one typographic knob a reader can genuinely wreck.
  *
- * The two measured presets are in `ch` — the only unit that keeps a line *readable* whatever the
+ * The three measured presets are in `ch` — the only unit that keeps a line *readable* whatever the
  * window size — and `full` is a percentage, because there the request is "use the pane", which is
  * exactly what a percentage measures. `comfortable` was raised from 72ch to 100ch on the reader's
  * call: 72 sits in the classic 45–75 band, while on-screen technical reading (docs sites, code
- * hosts) runs 80–120; `narrow` is there for long-form prose, and the tooltip always reports the
- * resolved width and its share of the pane so the number is never a mystery.
+ * hosts) runs 80–120; `narrow` is there for long-form prose, and `wide` (140ch, added for the
+ * ultrawide that 100ch leaves two thirds of empty) is the step between "a column" and "the pane".
+ * The tooltip always reports the resolved width and its share of the pane, so the number is never
+ * a mystery — including the cost of `full`.
  *
  * Both entry points — the status-bar chip and the settings row — read this table and write the same
  * `state.measure` field, exactly like the theme button and the theme row (SPEC §10).
@@ -24,13 +26,20 @@ import { t, type Key } from "./i18n";
 export const MEASURES: Record<Measure, { key: Key; ch: number | null }> = {
   narrow: { key: "measure.narrow", ch: 60 },
   comfortable: { key: "measure.comfortable", ch: 100 },
+  // `wide` exists for the ultrawide the other two are too narrow on, and it is the one tier whose
+  // *value* is a judgement call rather than a band: 140ch is past the 80–120 the code hosts run at,
+  // deliberately — it is still a column, where `full` on the same screen is 365 characters a line.
+  // Measured in the mockup at 3440×1440 with both panels open at 15px: 60ch 485px, 100ch 809px,
+  // 140ch 1132px, the pane 2948px. Before it, one keystroke went from 27% of the content area to
+  // 100%; now the step is 27% → 38% → 100%.
+  wide: { key: "measure.wide", ch: 140 },
   // No text cap and no wide-content exemption either: every block shares the column, so `full`
   // means the pane's content box. The pane already carries its own gutter as padding.
   full: { key: "measure.full", ch: null },
 };
 
 /** Display and cycle order, narrowest first. */
-export const MEASURE_ORDER: Measure[] = ["narrow", "comfortable", "full"];
+export const MEASURE_ORDER: Measure[] = ["narrow", "comfortable", "wide", "full"];
 
 export const DEFAULT_MEASURE: Measure = "comfortable";
 

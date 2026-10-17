@@ -39,6 +39,9 @@ Headings and bold use 600 rather than 500: `Microsoft YaHei UI` has only Regular
 **One size base for everything.**
 Body text, headings, code, tables and the source pane are all relative to "font-size setting × zoom", so changing either moves the whole document together — a heading can never end up smaller than the body it introduces, and the source pane never disagrees with the preview.
 
+**The reading column is a preset, with a rung for a wide screen.**
+`narrow` 60ch / `comfortable` 100ch / `wide` 140ch / `full` — one column that every block shares (headings, tables, code and the source pane alike), cycled with `ctrl shift M`, and reported by the status-bar chip as the preset, the pixels it resolved to and its share of the pane. The three measured rungs are in `ch`, the only unit that keeps a line readable whatever the window size. Measured at 3440×1440 with both panels open and the prose at 15px: 60ch = 485px (16% of the content area), 100ch = 809px (27%), 140ch = 1132px (38%), `full` = 100%. `wide` exists because the step from 27% straight to 100% was the one that left an ultrawide looking unused.
+
 **Installing needs no network.**
 The installer carries the WebView2 loader. It only fetches the WebView2 Runtime on a machine that does not have it (Windows 11 and Windows 10 with Edge already do).
 
@@ -60,7 +63,7 @@ The installer carries the WebView2 loader. It only fetches the WebView2 Runtime 
 | Diagrams | mermaid / dot / d2 cards with an engine badge, the first source line as a title and the source line number; the card appears where the fence is and fills in when the engine answers, and one that fails keeps its place, its badge and its anchors — the outline, the viewer's target and split-view sync still find it — losing only its `zoom` button; `zoom` opens the viewer (wheel to zoom, drag to pan, copy SVG, copy source, `esc` to close) |
 | Find | `ctrl F`, match case, a hit counter, next / previous |
 | Outline | headings (levels 1–4) and diagrams, click to jump, draggable width |
-| Reading | body size 12–22px; three reading widths (narrow 60ch / comfortable 100ch / full) — one column for the prose and the source pane alike; light / dark / follow the system; UI language follows the system (Chinese / English); reduce motion |
+| Reading | body size 12–22px; four reading widths (narrow 60ch / comfortable 100ch / wide 140ch / full) — one column for the prose and the source pane alike; light / dark / follow the system; UI language follows the system (Chinese / English); reduce motion |
 | Status bar | the path, the word count, the encoding (with a warn mark when the read was lossy), a `truncated` mark past 8 MiB, what each diagram engine is doing (off / loading / ready / failed — no dot can mean "not installed", all three ship), `rendered in N ms`, the zoom, and the reading-width chip |
 | Immersive | `F11` hides every piece of chrome; `esc` or `F11` leaves |
 | Help | `F1` — the keyboard map plus a diagram-syntax card for each engine |

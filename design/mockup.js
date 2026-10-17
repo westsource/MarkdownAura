@@ -1322,6 +1322,7 @@ Errors render inline with the line number instead of blanking the page.`
   const MEASURES = [
     ["narrow", "narrow", 60],
     ["comfortable", "comfortable", 100],
+    ["wide", "wide", 140],
     ["full", "full", null],
   ];
   const measureCh = (id) => (MEASURES.find((m) => m[0] === id) || MEASURES[1])[2];

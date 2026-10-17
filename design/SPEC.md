@@ -41,7 +41,7 @@ source pane can be edited deliberately; §12 is the design.
   the control that changes that (§12).
 - Vertical space goes to content: the title bar hosts the tabs, the status bar is 26px.
 - Chrome disappears on demand (`F11` immersive, `ctrl B` sidebar, `ctrl alt O` outline).
-- Reading comfort is the product: `--measure` (a preset — 60ch, 100ch, or the whole pane),
+- Reading comfort is the product: `--measure` (a preset — 60ch, 100ch, 140ch, or the whole pane),
   `line-height: 1.7`, two font weights only.
 
 **Still out of scope:** editing the *rendered* view (WYSIWYG), and anything that would make this an
@@ -202,7 +202,7 @@ width, that is one rule in `prose.css`.
 
 The measure is a *setting*, not a typographic constant: a fixed value is a fraction of the pane that
 depends on the pane, and on a 3440px display the old fixed `72ch` came to 582px in a 3016px content
-area — 19% of the screen (measured at 15px). It stays a **preset with three values** rather than a
+area — 19% of the screen (measured at 15px). It stays a **preset with four values** rather than a
 free slider, because line length is the one typographic knob a reader can genuinely wreck.
 
 - **One column for everything.** Every direct child of `.prose` carries the same limit — headings,
@@ -221,7 +221,7 @@ free slider, because line length is the one typographic knob a reader can genuin
     place), so `node design/check-prose-css.mjs` now fails instead (`IMPL.md` §10).
 - **The code panes take the same column, and the preset means the same thing on both halves of a
   split** (2026-10-14). The source pane and the editable pane that replaces it carry the same two
-  declarations, so 窄 / 舒适 / 撑满 narrows the code and the render side together instead of leaving
+  declarations, so 窄 / 舒适 / 宽 / 撑满 narrows the code and the render side together instead of leaving
   the code side at the full width of its pane — which is what it did until then, in split view and in
   the source view alike, where the presets changed nothing at all. Accepted consequence, stated
   because it is the one place the token is *not* a character count: the source pane is mono while the
@@ -253,16 +253,26 @@ free slider, because line length is the one typographic knob a reader can genuin
 - Consequence worth knowing: the resolved column is the same pixel value in both split panes, and a
   half-width pane is narrower than it, so in split view the pane — not the measure — is the binding
   constraint.
-- **Three presets: narrow 60ch / comfortable 100ch / full 100% of the pane.** `comfortable` was 72ch
-  and was raised to 100ch on the reader's call: 72 sits in the classic 45–75-character band, while
-  on-screen technical reading (docs sites, code hosts) runs 80–120, and `narrow` covers long-form
-  prose. The two measured presets are in `ch` because that is the only unit that keeps a line
-  *readable* whatever the window size; `full` is a percentage, because there the request is "use the
-  pane", which is what a percentage measures. Mixed units are deliberate — the preset names say what
-  each one is for.
+- **Four presets: narrow 60ch / comfortable 100ch / wide 140ch / full 100% of the pane.**
+  `comfortable` was 72ch and was raised to 100ch on the reader's call: 72 sits in the classic
+  45–75-character band, while on-screen technical reading (docs sites, code hosts) runs 80–120, and
+  `narrow` covers long-form prose. The three measured presets are in `ch` because that is the only
+  unit that keeps a line *readable* whatever the window size; `full` is a percentage, because there
+  the request is "use the pane", which is what a percentage measures. Mixed units are deliberate —
+  the preset names say what each one is for.
+  - **`wide` is the ultrawide step, and its value is a judgement call rather than a band**
+    (2026-10-17). Measured in the mockup at 3440×1440 with both panels open and the prose at 15px:
+    `ch` is 8.09px, so 60ch is 485px, 100ch is 809px, 140ch is 1132px, and the pane is 2948px. The
+    old ladder therefore went from **27% of the content area to 100% in one keystroke** — the gap
+    the reader hit. 140ch does not close it (nothing inside the readable range can: the pane is
+    ~365 characters a line at `full`), it makes the step honest: 27% → 38% → 100%. 140 is past the
+    80–120 the code hosts run at, on purpose, and it is the tier to retune — a different ultrawide
+    is one number in `MEASURES` (`src/measure.ts`), and the tooltip reports what it resolved to.
   - Cost of `full`, stated plainly: on a 3016px pane a 100% column is ~350 characters per line at
     16px. That is the reader's explicit choice, and the tooltip reports the resolved width and its
     share of the pane (`阅读宽度 — 撑满 · 100%`) so the number is never a mystery.
+  - A stored preset that no longer exists falls back to the default silently (verified with the
+    removed `xwide`, `IMPL.md` §6), so adding or retuning a tier costs nothing at load.
 - **Four entry points, one field** (see §10): the status-bar chip (carrying a `↔` icon, because its
   meaning is not its value) and the toolbar button both open the preset menu, `ctrl shift M` cycles
   from the keyboard in any mode, and the immersive bar repeats the chip. All of them write
@@ -866,7 +876,7 @@ health dots in the status bar, and §4 here — and the debounce keeps its one h
 
 | section | rows (shipped) |
 |---|---|
-| reading | theme (`system` / `light` / `dark`, segmented), language (`system` / `English` / `简体中文`, segmented), document font size (stepper, 12–22px, the `--doc-size` token), reading width (3 presets — 60ch / 100ch / full, the `--measure` token), math (a switch, **off** by default — it changes the HTML, so flipping it re-renders the open documents; §13), reduce motion |
+| reading | theme (`system` / `light` / `dark`, segmented), language (`system` / `English` / `简体中文`, segmented), document font size (stepper, 12–22px, the `--doc-size` token), reading width (4 presets — 60ch / 100ch / 140ch / full, the `--measure` token), math (a switch, **off** by default — it changes the HTML, so flipping it re-renders the open documents; §13), reduce motion |
 | files | default app — a read-out of what opens `.md` now, plus the one action this platform allows: `xdg-mime` on Linux, and on Windows the *Open with* dialog (or the Default Apps page when no document is open), because the choice is the user's and no process may set it |
 | cache | rendered-SVG size + clear (the in-memory cap is 6 MB, `IMPL.md` §5) |
 | diagnostics | log level (`off` / `error` / `warn` / `info` / `debug`, default `info`) and the log directory with a `change…` picker and a `reset` to the platform default — the row that lets the logs live somewhere a second machine can reach; what the log is for is `IMPL.md` §13 |

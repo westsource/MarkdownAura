@@ -91,7 +91,7 @@ pub struct Session {
     /// before i18n existed still load; the frontend resolves `system` itself.
     #[serde(default = "default_lang")]
     pub lang: String,
-    /// Reading-width preset name (`narrow`/`comfortable`/`full`, SPEC §8). Stored by
+    /// Reading-width preset name (`narrow`/`comfortable`/`wide`/`full`, SPEC §8). Stored by
     /// name so the preset table in `src/measure.ts` stays the single definition; the frontend
     /// sanitises an unknown value.
     #[serde(default = "default_measure")]

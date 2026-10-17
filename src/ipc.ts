@@ -20,7 +20,7 @@ export type ThemeChoice = "light" | "dark" | "system";
 export type Lang = "system" | "en" | "zh-CN";
 /** Reading-width preset (SPEC §8). Persisted by name, not by pixel value, so the table in
  *  `src/measure.ts` stays the single place the choice is defined. */
-export type Measure = "narrow" | "comfortable" | "full";
+export type Measure = "narrow" | "comfortable" | "wide" | "full";
 
 /** Runtime log level (IMPL.md §13). The same five values Rust accepts; anything else is `info`. */
 const LOG_LEVELS = ["off", "error", "warn", "info", "debug"] as const;

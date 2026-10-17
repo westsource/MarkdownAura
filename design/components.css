@@ -503,7 +503,7 @@ input:focus { border-color: var(--ac); }
    are resolved to pixels against the prose font of the view the reader is in, and `#out-preview` /
    `#out-split` do that job for the preview and the split — but the source view is a `<pre>`, so with
    it up there was no laid-out `.prose` at all: `chToPx` returned `null`, `--measure` kept whatever
-   the previous view had resolved, and picking 窄 / 舒适 / 撑满 in the source view did nothing to the
+   the previous view had resolved, and picking 窄 / 舒适 / 宽 / 撑满 in the source view did nothing to the
    pane in front of the reader. Hence one of these per view that needs it (`index.html`).
 
    The class carries the typography (`prose.css`, the same one the rendered pane uses) and being
@@ -557,7 +557,7 @@ input:focus { border-color: var(--ac); }
   user-select: text;
 }
 /* The reading column reaches the code panes (SPEC §3). The rendered pane centres every block with
-   these same two declarations (`prose.css`); the source panes took neither, so 窄 / 舒适 / 撑满
+   these same two declarations (`prose.css`); the source panes took neither, so 窄 / 舒适 / 宽 / 撑满
    narrowed the render half of a split while the source half stayed the full width of its pane — and
    the source *view* ignored the presets entirely, at any window size. One column per preset, both
    sides of a split, and the read-only pane and the editable pane it becomes (`.cm-editor

@@ -157,6 +157,7 @@ const en = {
   "lang.system": "system",
   "measure.narrow": "narrow",
   "measure.comfortable": "comfortable",
+  "measure.wide": "wide",
   "measure.full": "full",
 
   // ---- tabs / menus ----
@@ -458,6 +459,7 @@ const zh: Record<Key, string> = {
   "lang.system": "跟随系统",
   "measure.narrow": "窄",
   "measure.comfortable": "舒适",
+  "measure.wide": "宽",
   "measure.full": "撑满",
 
   "tabs.all": "全部标签页 · {n}",

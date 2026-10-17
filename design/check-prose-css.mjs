@@ -121,7 +121,7 @@ for (const selector of [".source-view pre", ".view.split .pane-src pre", ".edito
 /* 3. The reading column reaches the *code* panes, not just the rendered one (SPEC §3).
  *
  * The rendered pane centres every block; the source panes took neither declaration, so 窄 / 舒适 /
- * 撑满 narrowed the render half of a split while the source half stayed the full width of its pane,
+ * 宽 / 撑满 narrowed the render half of a split while the source half stayed the full width of its pane,
  * and the source *view* ignored the presets at any window size. Reported 2026-10-14 ("代码区和渲染区
  * 应该是同样的行为"). A selector list counts too — the intent is "this surface carries the column",
  * not "it carries it in a rule of its own". */

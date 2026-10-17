@@ -12,7 +12,7 @@ the renderer handles, so a screenshot of it shows what the app actually does —
 code, footnotes, and the same document rendered as **mermaid**, **graphviz** and **d2**.
 
 > Vertical space goes to content. The title bar hosts the tabs, the status bar is 26px, and the reading
-> column is a preset — 60ch, 100ch, or the whole pane.
+> column is a preset — 60ch, 100ch, 140ch, or the whole pane.
 
 ## What a document gets
 
@@ -103,7 +103,7 @@ does not scroll away when a long line does.
 ```python
 def reading_measure(chars: int) -> str:
     """A measure in `ch`, which is the only unit that survives a window resize."""
-    return f"{chars}ch"  # 60 · 100 · pane
+    return f"{chars}ch"  # 60 · 100 · 140 · pane
 ```
 
 Inline math and a display block are KaTeX's: `$a^2 + b^2 = c^2$`. **Math ships off** — *settings → math*

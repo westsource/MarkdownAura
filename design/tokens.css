@@ -124,7 +124,7 @@
 
   /* reading measure — --doc-size comes from settings, --zoom from the status bar;
      prose.css multiplies them, so neither can silently override the other.
-     --measure is a *preset* (窄 60ch / 舒适 100ch / 撑满 100%, default 100ch) written by JS; the value
+     --measure is a *preset* (窄 60ch / 舒适 100ch / 宽 140ch / 撑满 100%, default 100ch) written by JS; the value
      here is only the fallback for the first paint. Every block shares it: there is no wide-content
      exemption any more, so this one token is the whole layout. */
   --measure: 100ch;
