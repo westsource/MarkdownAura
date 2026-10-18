@@ -219,16 +219,22 @@ free slider, because line length is the one typographic knob a reader can genuin
     leaving exactly that block flush left while every other block stays centred. That shipped once
     (`.prose p`, and it is invisible to a width measurement: the box is the right size, in the wrong
     place), so `node design/check-prose-css.mjs` now fails instead (`IMPL.md` §10).
-  - **A table narrower than the column hugs its left edge at `wide` and `full`, and is centred at
-    `narrow` and `comfortable`** (2026-10-18). The two short presets keep the column close to the
-    reading width, so a small table sitting in the middle belongs to the text around it; at `wide`
-    (140ch) and `full` the column is far wider than most tables, and a centred one floats away from
-    the paragraphs it belongs to — every paragraph starts at the column's left edge, so the table
-    does too. A table as wide as the column, or wider, is unaffected: it already spans the column
-    (`margin-inline: 0` is where `auto` had put it). The preset *name* is the one thing CSS cannot
-    derive from `--measure`, which is a resolved length by the time it matters, so `src/measure.ts`
-    writes the id onto `:root[data-measure]` on every `applyMeasure` (the mockup mirrors it, and the
-    attribute is the only selector target: it is never read by any script).
+  - **A table narrower than the column starts at the column's left edge at `wide` and `full`, and is
+    centred at `narrow` and `comfortable`** (2026-10-18). The two short presets keep the column close
+    to the reading width, so a small table sitting in the middle belongs to the text around it; at
+    `wide` (140ch) and `full` the column is far wider than most tables, and a centred one floats away
+    from the paragraphs it belongs to — every paragraph starts at the column's left edge, so the
+    table does too. **The column's edge, not the pane's**: the column is centred in the pane, so
+    pushing the table to the pane's left would be wrong in the other direction (the first cut of this
+    rule did exactly that and was corrected the same day). The table hugs its grid, so there is
+    nothing to left-align *within* it: the box is given the column's width while the grid keeps to
+    its block start, and `margin-inline: auto` (the rule above) still centres that box — the grid
+    lands under the paragraphs. `max-width: 100%` covers the one case the measure exceeds the pane (a
+    140ch column on a narrower window): the box takes the pane, as a paragraph does. The preset
+    *name* is the one thing CSS cannot derive from `--measure`, which is a resolved length by the
+    time it matters, so `src/measure.ts` writes the id onto `:root[data-measure]` on every
+    `applyMeasure` (the mockup mirrors it, and the attribute is a selector target only: it is never
+    read by any script).
 - **The code panes take the same column, and the preset means the same thing on both halves of a
   split** (2026-10-14). The source pane and the editable pane that replaces it carry the same two
   declarations, so 窄 / 舒适 / 宽 / 撑满 narrows the code and the render side together instead of leaving

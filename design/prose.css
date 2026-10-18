@@ -315,22 +315,32 @@
   margin-inline: auto;
 }
 
-/* ---------- a narrow table hugs the left edge at 宽 / 撑满 ----------
+/* ---------- a narrow table starts at the column's left edge at 宽 / 撑满 ----------
  *
  * A block narrower than the column is centred by the rule above, which is right for `narrow` and
  * `comfortable`: there the column is close to the reading width, so a small table sitting in the
- * middle reads as part of the same block. At `wide` (140ch) and `full` (the whole pane) the column
- * is very much wider than most tables, and a centred one floats away from the text it belongs to —
- * every paragraph starts at the column's left edge, so the table should too. A table as wide as the
- * column (or wider, clamped by the measure and scrolled) is unaffected either way: `margin-inline: 0`
- * is exactly where `auto` had already put it.
+ * middle reads as part of the same block. At `wide` (140ch) and `full` the column is very much wider
+ * than most tables, and a centred one floats away from the text it belongs to — every paragraph
+ * starts at the column's left edge, so the table should too. It is the *column's* left edge and not
+ * the pane's: the column is centred in the pane, so pushing the table to the pane's left would be
+ * just as wrong in the other direction (that is the first cut of this rule, 2026-10-18).
+ *
+ * The table hugs its grid (`width: max-content`), so there is nothing to left-align *within* — the
+ * fix is to make the box the column's width while the grid stays at its (block) left. The element
+ * is `display: block` and the grid inside it is the anonymous table box that a `block` table
+ * generates; `width` sizes that box, and `max-content` is what let it hug. Stating the measure
+ * instead gives the box the column's width, the grid keeps to its start, and `margin-inline: auto`
+ * from the rule above still centres it — so the grid lands exactly under the paragraphs. `max-width:
+ * 100%` is for the one case the measure exceeds the pane (a 140ch column on a window narrower than
+ * it): the box takes the pane, exactly as a paragraph does, instead of overflowing it.
  *
  * The preset *name* is the one thing CSS cannot derive from `--measure` — by the time this rule runs
  * the token is a resolved length (px or `100%`), which no selector can match on. `src/measure.ts`
  * therefore writes the id onto `:root[data-measure]` whenever the preset is applied; the mockup
- * writes the same attribute so the two do not drift. The specificity (0,3,1) clears the centring
- * rule's (0,1,0) without an `!important`. */
+ * writes the same attribute so the two do not drift. The specificity (0,3,1) clears the base table
+ * rule's (0,1,1) without an `!important`. */
 :root[data-measure="wide"] .prose > table,
 :root[data-measure="full"] .prose > table {
-  margin-inline: 0;
+  width: var(--measure);
+  max-width: 100%;
 }
