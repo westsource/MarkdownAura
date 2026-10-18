@@ -92,6 +92,11 @@ function chToPx(ch: number): string | null {
  *  the zoom changes (`applyLayout`), and once more when webfonts settle (`main.ts` boot), because a
  *  resolved pixel value does not follow either by itself. */
 export function applyMeasure(id: Measure): void {
+  // The preset as a *selector target*, next to the resolved length it writes below: `wide`/`full`
+  // left-align a table narrower than the column while the others centre it (prose.css), and a
+  // resolved px/`100%` token is not something a selector can match on. Written every call so the
+  // attribute can never disagree with the token beside it.
+  document.documentElement.dataset.measure = id;
   const { ch } = MEASURES[id];
   if (ch === null) {
     document.documentElement.style.setProperty("--measure", "100%");

@@ -1353,6 +1353,9 @@ Errors render inline with the line number instead of blanking the page.`
 
   function applyMeasure() {
     const ch = measureCh(settings.measure);
+    // Keep in step with src/measure.ts: the preset *name* is what prose.css matches to left-align a
+    // narrow table at 宽 / 撑满, and the resolved token below is no longer a name.
+    document.documentElement.dataset.measure = settings.measure;
     /* `null` is "there is nothing laid out to measure" — leave the token alone rather than write a
        number derived from nothing, which is how the column once collapsed to one character per line. */
     const px = resolveMeasure(ch);
