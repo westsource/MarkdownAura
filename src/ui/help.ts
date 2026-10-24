@@ -26,6 +26,7 @@ export const KEYMAP: KeyEntry[] = [
   { group: "file", keys: "ctrl shift A", label: "help.key.listTabs" },
   { group: "file", keys: "ctrl W", label: "help.key.closeTab" },
   { group: "file", keys: "ctrl tab", label: "help.key.nextTab" },
+  { group: "file", keys: "ctrl shift tab", label: "help.key.prevTab" },
   { group: "file", keys: "ctrl 1-9", label: "help.key.goToTab" },
   { group: "view", keys: "ctrl B", label: "help.key.toggleSidebar" },
   { group: "view", keys: "ctrl alt O", label: "help.key.toggleOutline" },

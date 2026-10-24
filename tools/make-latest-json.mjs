@@ -38,11 +38,24 @@ const notesIndex = args.indexOf("--notes");
 const notes = notesIndex >= 0 ? args[notesIndex + 1] : "";
 const clean = args.includes("--clean");
 
+/* Gitee-side mirror: `latest-cn.json` is a *derived* copy of the GitHub manifest with only the
+ * `platforms.*.url` base rewritten. It is never hand-written. `--gitee` enters the Gitee upload path;
+ * that path defaults to --dry-run (print the plan, no network, never touch the token). Pass
+ * `--upload-gitee` to actually push (only once the Gitee repo + token exist; see uploadToGitee). */
+const gitee = args.includes("--gitee");
+const uploadGitee = args.includes("--upload-gitee");
+const giteeFlag = gitee || uploadGitee;
+
 const version = readJson(path.join(root, "package.json")).version;
 const tag = `v${version}`;
 const repo = "https://github.com/westsource/MarkdownAura";
+const giteeRepo = "https://gitee.com/westsource/MarkdownAura";
+/* Owner/name for the Gitee v5 API (create release, attach files). */
+const giteeOwner = "westsource";
+const giteeName = "MarkdownAura";
 const releaseDir = path.join(root, "var", "release");
 const manifestPath = path.join(releaseDir, "latest.json");
+const cnManifestPath = path.join(releaseDir, "latest-cn.json");
 const bundleDir = path.join(root, "src-tauri", "target", "release", "bundle");
 
 /* A previous manifest is merged only when it describes the same version; anything else is a release
@@ -163,8 +176,171 @@ for (const key of keys.sort()) {
   console.log(`    url ${platforms[key].url}`);
   console.log(`    sig ${platforms[key].signature.slice(0, 24)}…`);
 }
+
+// ---------------------------------------------------------------- CN mirror
+
+/* latest-cn.json is a *derived* product: the GitHub manifest is the single source of truth; the CN one
+ * is built from it by rewriting only `platforms.*.url` to the Gitee release download base, keeping
+ * version/notes/pub_date/signature byte-for-byte. It is never hand-written and never assembled from a
+ * historical manifest separate from the current one. Deriving from the in-memory `manifest` (possibly
+ * after a Windows/Linux merge via `carry`) is exactly right: the CN mirror must reflect whatever this
+ * run just produced. Faithfulness is enforced by the self-check below. */
+
+const giteeUrlOf = (name) => `${giteeRepo}/releases/download/${tag}/${name}`;
+const manifestCn = {
+  version: manifest.version,
+  notes: manifest.notes,
+  pub_date: manifest.pub_date,
+  platforms: {},
+};
+for (const [arch, p] of Object.entries(manifest.platforms)) {
+  manifestCn.platforms[arch] = { signature: p.signature, url: giteeUrlOf(/* name kept in comment */ p.url.split("/").pop()) };
+}
+
+/* Self-check: the two manifests must be identical except the url field. Any drift (a hand edit, a
+ * signature re-token, an extra platform) aborts the release before the CN manifest can ship wrong. */
+{
+  const ghKeys = Object.keys(manifest.platforms).sort();
+  const cnKeys = Object.keys(manifestCn.platforms).sort();
+  const problems = [];
+  if (cnKeys.join() !== ghKeys.join()) problems.push(`platform sets differ: gh=[${ghKeys}] cn=[${cnKeys}]`);
+  if (manifestCn.version !== manifest.version) problems.push("version differs");
+  if (manifestCn.notes !== manifest.notes) problems.push("notes differ");
+  if (manifestCn.pub_date !== manifest.pub_date) problems.push("pub_date differs");
+  for (const arch of ghKeys) {
+    const gh = manifest.platforms[arch];
+    const cn = manifestCn.platforms[arch];
+    if (!cn) { problems.push(`${arch}: missing in cn`); continue; }
+    if (cn.signature !== gh.signature) problems.push(`${arch}: signature differs`);
+    if (cn.url !== giteeUrlOf(gh.url.split("/").pop())) problems.push(`${arch}: cn url not derived from gh url`);
+  }
+  if (problems.length) {
+    console.error("error: latest-cn.json is not a faithful derivation of latest.json:");
+    for (const p of problems) console.error(`  - ${p}`);
+    process.exit(1);
+  }
+}
+fs.writeFileSync(cnManifestPath, `${JSON.stringify(manifestCn, null, 2)}\n`);
+
+console.log(`latest-cn.json -> ${path.relative(root, cnManifestPath)} (derived, signatures byte-identical)`);
+
+// ---------------------------------------------------------------- Gitee
+
+/* The upload set is *derived* from the CN manifest, not a sweep of var/release/: only the files the
+ * CN manifest's platforms.*.url actually reference (the two installers) plus latest-cn.json itself
+ * get pushed to Gitee. Kept lean because Gitee caps a single attachment per file, and latest.json /
+ * LICENSE / THIRD-PARTY.md / zip / .sig have no business on the CN mirror (the .sig travels inside
+ * latest-cn.json, whose signature field is verified by the client). */
+const giteeUploadFiles = () => {
+  const names = new Set([path.basename(cnManifestPath)]);
+  for (const p of Object.values(manifestCn.platforms)) names.add(p.url.split("/").pop());
+  return [...names].sort();
+};
+
+/* Gitee puts the token in the query string, so every URL we might print has to be scrubbed first —
+ * the token must never appear in console output, logs, or error text. Declared before the dry-run
+ * loop below uses it. */
+const scrub = (s) => String(s).replace(/(access_token=)[^&\s]+/gi, "$1***");
+
+/* Each referenced pixel file must actually be there and non-empty before we advertise a manifest that
+ * points at it: a CN manifest whose url points at a missing/zero-byte installer is exactly the failure
+ * mode that leaves CN users stuck. latest-cn.json itself is a disposable derived artifact (rebuilt
+ * every run, never trusted off disk), so we only ever check the installers the manifest references. */
+const assertUploadFilesPresent = (files) => {
+  for (const file of files) {
+    if (file === path.basename(cnManifestPath)) continue; // derived this run; checked above
+    const p = path.join(releaseDir, file);
+    if (!fs.existsSync(p)) {
+      console.error(`error: CN manifest references ${file}, but ${path.relative(root, p)} does not exist`);
+      process.exit(1);
+    }
+    const size = fs.statSync(p).size;
+    if (size === 0) {
+      console.error(`error: CN manifest references ${file}, but ${path.relative(root, p)} is empty (0 bytes)`);
+      process.exit(1);
+    }
+  }
+};
+
+if (giteeFlag) {
+  const files = giteeUploadFiles();
+  assertUploadFilesPresent(files);
+  if (uploadGitee) uploadToGitee(files);
+  else {
+    console.log(`gitee: --dry-run (no network) — derived files to attach to ${giteeRepo}/releases/${tag}:`);
+    for (const file of files) {
+      const size = fs.statSync(path.join(releaseDir, file)).size;
+      console.log(`  ${(size / 1048576).toFixed(2).padStart(7)} MB  ${file}`);
+      console.log(`        -> ${scrub(giteeUrlOf(file))}`);
+    }
+    console.log("  (pass --upload-gitee to actually push; requires GITEE_TOKEN and the repo to exist)");
+  }
+}
+
 console.log("assets to upload (var/release/):");
 for (const file of fs.readdirSync(releaseDir).sort()) {
   const size = fs.statSync(path.join(releaseDir, file)).size;
   console.log(`  ${(size / 1048576).toFixed(2).padStart(7)} MB  ${file}`);
+}
+
+/* Real Gitee upload. Gated behind --upload-gitee and kept out of the default path. Reads the token from
+ * $env:GITEE_TOKEN and never prints/logs/writes it (scrub() guards every URL that reaches console).
+ * NOTE: written against the Gitee v5 API shape (create-or-reuse release, then attach each file as
+ * multipart, deleting a same-name residual first for idempotency) but NOT yet exercised — 1.8.0's
+ * scope is dry-run only, and the repo + token do not exist yet. Verify against the live API before
+ * first real use. */
+async function uploadToGitee(files) {
+  const token = process.env.GITEE_TOKEN;
+  if (!token) {
+    console.error("error: --upload-gitee needs $env:GITEE_TOKEN set");
+    process.exit(1);
+  }
+  const api = "https://gitee.com/api/v5";
+  const base = `${api}/repos/${giteeOwner}/${giteeName}`;
+
+  // Create-or-reuse the release, idempotent on tag_name.
+  let releaseId;
+  {
+    const list = await (await fetch(`${base}/releases?access_token=${encodeURIComponent(token)}`, {
+      headers: { "Content-Type": "application/json" },
+    })).json();
+    const existing = Array.isArray(list) ? list.find((r) => r.tag_name === tag) : null;
+    if (existing) {
+      releaseId = existing.id;
+      console.log(`gitee: release ${tag} already exists (id ${releaseId})`);
+    } else {
+      const body = await (await fetch(`${base}/releases?access_token=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tag_name: tag, name: `MarkdownAura ${tag}`, body: `MarkdownAura ${version} — CN mirror release`, prerelease: false, draft: false }),
+      })).json();
+      releaseId = body.id;
+      console.log(`gitee: created release ${tag} (id ${releaseId})`);
+    }
+  }
+
+  // Re-run must be idempotent: Gitee rejects a same-name re-attach, so delete any residual of that
+  // name first (e.g. a state=starter half from an interrupted run), like diagramon's release.mjs.
+  const attachmentsFor = async () => {
+    const r = await fetch(`${base}/releases/${releaseId}/attach_files?access_token=${encodeURIComponent(token)}`);
+    const j = await r.json();
+    return Array.isArray(j) ? j : [];
+  };
+  for (const file of files) {
+    const target = `${base}/releases/${releaseId}/attach_files?access_token=${encodeURIComponent(token)}`;
+    for (const a of (await attachmentsFor()).filter((x) => x.name === file)) {
+      console.log(`gitee: removing same-name residual ${a.name} (id ${a.id})`);
+      await fetch(`${base}/releases/${releaseId}/attach_files/${a.id}?access_token=${encodeURIComponent(token)}`, { method: "DELETE" });
+    }
+    const buf = await fs.promises.readFile(path.join(releaseDir, file));
+    const fd = new FormData();
+    fd.append("file", new Blob([buf], { type: "application/octet-stream" }), file);
+    const r = await fetch(target, { method: "POST", body: fd });
+    if (!r.ok) {
+      console.error(`gitee: failed to attach ${file}: ${r.status} ${await r.text()}`.replace(/\n/g, " "));
+      process.exit(1);
+    }
+    console.log(`gitee: attached ${file}`);
+  }
+  console.log("gitee: upload complete");
 }
